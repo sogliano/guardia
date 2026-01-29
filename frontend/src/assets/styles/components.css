@@ -221,6 +221,12 @@
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   overflow: hidden;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.table-card:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .loading-state {

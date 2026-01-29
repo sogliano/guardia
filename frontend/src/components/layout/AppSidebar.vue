@@ -89,7 +89,7 @@ function isActive(to: string): boolean {
   top: 0;
   bottom: 0;
   width: var(--sidebar-width);
-  background: var(--bg-secondary);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -106,15 +106,24 @@ function isActive(to: string): boolean {
 }
 
 .sidebar-logo-icon {
-  font-size: 28px;
+  font-size: 26px;
   color: var(--accent-cyan);
-  font-variation-settings: 'wght' 300;
+  filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.4));
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.4)); }
+  50% { filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.7)); }
 }
 
 .sidebar-logo-text {
-  font-size: 18px;
+  font-family: var(--font-mono);
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
 }
 
 .sidebar-nav {
@@ -133,27 +142,41 @@ function isActive(to: string): boolean {
   height: 40px;
   padding: 0 12px;
   border-radius: var(--border-radius-sm);
-  color: var(--text-secondary);
+  color: var(--text-muted);
   text-decoration: none;
-  font-size: 14px;
-  transition: all 0.15s;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  transition: all 0.2s;
 }
 
 .nav-item:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 212, 255, 0.04);
 }
 
 .nav-item.active {
   color: var(--accent-cyan);
-  background: var(--accent-cyan-muted);
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: inset 3px 0 0 var(--accent-cyan);
 }
 
 .nav-icon {
-  font-size: 20px;
+  font-size: 19px;
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon {
+  opacity: 1;
+}
+
+.nav-item.active .nav-icon {
+  filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.5));
 }
 
 .nav-label {
@@ -168,9 +191,10 @@ function isActive(to: string): boolean {
   height: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: rgba(0, 212, 255, 0.15);
+  background: rgba(0, 212, 255, 0.12);
   color: #00D4FF;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -180,6 +204,7 @@ function isActive(to: string): boolean {
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .user-info {
@@ -191,16 +216,23 @@ function isActive(to: string): boolean {
 }
 
 .user-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.3px;
 }
 
 .user-role {
-  font-size: 11px;
-  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.7;
 }
 </style>

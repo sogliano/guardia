@@ -71,6 +71,12 @@ const overallStatus = computed(() => {
   width: 380px;
   max-width: 100%;
   flex-shrink: 0;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.pipeline-health:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .section-title {

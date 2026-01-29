@@ -80,6 +80,12 @@ const chartOptions = {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.threat-chart:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .chart-title {

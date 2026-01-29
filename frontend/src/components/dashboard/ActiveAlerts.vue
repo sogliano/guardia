@@ -46,6 +46,12 @@ function severityColor(severity: string): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.active-alerts:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.08);
 }
 
 .alert-header {

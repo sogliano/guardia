@@ -67,6 +67,12 @@ function hexToRgba(hex: string, alpha: number): string {
   align-items: center;
   gap: 18px;
   min-width: 0;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.stats-card:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .card-icon {

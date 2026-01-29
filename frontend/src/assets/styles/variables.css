@@ -5,18 +5,20 @@
   --bg-card: #0C1220;
   --bg-elevated: #111827;
   --bg-inset: #0A0F1A;
-  --bg-sidebar: #080D18;
+  --bg-sidebar: #0A1120;
 
   /* Accent */
   --accent-cyan: #00D4FF;
   --accent-cyan-hover: #00B8E0;
   --accent-cyan-muted: rgba(0, 212, 255, 0.07);
+  --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.08);
+  --glow-cyan-strong: 0 0 30px rgba(0, 212, 255, 0.15);
 
   /* Text */
-  --text-primary: #E8ECF1;
-  --text-secondary: #8B95A5;
-  --text-muted: #566070;
-  --text-dim: #4B5563;
+  --text-primary: #F1F5F9;
+  --text-secondary: #A0ABBE;
+  --text-muted: #6B7A8D;
+  --text-dim: #596777;
 
   /* Risk / Severity levels */
   --color-success: #22C55E;
@@ -33,7 +35,7 @@
   --color-info-bg: rgba(0, 212, 255, 0.07);
 
   /* Borders */
-  --border-color: #1A2332;
+  --border-color: #1E2A3A;
   --border-subtle: rgba(18, 25, 36, 0.5);
   --border-radius: 6px;
   --border-radius-sm: 6px;
