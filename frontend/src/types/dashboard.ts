@@ -43,12 +43,6 @@ export interface ActiveAlertItem {
   created_at: string
 }
 
-export interface TopSenderItem {
-  sender: string
-  count: number
-  avg_score: number
-}
-
 export interface VerdictTrendPoint {
   date: string
   allow: number
@@ -70,7 +64,6 @@ export interface DashboardData {
   pipeline_health: PipelineHealthStats | null
   recent_cases: RecentCaseItem[]
   active_alerts: ActiveAlertItem[]
-  top_senders: TopSenderItem[]
   verdict_trend: VerdictTrendPoint[]
   score_distribution: ScoreBucket[]
 }

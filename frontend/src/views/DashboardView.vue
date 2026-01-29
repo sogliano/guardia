@@ -10,7 +10,6 @@ import ActiveAlerts from '@/components/dashboard/ActiveAlerts.vue'
 import ThreatCategories from '@/components/dashboard/ThreatCategories.vue'
 import VerdictTimeline from '@/components/dashboard/VerdictTimeline.vue'
 import ScoreDistribution from '@/components/dashboard/ScoreDistribution.vue'
-import TopSenders from '@/components/dashboard/TopSenders.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 
 const store = useDashboardStore()
@@ -96,9 +95,6 @@ onMounted(() => {
       <RecentCases :cases="store.data?.recent_cases ?? []" />
       <PipelineHealth :health="store.data?.pipeline_health ?? null" />
     </div>
-
-    <!-- Top Senders -->
-    <TopSenders :senders="store.data?.top_senders ?? []" />
 
     <!-- Active Alerts -->
     <ActiveAlerts :alerts="store.data?.active_alerts ?? []" />
