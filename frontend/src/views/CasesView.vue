@@ -164,6 +164,34 @@ async function quickBlock(caseId: string) {
   }
 }
 
+function exportCSV() {
+  const rows = store.cases
+  if (!rows.length) return
+  const headers = ['Case #', 'Subject', 'Sender', 'Score', 'Risk', 'Verdict', 'Status', 'Received', 'Created']
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
+  const lines = [
+    headers.join(','),
+    ...rows.map(c => [
+      c.case_number,
+      escape(c.email_subject ?? ''),
+      escape(c.email_sender ?? ''),
+      c.final_score !== null ? `${(c.final_score * 100).toFixed(0)}%` : '',
+      c.risk_level ?? '',
+      c.verdict ?? '',
+      c.status,
+      c.email_received_at ?? '',
+      c.created_at,
+    ].join(',')),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `guardia-cases-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(() => {
   store.fetchCases()
 })
@@ -180,7 +208,7 @@ onMounted(() => {
         <span class="count-badge">{{ store.total.toLocaleString() }}</span>
       </div>
       <div class="header-right">
-        <button class="btn-outline">
+        <button class="btn-outline" @click="exportCSV">
           <span class="material-symbols-rounded btn-icon">download</span>
           Export CSV
         </button>
