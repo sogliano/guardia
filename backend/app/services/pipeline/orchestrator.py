@@ -26,6 +26,7 @@ from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.email import Email
 from app.models.evidence import Evidence
+from app.services.alert_service import AlertService
 from app.services.pipeline.heuristics import HeuristicEngine
 from app.services.pipeline.llm_explainer import LLMExplainer
 from app.services.pipeline.ml_classifier import get_ml_classifier
@@ -161,6 +162,13 @@ class PipelineOrchestrator:
             case.status = CaseStatus.QUARANTINED
 
         await self.db.flush()
+
+        # Evaluate alert rules and fire matching alerts (Slack, etc.)
+        try:
+            alert_svc = AlertService(self.db)
+            await alert_svc.evaluate_and_fire(case)
+        except Exception as exc:
+            logger.error("alert_evaluation_error", error=str(exc), case_id=str(case.id))
 
         logger.info(
             "pipeline_completed",

@@ -92,6 +92,11 @@ class DashboardService:
         pq = _apply_case_filters(pq)
         pending_cases = (await self.db.execute(pq)).scalar() or 0
 
+        # Total cases
+        tcq = select(func.count()).select_from(Case)
+        tcq = _apply_case_filters(tcq)
+        total_cases = (await self.db.execute(tcq)).scalar() or 0
+
         # Average score
         aq = select(func.avg(Case.final_score)).where(Case.final_score.isnot(None))
         aq = _apply_case_filters(aq)
@@ -143,7 +148,7 @@ class DashboardService:
             "stats": {
                 "total_emails": total_emails,
                 "emails_today": emails_today,
-                "total_cases": 0,
+                "total_cases": total_cases,
                 "pending_cases": pending_cases,
                 "avg_score": round(float(avg_score), 4),
                 "by_verdict": by_verdict,
@@ -214,6 +219,14 @@ class DashboardService:
         if not row or not row.avg_ms:
             return None
 
+        # p95 duration
+        p95_result = await self.db.execute(
+            select(
+                func.percentile_cont(0.95).within_group(Case.pipeline_duration_ms)
+            ).where(Case.pipeline_duration_ms.isnot(None))
+        )
+        p95_val = p95_result.scalar() or 0.0
+
         stage_result = await self.db.execute(
             select(
                 Analysis.stage,
@@ -240,7 +253,7 @@ class DashboardService:
 
         return {
             "avg_duration_ms": round(float(row.avg_ms), 1),
-            "p95_duration_ms": 0.0,
+            "p95_duration_ms": round(float(p95_val), 1),
             "success_rate": round(analyzed / max(total, 1), 4),
             "stage_avg_ms": stage_avg,
         }

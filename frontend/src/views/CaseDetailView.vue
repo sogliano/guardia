@@ -112,31 +112,31 @@ const threatCategoryMeta: Record<string, { label: string; color: string; bg: str
     label: 'BEC',
     color: '#8B5CF6',
     bg: 'rgba(139, 92, 246, 0.15)',
-    desc: 'Business Email Compromise: suplantación de identidad ejecutiva para solicitar transferencias o datos sensibles',
+    desc: 'Business Email Compromise: executive identity impersonation to request wire transfers or sensitive data',
   },
   credential_phishing: {
     label: 'Credential Phishing',
     color: '#EF4444',
     bg: 'rgba(239, 68, 68, 0.15)',
-    desc: 'Intento de robar credenciales mediante páginas falsas de login',
+    desc: 'Attempt to steal credentials through fake login pages',
   },
   malware_payload: {
     label: 'Malware',
     color: '#DC2626',
     bg: 'rgba(220, 38, 38, 0.15)',
-    desc: 'Email con archivos adjuntos o enlaces que distribuyen código malicioso',
+    desc: 'Email with attachments or links distributing malicious code',
   },
   generic_phishing: {
     label: 'Phishing',
     color: '#F97316',
     bg: 'rgba(249, 115, 22, 0.15)',
-    desc: 'Intento genérico de phishing sin categoría específica',
+    desc: 'Generic phishing attempt without a specific category',
   },
   clean: {
     label: 'Clean',
     color: '#D1D5DB',
     bg: 'rgba(209, 213, 219, 0.12)',
-    desc: 'Email analizado sin amenazas detectadas',
+    desc: 'Email analyzed with no threats detected',
   },
 }
 

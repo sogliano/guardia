@@ -25,6 +25,7 @@ const allMenuItems: MenuItem[] = [
   { label: 'Cases', icon: 'folder', to: '/cases', badgeKey: 'cases' },
   { label: 'Quarantine', icon: 'shield', to: '/quarantine', badgeKey: 'quarantine' },
   { label: 'Emails', icon: 'mail', to: '/emails' },
+  { label: 'Notifications', icon: 'notifications', to: '/notifications' },
 ]
 
 const menuItems = computed(() => {

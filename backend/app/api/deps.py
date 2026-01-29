@@ -73,6 +73,6 @@ def require_role(*allowed_roles: str):
     return Depends(_check)
 
 
-RequireAdmin = require_role("admin")
-RequireAnalyst = require_role("admin", "analyst")
-RequireAuditor = require_role("admin", "analyst", "auditor")
+RequireAdmin = require_role("administrator")
+RequireAnalyst = require_role("administrator", "analyst")
+RequireAuditor = require_role("administrator", "analyst", "auditor")

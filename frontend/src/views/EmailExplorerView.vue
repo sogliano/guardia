@@ -4,7 +4,7 @@ import { useEmailsStore } from '@/stores/emails'
 import { formatDate, capitalize } from '@/utils/formatters'
 import { scoreColor, riskColor, riskBg, actionColor, actionBg } from '@/utils/colors'
 import { computePageNumbers } from '@/utils/pagination'
-import { RISK_OPTIONS, DATE_OPTIONS } from '@/constants/filterOptions'
+import { RISK_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 
 const store = useEmailsStore()
@@ -25,9 +25,11 @@ const endItem = computed(() => Math.min(store.page * store.size, store.total))
 const pageNumbers = computed(() => computePageNumbers(store.page, totalPages.value))
 
 function applyFilters() {
+  const dateParams = filterDate.value ? dateRangeToParams(filterDate.value) : {}
   store.setFilters({
     search: searchQuery.value || undefined,
     risk_level: filterRisk.value?.toLowerCase(),
+    ...dateParams,
   })
 }
 
@@ -85,7 +87,7 @@ onMounted(() => {
       </select>
       <select v-model="filterDate" class="filter-select" @change="applyFilters">
         <option :value="undefined">Date Range</option>
-        <option v-for="opt in DATE_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+        <option v-for="opt in DATE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
     </div>
 

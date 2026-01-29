@@ -7,7 +7,7 @@ import type { Case } from '@/types/case'
 import { formatDate, capitalize } from '@/utils/formatters'
 import { scoreColor, riskColor, riskBg, actionColor, actionBg, statusColor, statusBg } from '@/utils/colors'
 import { computePageNumbers } from '@/utils/pagination'
-import { RISK_OPTIONS, ACTION_OPTIONS, STATUS_OPTIONS, DATE_OPTIONS } from '@/constants/filterOptions'
+import { RISK_OPTIONS, ACTION_OPTIONS, STATUS_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 
 const router = useRouter()
@@ -110,11 +110,13 @@ const sortedNeedsAction = computed(() => sortCases(needsActionCases.value, naSor
 const sortedAllCases = computed(() => sortCases(store.cases, sortCol.value, sortDir.value))
 
 function applyFilters() {
+  const dateParams = filterDateRange.value ? dateRangeToParams(filterDateRange.value) : {}
   store.setFilters({
     search: searchQuery.value || undefined,
     risk_level: filterRisk.value?.toLowerCase(),
     verdict: filterAction.value?.toLowerCase(),
     status: filterStatus.value?.toLowerCase(),
+    ...dateParams,
   })
 }
 
@@ -350,7 +352,7 @@ onMounted(() => {
       </select>
       <select v-model="filterDateRange" class="filter-select" @change="applyFilters">
         <option :value="undefined">Date Range</option>
-        <option v-for="opt in DATE_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+        <option v-for="opt in DATE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <a v-if="hasActiveFilters" href="#" class="clear-link" @click.prevent="clearFilters">Clear Filters</a>
       <span class="results-count">Showing {{ startItem }}-{{ endItem }} of {{ store.total.toLocaleString() }}</span>

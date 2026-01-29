@@ -10,6 +10,7 @@ import ActiveAlerts from '@/components/dashboard/ActiveAlerts.vue'
 import ThreatCategories from '@/components/dashboard/ThreatCategories.vue'
 import VerdictTimeline from '@/components/dashboard/VerdictTimeline.vue'
 import ScoreDistribution from '@/components/dashboard/ScoreDistribution.vue'
+import TopSenders from '@/components/dashboard/TopSenders.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 
 const store = useDashboardStore()
@@ -68,9 +69,9 @@ onMounted(() => {
         badge-details
         badge-full-text
         :details="store.data?.pipeline_health ? [
-          { text: `Heuristic ${store.data.pipeline_health.stages?.heuristic?.avg_ms?.toFixed(0) ?? '~5'}ms`, color: '#9CA3AF' },
-          { text: `ML ${store.data.pipeline_health.stages?.ml?.avg_ms?.toFixed(0) ?? '~18'}ms`, color: '#9CA3AF' },
-          { text: `LLM ${store.data.pipeline_health.stages?.llm?.avg_ms?.toFixed(0) ?? '~2s'}`, color: '#9CA3AF' },
+          { text: `Heuristic ${store.data.pipeline_health.stage_avg_ms?.heuristic?.toFixed(0) ?? '~5'}ms`, color: '#9CA3AF' },
+          { text: `ML ${store.data.pipeline_health.stage_avg_ms?.ml?.toFixed(0) ?? '~18'}ms`, color: '#9CA3AF' },
+          { text: `LLM ${store.data.pipeline_health.stage_avg_ms?.llm ? (store.data.pipeline_health.stage_avg_ms.llm / 1000).toFixed(1) + 's' : '~2s'}`, color: '#9CA3AF' },
         ] : []"
       />
     </div>
@@ -95,6 +96,9 @@ onMounted(() => {
       <RecentCases :cases="store.data?.recent_cases ?? []" />
       <PipelineHealth :health="store.data?.pipeline_health ?? null" />
     </div>
+
+    <!-- Top Senders -->
+    <TopSenders :senders="store.data?.top_senders ?? []" />
 
     <!-- Active Alerts -->
     <ActiveAlerts :alerts="store.data?.active_alerts ?? []" />
