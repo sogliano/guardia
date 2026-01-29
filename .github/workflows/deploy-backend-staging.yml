@@ -1,4 +1,4 @@
-name: Deploy Staging
+name: Deploy Backend Staging
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ env:
   IMAGE_TAG: staging-${{ github.sha }}
 
 jobs:
-  deploy-backend:
+  deploy:
     name: Backend → Cloud Run (staging)
     runs-on: ubuntu-latest
     environment: staging
@@ -48,42 +48,3 @@ jobs:
           service: ${{ env.CLOUD_RUN_SERVICE }}
           region: ${{ env.GCP_REGION }}
           image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/guardia/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-
-  deploy-frontend:
-    name: Frontend → Vercel (staging)
-    runs-on: ubuntu-latest
-    environment: staging
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: frontend
-
-      - name: Build
-        run: npm run build
-        working-directory: frontend
-        env:
-          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
-          VITE_API_BASE_URL: https://guardia-api-staging-81580052566.us-east1.run.app/api/v1
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel
-
-      - name: Deploy prebuilt to Vercel
-        run: |
-          mkdir -p .vercel
-          echo '{"projectId":"${{ secrets.VERCEL_PROJECT_ID }}","orgId":"${{ secrets.VERCEL_ORG_ID }}"}' > .vercel/project.json
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes dist/
-        working-directory: frontend
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
