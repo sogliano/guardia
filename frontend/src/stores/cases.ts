@@ -46,6 +46,12 @@ export const useCasesStore = defineStore('cases', () => {
     fetchCases()
   }
 
+  function setSize(s: number) {
+    size.value = s
+    page.value = 1
+    fetchCases()
+  }
+
   function setFilters(f: typeof filters.value) {
     filters.value = f
     page.value = 1
@@ -57,5 +63,5 @@ export const useCasesStore = defineStore('cases', () => {
     fetchCases()
   }, { deep: true })
 
-  return { cases, total, page, size, loading, error, filters, fetchCases, setPage, setFilters }
+  return { cases, total, page, size, loading, error, filters, fetchCases, setPage, setSize, setFilters }
 })

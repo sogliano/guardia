@@ -138,6 +138,7 @@ const legendItems = computed(() => {
     </div>
 
     <template v-if="data.length">
+      <div class="view-content">
       <!-- Bar View -->
       <div v-if="viewMode === 'bars'" class="bars-view">
         <div v-for="item in barItems" :key="item.key" class="bar-row">
@@ -194,6 +195,7 @@ const legendItems = computed(() => {
           </div>
         </div>
       </div>
+      </div>
     </template>
     <div v-else class="empty-state">No risk data available</div>
   </div>
@@ -204,10 +206,10 @@ const legendItems = computed(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
@@ -263,6 +265,12 @@ const legendItems = computed(() => {
   color: var(--accent-cyan);
 }
 
+.view-content {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── Bar View ── */
 .bars-view {
   display: flex;
@@ -311,9 +319,9 @@ const legendItems = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--border-color);
 }
 

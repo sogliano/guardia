@@ -167,9 +167,12 @@ const stageDescs: Record<string, string> = {
 
 const evidenceTypeLabels: Record<string, string> = {
   auth_spf_fail: 'SPF Authentication',
+  auth_spf_neutral: 'SPF Neutral',
   auth_dkim_fail: 'DKIM Signature',
   auth_dmarc_fail: 'DMARC Policy',
+  auth_dmarc_missing: 'DMARC Missing',
   auth_reply_to_mismatch: 'Reply-To Mismatch',
+  auth_compound_failure: 'Compound Auth Failure',
   domain_blacklisted: 'Blocklisted Domain',
   domain_typosquatting: 'Typosquatting',
   domain_suspicious_tld: 'Suspicious TLD',
@@ -179,8 +182,11 @@ const evidenceTypeLabels: Record<string, string> = {
   keyword_urgency: 'Urgency Language',
   keyword_phishing: 'Phishing Keywords',
   keyword_caps_abuse: 'Caps Abuse',
-  ml_threat_detected: 'ML Threat Signal',
-  impersonation_display_name: 'Display Name Spoofing',
+  attachment_suspicious_ext: 'Suspicious Attachment',
+  attachment_double_ext: 'Double Extension Attack',
+  ml_high_score: 'ML Threat Signal',
+  ceo_impersonation: 'CEO Impersonation',
+  sender_impersonation: 'Brand Impersonation',
 }
 
 function evidenceLabel(type: string): string {

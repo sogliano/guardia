@@ -1,6 +1,5 @@
 from enum import StrEnum
 
-
 # --- Case Flow ---
 
 class CaseStatus(StrEnum):
@@ -60,7 +59,13 @@ class EvidenceType(StrEnum):
     AUTH_SPF_FAIL = "auth_spf_fail"
     AUTH_DKIM_FAIL = "auth_dkim_fail"
     AUTH_DMARC_FAIL = "auth_dmarc_fail"
+    AUTH_DMARC_MISSING = "auth_dmarc_missing"
+    AUTH_SPF_NEUTRAL = "auth_spf_neutral"
     AUTH_REPLY_TO_MISMATCH = "auth_reply_to_mismatch"
+    AUTH_COMPOUND_FAILURE = "auth_compound_failure"
+    # Attachments
+    ATTACHMENT_SUSPICIOUS_EXT = "attachment_suspicious_ext"
+    ATTACHMENT_DOUBLE_EXT = "attachment_double_ext"
     # ML
     ML_HIGH_SCORE = "ml_high_score"
     # Identity
@@ -155,6 +160,16 @@ HEURISTIC_WEIGHT_KEYWORD = 0.15    # Noisiest signal, most false positives
 # Correlation boost: multiple sub-engines triggering = higher confidence
 HEURISTIC_CORRELATION_BOOST_3 = 1.15   # 3 sub-engines fired
 HEURISTIC_CORRELATION_BOOST_4 = 1.25   # all 4 sub-engines fired
+
+# Auth compound failure: when 2+ auth mechanisms fail simultaneously
+# This adds a flat bonus ON TOP of individual auth scores, reflecting
+# that multiple auth failures together are far more suspicious than isolated ones
+AUTH_COMPOUND_2_BONUS = 0.15    # 2 of 3 (SPF/DKIM/DMARC) failed
+AUTH_COMPOUND_3_BONUS = 0.30    # all 3 failed — extremely suspicious
+
+# Attachment risk: additive bonus to final heuristic score
+ATTACHMENT_SUSPICIOUS_BONUS = 0.10   # suspicious extension found
+ATTACHMENT_DOUBLE_EXT_BONUS = 0.15   # double extension (e.g. invoice.pdf.exe)
 
 # Pipeline score weights (final score calculation)
 SCORE_WEIGHT_HEURISTIC = 0.40

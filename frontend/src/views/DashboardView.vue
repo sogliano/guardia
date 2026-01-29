@@ -113,7 +113,7 @@ onMounted(() => {
 .kpi-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1.4fr;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
 }
 

@@ -123,10 +123,10 @@ const chartOptions = {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
@@ -143,11 +143,12 @@ const chartOptions = {
 }
 
 .chart-area {
-  height: 220px;
+  flex: 1;
+  min-height: 0;
 }
 
 .empty-state {
-  height: 220px;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;

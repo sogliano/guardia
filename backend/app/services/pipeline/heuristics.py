@@ -1,10 +1,18 @@
 """Layer 1: Heuristic analysis engine (~5ms).
 
-Four sub-engines, each weighted 25%:
-- Domain analysis: blacklist (DB), typosquatting, suspicious TLDs
-- URL analysis: shorteners, IP-based URLs, display/href mismatch
-- Keyword analysis: urgency, phishing terms, CAPS abuse, financial
-- Auth analysis: SPF/DKIM/DMARC failures, reply-to mismatch
+Four weighted sub-engines + attachment/impersonation bonuses:
+- Auth analysis  (35%): SPF/DKIM/DMARC failures, DMARC missing, compound failures, reply-to mismatch
+- Domain analysis (25%): blacklist (DB), typosquatting, suspicious TLDs
+- URL analysis    (25%): shorteners, IP-based URLs, suspicious TLD links
+- Keyword analysis(15%): urgency, phishing terms, CAPS abuse, financial/BEC
+
+Additive bonuses (on top of weighted score):
+- Attachment risk: suspicious extensions, double extensions
+- Correlation boost: 3+ sub-engines firing simultaneously
+
+Security design: this is a pre-delivery email security gateway.
+False negatives (missing threats) are worse than false positives.
+Scoring is intentionally aggressive on auth failures.
 """
 
 import re
@@ -16,6 +24,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
+    ATTACHMENT_DOUBLE_EXT_BONUS,
+    ATTACHMENT_SUSPICIOUS_BONUS,
+    AUTH_COMPOUND_2_BONUS,
+    AUTH_COMPOUND_3_BONUS,
     HEURISTIC_CORRELATION_BOOST_3,
     HEURISTIC_CORRELATION_BOOST_4,
     HEURISTIC_WEIGHT_AUTH,
@@ -28,7 +40,9 @@ from app.core.constants import (
 )
 from app.models.policy_entry import PolicyEntry
 from app.services.pipeline.heuristic_data import (
+    DOUBLE_EXTENSION_PATTERN,
     FINANCIAL_KEYWORDS,
+    IMPERSONATION_TITLES,
     KNOWN_DOMAINS,
     PHISHING_KEYWORDS,
     SUSPICIOUS_EXTENSIONS,
@@ -99,7 +113,7 @@ class HeuristicEngine:
                 self._whitelisted_domains.add(value)
 
     async def analyze(self, email_data: dict) -> HeuristicResult:
-        """Run all four sub-engines and compute weighted score."""
+        """Run all sub-engines and compute weighted score with bonuses."""
         start = time.monotonic()
         await self._load_policies()
 
@@ -110,6 +124,8 @@ class HeuristicEngine:
         url_score, url_ev = await self._analyze_urls(email_data)
         keyword_score, keyword_ev = await self._analyze_keywords(email_data)
         auth_score, auth_ev = await self._analyze_auth(email_data)
+        attach_bonus, attach_ev = self._analyze_attachments(email_data)
+        impersonation_ev = self._analyze_impersonation(email_data)
 
         result.domain_score = domain_score
         result.url_score = url_score
@@ -119,8 +135,10 @@ class HeuristicEngine:
         evidences.extend(url_ev)
         evidences.extend(keyword_ev)
         evidences.extend(auth_ev)
+        evidences.extend(attach_ev)
+        evidences.extend(impersonation_ev)
 
-        # Weighted score
+        # Weighted score from 4 main sub-engines
         weighted = (
             result.domain_score * HEURISTIC_WEIGHT_DOMAIN
             + result.url_score * HEURISTIC_WEIGHT_URL
@@ -138,6 +156,13 @@ class HeuristicEngine:
         elif active_engines >= 3:
             weighted *= HEURISTIC_CORRELATION_BOOST_3
 
+        # Additive bonuses (attachment risk)
+        weighted += attach_bonus
+
+        # Impersonation signals boost keyword weight (BEC indicator)
+        if impersonation_ev:
+            weighted += 0.10
+
         result.score = min(1.0, max(0.0, weighted))
         result.evidences = evidences
         result.execution_time_ms = int((time.monotonic() - start) * 1000)
@@ -150,6 +175,8 @@ class HeuristicEngine:
             keyword=result.keyword_score,
             auth=result.auth_score,
             active_engines=active_engines,
+            attach_bonus=attach_bonus,
+            impersonation=len(impersonation_ev),
             evidence_count=len(evidences),
             duration_ms=result.execution_time_ms,
         )
@@ -182,7 +209,11 @@ class HeuristicEngine:
             evidences.append(EvidenceItem(
                 type=EvidenceType.DOMAIN_BLACKLISTED,
                 severity=Severity.CRITICAL,
-                description=f"The sender domain '{domain}' is on the organization's blocklist of known malicious domains. Emails from this domain should be treated as high-risk threats.",
+                description=(
+                    f"The sender domain '{domain}' is on the organization's "
+                    f"blocklist of known malicious domains. Emails from this "
+                    f"domain should be treated as high-risk threats."
+                ),
                 raw_data={"domain": domain},
             ))
             return score, evidences
@@ -194,7 +225,12 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.DOMAIN_SUSPICIOUS_TLD,
                     severity=Severity.MEDIUM,
-                    description=f"The sender domain '{domain}' uses the TLD '{tld}', which is commonly associated with phishing and spam campaigns due to low registration barriers.",
+                    description=(
+                        f"The sender domain '{domain}' uses the TLD "
+                        f"'{tld}', which is commonly associated with "
+                        f"phishing and spam campaigns due to low "
+                        f"registration barriers."
+                    ),
                     raw_data={"domain": domain, "tld": tld},
                 ))
                 break
@@ -209,7 +245,13 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.DOMAIN_TYPOSQUATTING,
                     severity=Severity.HIGH,
-                    description=f"The domain '{domain}' is suspiciously similar to the legitimate domain '{known}' (edit distance: {dist}). This is a common typosquatting technique used to impersonate trusted organizations.",
+                    description=(
+                        f"The domain '{domain}' is suspiciously similar "
+                        f"to the legitimate domain '{known}' (edit "
+                        f"distance: {dist}). This is a common "
+                        f"typosquatting technique used to impersonate "
+                        f"trusted organizations."
+                    ),
                     raw_data={"domain": domain, "similar_to": known, "distance": dist},
                 ))
                 break
@@ -247,7 +289,12 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.URL_SHORTENER,
                     severity=Severity.MEDIUM,
-                    description=f"A URL in the email uses the shortener service '{hostname}', which can be used to hide the true destination of malicious links from both users and security tools.",
+                    description=(
+                        f"A URL in the email uses the shortener service "
+                        f"'{hostname}', which can be used to hide the "
+                        f"true destination of malicious links from both "
+                        f"users and security tools."
+                    ),
                     raw_data={"url": url, "shortener": hostname},
                 ))
 
@@ -257,7 +304,13 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.URL_IP_BASED,
                     severity=Severity.HIGH,
-                    description=f"A URL points directly to an IP address ({hostname}) instead of a domain name. Legitimate services rarely use raw IP addresses, making this a strong indicator of a phishing or malware delivery link.",
+                    description=(
+                        f"A URL points directly to an IP address "
+                        f"({hostname}) instead of a domain name. "
+                        f"Legitimate services rarely use raw IP "
+                        f"addresses, making this a strong indicator "
+                        f"of a phishing or malware delivery link."
+                    ),
                     raw_data={"url": url},
                 ))
 
@@ -268,7 +321,12 @@ class HeuristicEngine:
                     evidences.append(EvidenceItem(
                         type=EvidenceType.URL_SUSPICIOUS,
                         severity=Severity.MEDIUM,
-                        description=f"A URL in the email points to '{hostname}', which uses a TLD commonly associated with malicious activity. Links to these domains carry elevated risk.",
+                        description=(
+                            f"A URL in the email points to '{hostname}', "
+                            f"which uses a TLD commonly associated with "
+                            f"malicious activity. Links to these domains "
+                            f"carry elevated risk."
+                        ),
                         raw_data={"url": url, "tld": tld},
                     ))
                     break
@@ -322,7 +380,12 @@ class HeuristicEngine:
             evidences.append(EvidenceItem(
                 type=EvidenceType.KEYWORD_URGENCY,
                 severity=Severity.MEDIUM,
-                description=f"The email contains {len(urgency_hits)} urgency keyword(s): {', '.join(urgency_hits[:5])}. Attackers often create a false sense of urgency to pressure victims into acting without thinking.",
+                description=(
+                    f"The email contains {len(urgency_hits)} urgency "
+                    f"keyword(s): {', '.join(urgency_hits[:5])}. "
+                    f"Attackers often create a false sense of urgency "
+                    f"to pressure victims into acting without thinking."
+                ),
                 raw_data={"keywords": urgency_hits},
             ))
 
@@ -330,7 +393,13 @@ class HeuristicEngine:
             evidences.append(EvidenceItem(
                 type=EvidenceType.KEYWORD_PHISHING,
                 severity=Severity.HIGH,
-                description=f"The email contains {len(phishing_hits)} phishing-related keyword(s): {', '.join(phishing_hits[:5])}. These terms are frequently found in credential theft and social engineering attacks.",
+                description=(
+                    f"The email contains {len(phishing_hits)} "
+                    f"phishing-related keyword(s): "
+                    f"{', '.join(phishing_hits[:5])}. These terms are "
+                    f"frequently found in credential theft and social "
+                    f"engineering attacks."
+                ),
                 raw_data={"keywords": phishing_hits},
             ))
 
@@ -344,7 +413,13 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.KEYWORD_CAPS_ABUSE,
                     severity=Severity.LOW,
-                    description=f"The email body contains {caps_ratio:.0%} uppercase words ({caps_words} of {len(words)}). Excessive use of capital letters is a social engineering tactic to convey urgency and grab attention.",
+                    description=(
+                        f"The email body contains {caps_ratio:.0%} "
+                        f"uppercase words ({caps_words} of "
+                        f"{len(words)}). Excessive use of capital "
+                        f"letters is a social engineering tactic to "
+                        f"convey urgency and grab attention."
+                    ),
                     raw_data={"caps_ratio": round(caps_ratio, 3), "caps_words": caps_words},
                 ))
 
@@ -368,38 +443,99 @@ class HeuristicEngine:
     async def _analyze_auth(
         self, email_data: dict
     ) -> tuple[float, list[EvidenceItem]]:
-        """Check SPF/DKIM/DMARC results and reply-to mismatch.
+        """Check SPF/DKIM/DMARC results, compound failures, and reply-to mismatch.
 
         Scoring rationale (max 1.0):
-          DMARC fail = 0.45 (strongest single signal, combines SPF+DKIM policy)
-          SPF fail   = 0.30, softfail = 0.15
-          DKIM fail  = 0.25
-          Reply-To   = 0.20 (BEC indicator)
-        Multiple failures compound but cap at 1.0.
+          DMARC fail    = 0.45 (strongest signal, combines SPF+DKIM policy)
+          DMARC none    = 0.15 (no policy = no protection, suspicious)
+          SPF fail      = 0.30
+          SPF softfail  = 0.15
+          SPF neutral   = 0.08 (inconclusive, slight risk)
+          DKIM fail     = 0.25
+          Reply-To      = 0.20 (BEC indicator)
+
+        Compound auth failures add a bonus:
+          2 of 3 mechanisms failed = +0.15
+          3 of 3 mechanisms failed = +0.30
+
+        Possible auth results per RFC 8601:
+          pass, fail, softfail, neutral, none, temperror, permerror
         """
         evidences: list[EvidenceItem] = []
         auth: dict = email_data.get("auth_results", {})
         score = 0.0
 
-        # SPF
+        # Track individual mechanism failures for compound detection
+        spf_failed = False
+        dkim_failed = False
+        dmarc_failed = False
+
+        # --- SPF ---
         spf = auth.get("spf", "none").lower()
-        if spf in ("fail", "softfail"):
-            score += 0.30 if spf == "fail" else 0.15
+        if spf == "fail":
+            score += 0.30
+            spf_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_SPF_FAIL,
-                severity=Severity.HIGH if spf == "fail" else Severity.MEDIUM,
+                severity=Severity.HIGH,
+                description=(
+                    "SPF verification returned 'fail'. The sending server is not authorized "
+                    "to send email on behalf of this domain, which is a strong indicator of "
+                    "email spoofing."
+                ),
+                raw_data={"spf": spf},
+            ))
+        elif spf == "softfail":
+            score += 0.15
+            spf_failed = True
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_SPF_FAIL,
+                severity=Severity.MEDIUM,
+                description=(
+                    "SPF verification returned 'softfail'. The sending "
+                    "server is weakly authorized to send email on "
+                    "behalf of this domain. While not a hard failure, "
+                    "this indicates the domain owner has not fully "
+                    "authorized this server, which may indicate "
+                    "spoofing."
+                ),
+                raw_data={"spf": spf},
+            ))
+        elif spf == "neutral":
+            score += 0.08
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_SPF_NEUTRAL,
+                severity=Severity.LOW,
+                description=(
+                    "SPF verification returned 'neutral'. The domain "
+                    "owner has explicitly stated that no assertion "
+                    "can be made about the sender's authorization. "
+                    "This provides no protection against spoofing."
+                ),
+                raw_data={"spf": spf},
+            ))
+        elif spf in ("temperror", "permerror"):
+            score += 0.10
+            spf_failed = True
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_SPF_FAIL,
+                severity=Severity.MEDIUM,
                 description=(
                     f"SPF verification returned '{spf}'. "
-                    f"The sending server is {'not authorized' if spf == 'fail' else 'weakly authorized'} "
-                    f"to send email on behalf of this domain, which may indicate spoofing."
+                    f"A {'temporary' if spf == 'temperror' else 'permanent'} error occurred "
+                    f"during SPF validation, preventing "
+                    f"authentication of the sender. This may "
+                    f"indicate a misconfigured or intentionally "
+                    f"broken SPF record."
                 ),
                 raw_data={"spf": spf},
             ))
 
-        # DKIM
+        # --- DKIM ---
         dkim = auth.get("dkim", "none").lower()
         if dkim == "fail":
             score += 0.25
+            dkim_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DKIM_FAIL,
                 severity=Severity.HIGH,
@@ -410,11 +546,26 @@ class HeuristicEngine:
                 ),
                 raw_data={"dkim": dkim},
             ))
+        elif dkim in ("temperror", "permerror"):
+            score += 0.10
+            dkim_failed = True
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_DKIM_FAIL,
+                severity=Severity.MEDIUM,
+                description=(
+                    f"DKIM verification returned '{dkim}'. "
+                    f"A {'temporary' if dkim == 'temperror' else 'permanent'} error occurred "
+                    f"during DKIM validation. The email's integrity "
+                    f"could not be verified."
+                ),
+                raw_data={"dkim": dkim},
+            ))
 
-        # DMARC
+        # --- DMARC ---
         dmarc = auth.get("dmarc", "none").lower()
         if dmarc == "fail":
             score += 0.45
+            dmarc_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DMARC_FAIL,
                 severity=Severity.CRITICAL,
@@ -425,8 +576,68 @@ class HeuristicEngine:
                 ),
                 raw_data={"dmarc": dmarc},
             ))
+        elif dmarc == "none":
+            score += 0.15
+            dmarc_failed = True
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_DMARC_MISSING,
+                severity=Severity.MEDIUM,
+                description=(
+                    "No DMARC policy is published for the sender's domain. Without DMARC, "
+                    "there is no domain-level policy to prevent email spoofing. Legitimate "
+                    "organizations typically publish DMARC records to protect their domain."
+                ),
+                raw_data={"dmarc": dmarc},
+            ))
+        elif dmarc in ("temperror", "permerror"):
+            score += 0.15
+            dmarc_failed = True
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_DMARC_FAIL,
+                severity=Severity.MEDIUM,
+                description=(
+                    f"DMARC verification returned '{dmarc}'. "
+                    f"A {'temporary' if dmarc == 'temperror' else 'permanent'} error prevented "
+                    f"DMARC policy evaluation. The domain's "
+                    f"anti-spoofing policy could not be enforced."
+                ),
+                raw_data={"dmarc": dmarc},
+            ))
 
-        # Reply-To mismatch: reply_to domain ≠ sender domain
+        # --- Compound auth failure bonus ---
+        failed_count = sum([spf_failed, dkim_failed, dmarc_failed])
+        if failed_count >= 3:
+            score += AUTH_COMPOUND_3_BONUS
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_COMPOUND_FAILURE,
+                severity=Severity.CRITICAL,
+                description=(
+                    "All three email authentication mechanisms (SPF, DKIM, DMARC) failed or are "
+                    "absent. This combination is extremely rare for legitimate email and is a very "
+                    "strong indicator of a spoofed or malicious message."
+                ),
+                raw_data={
+                    "spf": spf, "dkim": dkim, "dmarc": dmarc,
+                    "failed_count": failed_count,
+                },
+            ))
+        elif failed_count >= 2:
+            score += AUTH_COMPOUND_2_BONUS
+            evidences.append(EvidenceItem(
+                type=EvidenceType.AUTH_COMPOUND_FAILURE,
+                severity=Severity.HIGH,
+                description=(
+                    f"Multiple email authentication mechanisms failed ({failed_count} of 3). "
+                    f"The combination of authentication failures significantly increases the "
+                    f"likelihood that this email is spoofed or malicious."
+                ),
+                raw_data={
+                    "spf": spf, "dkim": dkim, "dmarc": dmarc,
+                    "failed_count": failed_count,
+                },
+            ))
+
+        # --- Reply-To mismatch ---
         sender = email_data.get("sender_email", "")
         reply_to = email_data.get("reply_to", "")
         if reply_to and sender:
@@ -438,9 +649,12 @@ class HeuristicEngine:
                     type=EvidenceType.AUTH_REPLY_TO_MISMATCH,
                     severity=Severity.HIGH,
                     description=(
-                        f"The Reply-To header points to '{reply_domain}' while the sender domain is "
-                        f"'{sender_domain}'. This mismatch is a common indicator of BEC (Business Email "
-                        f"Compromise) attacks, where replies are routed to an attacker-controlled address."
+                        f"The Reply-To header points to "
+                        f"'{reply_domain}' while the sender domain "
+                        f"is '{sender_domain}'. This mismatch is a "
+                        f"common indicator of BEC (Business Email "
+                        f"Compromise) attacks, where replies are "
+                        f"routed to an attacker-controlled address."
                     ),
                     raw_data={
                         "sender_domain": sender_domain,
@@ -449,3 +663,116 @@ class HeuristicEngine:
                 ))
 
         return min(1.0, score), evidences
+
+    # ------------------------------------------------------------------
+    # Sub-engine 5: Attachment Analysis (additive bonus)
+    # ------------------------------------------------------------------
+
+    def _analyze_attachments(
+        self, email_data: dict
+    ) -> tuple[float, list[EvidenceItem]]:
+        """Check attachments for suspicious extensions and double extensions."""
+        evidences: list[EvidenceItem] = []
+        attachments: list[dict] = email_data.get("attachments", [])
+        bonus = 0.0
+
+        if not attachments:
+            return 0.0, []
+
+        for att in attachments:
+            filename = (att.get("filename") or "").lower()
+            if not filename:
+                continue
+
+            # Double extension (e.g., invoice.pdf.exe) — most dangerous
+            if re.search(DOUBLE_EXTENSION_PATTERN, filename, re.IGNORECASE):
+                bonus = max(bonus, ATTACHMENT_DOUBLE_EXT_BONUS)
+                evidences.append(EvidenceItem(
+                    type=EvidenceType.ATTACHMENT_DOUBLE_EXT,
+                    severity=Severity.CRITICAL,
+                    description=(
+                        f"The attachment '{filename}' uses a double extension, a technique "
+                        f"where a dangerous file type is disguised as a safe one (e.g., "
+                        f"'document.pdf.exe'). This is a strong indicator of malware delivery."
+                    ),
+                    raw_data={"filename": filename},
+                ))
+                continue
+
+            # Suspicious extension
+            for ext in SUSPICIOUS_EXTENSIONS:
+                if filename.endswith(ext):
+                    bonus = max(bonus, ATTACHMENT_SUSPICIOUS_BONUS)
+                    evidences.append(EvidenceItem(
+                        type=EvidenceType.ATTACHMENT_SUSPICIOUS_EXT,
+                        severity=Severity.HIGH,
+                        description=(
+                            f"The attachment '{filename}' has the extension '{ext}', which is "
+                            f"an executable or script file type commonly used to deliver malware. "
+                            f"Legitimate business emails rarely include these file types."
+                        ),
+                        raw_data={"filename": filename, "extension": ext},
+                    ))
+                    break
+
+        return bonus, evidences
+
+    # ------------------------------------------------------------------
+    # Sub-engine 6: Display Name Impersonation (additive bonus)
+    # ------------------------------------------------------------------
+
+    def _analyze_impersonation(
+        self, email_data: dict
+    ) -> list[EvidenceItem]:
+        """Detect display name impersonation patterns (BEC/CEO fraud)."""
+        evidences: list[EvidenceItem] = []
+
+        display_name = (email_data.get("sender_name") or "").lower()
+        if not display_name:
+            return []
+
+        # Check for executive title impersonation
+        for title in IMPERSONATION_TITLES:
+            if title in display_name:
+                evidences.append(EvidenceItem(
+                    type=EvidenceType.CEO_IMPERSONATION,
+                    severity=Severity.HIGH,
+                    description=(
+                        f"The sender's display name contains '{title}', an executive title "
+                        f"commonly used in Business Email Compromise (BEC) attacks. Attackers "
+                        f"impersonate executives to trick employees into unauthorized actions."
+                    ),
+                    raw_data={"display_name": display_name, "title_match": title},
+                ))
+                break
+
+        # Check if display name contains a known domain brand
+        # (e.g., "Google Support <fake@evil.com>")
+        sender_email = (email_data.get("sender_email") or "").lower()
+        if sender_email and "@" in sender_email:
+            sender_domain = sender_email.rsplit("@", 1)[1]
+            for known in KNOWN_DOMAINS:
+                brand = known.split(".")[0]
+                if (
+                    len(brand) >= 4
+                    and brand in display_name
+                    and brand not in sender_domain
+                ):
+                    evidences.append(EvidenceItem(
+                        type=EvidenceType.SENDER_IMPERSONATION,
+                        severity=Severity.HIGH,
+                        description=(
+                            f"The display name references '{brand}' but the sender's actual "
+                            f"domain is '{sender_domain}'. This is a common impersonation "
+                            f"technique where attackers use trusted brand names in the display "
+                            f"name to deceive recipients."
+                        ),
+                        raw_data={
+                            "display_name": display_name,
+                            "brand": brand,
+                            "sender_domain": sender_domain,
+                        },
+                    ))
+                    break
+
+        return evidences

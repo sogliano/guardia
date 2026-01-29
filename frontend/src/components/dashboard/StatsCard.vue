@@ -28,7 +28,7 @@ function hexToRgba(hex: string, alpha: number): string {
 
 <template>
   <div class="stats-card">
-    <div v-if="icon" class="card-icon">
+    <div v-if="icon" class="card-icon-wrap" :style="{ background: hexToRgba(iconColor ?? '#6B7280', 0.12) }">
       <span class="material-symbols-rounded" :style="{ color: iconColor ?? 'var(--text-muted)' }">{{ icon }}</span>
     </div>
     <div class="card-content">
@@ -62,10 +62,10 @@ function hexToRgba(hex: string, alpha: number): string {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
-  padding: 20px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
@@ -75,16 +75,18 @@ function hexToRgba(hex: string, alpha: number): string {
   box-shadow: var(--glow-cyan);
 }
 
-.card-icon {
+.card-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.card-icon .material-symbols-rounded {
-  font-size: 44px;
-  opacity: 0.35;
+.card-icon-wrap .material-symbols-rounded {
+  font-size: 20px;
 }
 
 .card-content {
@@ -103,8 +105,8 @@ function hexToRgba(hex: string, alpha: number): string {
 
 .card-value {
   font-family: var(--font-mono);
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--text-primary);
   line-height: 1.1;
 }

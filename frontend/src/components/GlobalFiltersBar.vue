@@ -92,7 +92,7 @@ watch(() => globalFilters.dateRange, (val) => {
   height: 30px;
   padding: 0 26px 0 8px;
   font-size: 12px;
-  font-family: var(--font-family);
+  font-family: var(--font-mono);
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
@@ -124,7 +124,7 @@ watch(() => globalFilters.dateRange, (val) => {
   height: 28px;
   padding: 0 6px;
   font-size: 12px;
-  font-family: var(--font-family);
+  font-family: var(--font-mono);
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border-color);

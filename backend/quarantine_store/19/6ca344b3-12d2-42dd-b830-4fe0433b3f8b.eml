@@ -1,0 +1,37 @@
+From: Slack Support <billing@slack-enterprise-upgrade.com>
+To: analyst@strike.sh
+Subject: Action needed: Your Slack Enterprise plan payment failed
+Date: Thu, 29 Jan 2026 14:03:49 +0000
+Message-ID:
+ <176969542900.16800.10519845645461754051@slack-enterprise-upgrade.com>
+MIME-Version: 1.0
+Reply-To: billing-support@slack-enterprise-upgrade.com
+Authentication-Results: mx.google.com; spf=fail (google.com: domain of
+ billing@slack-enterprise-upgrade.com); dkim=fail; dmarc=fail (p=REJECT)
+Received: from mail.slack-enterprise-upgrade.com
+ (mail.slack-enterprise-upgrade.com [203.0.113.42]) by guardia.strike.sh with
+ ESMTPS; Thu, 29 Jan 2026 14:03:49 +0000
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Hi Strike Security admin,
+
+We were unable to process the payment for your Slack Enterprise Grid plan (Wo=
+rkspace: strike-security.slack.com).
+
+Plan: Enterprise Grid
+Amount due: $4,200.00/mo
+Next retry: Tomorrow
+
+If payment fails again, your workspace will be downgraded to the Free plan an=
+d all Enterprise features (SSO, DLP, compliance exports) will be disabled.
+
+Update your payment method now:
+https://slack-enterprise-upgrade.com/billing/update?ws=3Dstrike
+
+If you believe this is an error, contact our billing team.
+
+Slack Billing Team
+
+Please visit: https://slack-enterprise-upgrade.com/billing/update?ws=3Dstrike=
+ https://bit.ly/slack-billing-help
