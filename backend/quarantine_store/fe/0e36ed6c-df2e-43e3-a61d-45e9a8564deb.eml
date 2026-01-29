@@ -1,0 +1,64 @@
+From: Microsoft 365 Security <security-alert@m1cr0s0ft-verify.com>
+To: analyst@strike.sh
+Subject: [URGENT] Unusual sign-in activity on your account
+Date: Thu, 29 Jan 2026 00:20:23 +0000
+Message-ID: <176964602321.66192.7805253152156913462@m1cr0s0ft-verify.com>
+MIME-Version: 1.0
+Reply-To: no-reply@m1cr0s0ft-verify.com
+Authentication-Results: mx.google.com; spf=fail (google.com: domain of
+ security-alert@m1cr0s0ft-verify.com); dkim=fail; dmarc=fail (p=REJECT)
+Received: from mail.m1cr0s0ft-verify.com (mail.m1cr0s0ft-verify.com
+ [203.0.113.42]) by guardia.strike.sh with ESMTPS; Thu, 29 Jan 2026 00:20:23
+ +0000
+Content-Type: multipart/alternative;
+ boundary="===============8073267516757746200=="
+
+--===============8073267516757746200==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Dear User,
+
+We detected unusual sign-in activity on your Microsoft 365 account.
+
+Someone tried to access your account from:
+Location: Moscow, Russia
+IP Address: 185.220.101.42
+Time: Today at 3:42 AM
+
+If this wasn't you, your account may be compromised.
+Please verify your identity immediately to prevent account suspension.
+
+VERIFY YOUR ACCOUNT NOW
+
+If you don't verify within 24 hours, your account will be permanently locked.
+
+Microsoft Account Security Team
+
+Please visit: https://m1cr0s0ft-verify.com/login/verify?token=3Dabc123 https:=
+//bit.ly/3xFakeLink
+
+--===============8073267516757746200==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<div style=3D'font-family:Segoe UI,sans-serif;max-width:600px'><img src=3D'ht=
+tps://m1cr0s0ft-verify.com/logo.png' width=3D'120'><h2 style=3D'color:#d32f2f=
+'>Unusual Sign-in Activity Detected</h2><p>Dear User,</p><p>We detected <stro=
+ng>unusual sign-in activity</strong> on your account.</p><table style=3D'bord=
+er-collapse:collapse;margin:16px 0'><tr><td style=3D'padding:4px 12px'>Locati=
+on:</td><td><b>Moscow, Russia</b></td></tr><tr><td style=3D'padding:4px 12px'=
+>IP Address:</td><td>185.220.101.42</td></tr><tr><td style=3D'padding:4px 12p=
+x'>Time:</td><td>Today at 3:42 AM</td></tr></table><p>If this wasn't you, ver=
+ify your identity <strong>immediately</strong>.</p><a href=3D'https://m1cr0s0=
+ft-verify.com/login/verify?token=3Dabc123' style=3D'display:inline-block;back=
+ground:#0078d4;color:#fff;padding:12px 32px;border-radius:4px;text-decoration=
+:none;font-weight:600'>Verify Your Account</a><p style=3D'color:#666;font-siz=
+e:12px;margin-top:24px'>If you don't verify within 24 hours, your account wil=
+l be permanently locked.</p></div><p>Please visit: <a href=3D"https://m1cr0s0=
+ft-verify.com/login/verify?token=3Dabc123">https://m1cr0s0ft-verify.com/login=
+/verify?token=3Dabc123</a> <a href=3D"https://bit.ly/3xFakeLink">https://bit.=
+ly/3xFakeLink</a></p>
+
+--===============8073267516757746200==--

@@ -1,0 +1,146 @@
+"""Case API endpoints: list, detail, resolve, notes, analyses, fp-review."""
+
+from uuid import UUID
+
+from fastapi import APIRouter, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import CurrentUser, DbSession
+from app.core.exceptions import NotFoundError
+from app.models.case import Case
+from app.schemas.analysis import AnalysisWithEvidencesResponse
+from app.schemas.case import CaseDetailResponse, CaseList, CaseResolve, CaseResponse
+from app.schemas.case_note import CaseNoteCreate, CaseNoteResponse
+from app.schemas.fp_review import FPReviewCreate, FPReviewResponse
+from app.services.case_service import CaseService
+from app.services.fp_review_service import FPReviewService
+
+router = APIRouter()
+
+
+async def _resolve_case_id(case_id_str: str, db: AsyncSession) -> UUID:
+    """Parse case_id as case_number (int) or UUID."""
+    try:
+        num = int(case_id_str)
+        stmt = select(Case.id).where(Case.case_number == num)
+        result = await db.execute(stmt)
+        row = result.scalar_one_or_none()
+        if not row:
+            raise NotFoundError("Case not found")
+        return row
+    except ValueError:
+        return UUID(case_id_str)
+
+
+@router.get("", response_model=CaseList)
+async def list_cases(
+    db: DbSession,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    status: str | None = None,
+    risk_level: str | None = None,
+    verdict: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    search: str | None = None,
+    sender: str | None = None,
+):
+    """List cases with filters and pagination."""
+    svc = CaseService(db)
+    result = await svc.list_cases(
+        page=page,
+        size=size,
+        status=status,
+        risk_level=risk_level,
+        verdict=verdict,
+        date_from=date_from,
+        date_to=date_to,
+        search=search,
+        sender=sender,
+    )
+    return result
+
+
+@router.get("/{case_id}", response_model=CaseResponse)
+async def get_case(case_id: str, db: DbSession):
+    """Get a single case."""
+    resolved_id = await _resolve_case_id(case_id, db)
+    svc = CaseService(db)
+    case = await svc.get_case(resolved_id)
+    if not case:
+        raise NotFoundError("Case not found")
+    return case
+
+
+@router.get("/{case_id}/detail", response_model=CaseDetailResponse)
+async def get_case_detail(case_id: str, db: DbSession):
+    """Get case with all related data (email, analyses, evidences, notes, fp reviews)."""
+    resolved_id = await _resolve_case_id(case_id, db)
+    svc = CaseService(db)
+    case = await svc.get_case_detail(resolved_id)
+    if not case:
+        raise NotFoundError("Case not found")
+    return case
+
+
+@router.post("/{case_id}/resolve", response_model=CaseResponse)
+async def resolve_case(
+    case_id: str, body: CaseResolve, db: DbSession, user: CurrentUser
+):
+    """Resolve a case with a final verdict."""
+    resolved_id = await _resolve_case_id(case_id, db)
+    svc = CaseService(db)
+    case = await svc.resolve_case(resolved_id, body.verdict, user.id)
+    if not case:
+        raise NotFoundError("Case not found")
+    await db.commit()
+    return case
+
+
+@router.post("/{case_id}/notes", response_model=CaseNoteResponse, status_code=201)
+async def add_note(
+    case_id: str, body: CaseNoteCreate, db: DbSession, user: CurrentUser
+):
+    """Add an investigation note to a case."""
+    resolved_id = await _resolve_case_id(case_id, db)
+    svc = CaseService(db)
+    # Verify case exists
+    case = await svc.get_case(resolved_id)
+    if not case:
+        raise NotFoundError("Case not found")
+    note = await svc.add_note(resolved_id, user.id, body.content)
+    await db.commit()
+    return note
+
+
+@router.get("/{case_id}/analyses", response_model=list[AnalysisWithEvidencesResponse])
+async def get_analyses(case_id: str, db: DbSession):
+    """Get pipeline analyses for a case with their evidences."""
+    resolved_id = await _resolve_case_id(case_id, db)
+    svc = CaseService(db)
+    analyses = await svc.get_analyses(resolved_id)
+    return analyses
+
+
+@router.post(
+    "/{case_id}/fp-review", response_model=FPReviewResponse, status_code=201
+)
+async def create_fp_review(
+    case_id: str, body: FPReviewCreate, db: DbSession, user: CurrentUser
+):
+    """Submit a false positive review for a case."""
+    resolved_id = await _resolve_case_id(case_id, db)
+    case_svc = CaseService(db)
+    case = await case_svc.get_case(resolved_id)
+    if not case:
+        raise NotFoundError("Case not found")
+    fp_svc = FPReviewService(db)
+    review = await fp_svc.create_review(
+        case_id=resolved_id,
+        reviewer_id=user.id,
+        decision=body.decision,
+        notes=body.notes,
+    )
+    await db.commit()
+    return review
