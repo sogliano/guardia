@@ -146,11 +146,15 @@ THRESHOLD_ALLOW = 0.3
 THRESHOLD_WARN = 0.6
 THRESHOLD_QUARANTINE = 0.8
 
-# Heuristic engine weights
-HEURISTIC_WEIGHT_DOMAIN = 0.25
-HEURISTIC_WEIGHT_URL = 0.25
-HEURISTIC_WEIGHT_KEYWORD = 0.25
-HEURISTIC_WEIGHT_AUTH = 0.25
+# Heuristic engine weights (must sum to 1.0)
+HEURISTIC_WEIGHT_AUTH = 0.35       # Most reliable signal (SPF/DKIM/DMARC)
+HEURISTIC_WEIGHT_DOMAIN = 0.25     # Typosquatting, blacklists, suspicious TLDs
+HEURISTIC_WEIGHT_URL = 0.25        # IP-based URLs, shorteners, suspicious links
+HEURISTIC_WEIGHT_KEYWORD = 0.15    # Noisiest signal, most false positives
+
+# Correlation boost: multiple sub-engines triggering = higher confidence
+HEURISTIC_CORRELATION_BOOST_3 = 1.15   # 3 sub-engines fired
+HEURISTIC_CORRELATION_BOOST_4 = 1.25   # all 4 sub-engines fired
 
 # Pipeline score weights (final score calculation)
 SCORE_WEIGHT_HEURISTIC = 0.40

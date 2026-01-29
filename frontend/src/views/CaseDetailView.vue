@@ -72,7 +72,7 @@ function formatMs(ms: number | null): string {
 }
 
 function formatScore(score: number | null): string {
-  return score != null ? (score * 100).toFixed(1) + '%' : '—'
+  return score != null ? (score * 100).toFixed(0) + '%' : '—'
 }
 
 function riskBadgeClass(level: string | null): string {
@@ -165,11 +165,50 @@ const stageDescs: Record<string, string> = {
   llm: 'AI-generated natural language explanation of the analysis',
 }
 
-function stageStatusLabel(analysis: Analysis): string {
+const evidenceTypeLabels: Record<string, string> = {
+  auth_spf_fail: 'SPF Authentication',
+  auth_dkim_fail: 'DKIM Signature',
+  auth_dmarc_fail: 'DMARC Policy',
+  auth_reply_to_mismatch: 'Reply-To Mismatch',
+  domain_blacklisted: 'Blocklisted Domain',
+  domain_typosquatting: 'Typosquatting',
+  domain_suspicious_tld: 'Suspicious TLD',
+  url_shortener: 'URL Shortener',
+  url_ip_based: 'IP-Based URL',
+  url_suspicious: 'Suspicious URL',
+  keyword_urgency: 'Urgency Language',
+  keyword_phishing: 'Phishing Keywords',
+  keyword_caps_abuse: 'Caps Abuse',
+  ml_threat_detected: 'ML Threat Signal',
+  impersonation_display_name: 'Display Name Spoofing',
+}
+
+function evidenceLabel(type: string): string {
+  return evidenceTypeLabels[type] ?? type.replace(/_/g, ' ')
+}
+
+const severityOrder: Record<string, number> = {
+  critical: 0, high: 1, medium: 2, low: 3,
+}
+
+function sortedEvidences(evidences: Evidence[]): Evidence[] {
+  return [...evidences].sort((a, b) => (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4))
+}
+
+function isStageUnavailable(analysis: Analysis): boolean {
+  if (analysis.stage === 'ml') {
+    return analysis.score === 0 && analysis.confidence === 0 && analysis.execution_time_ms === 0
+  }
   if (analysis.stage === 'llm') {
-    if (!analysis.explanation) return 'No explanation'
-    if (analysis.explanation.toLowerCase().includes('unavailable')) return 'Unavailable'
-    return 'Explained'
+    return !analysis.explanation || analysis.explanation.toLowerCase().includes('unavailable')
+  }
+  return false
+}
+
+function stageStatusLabel(analysis: Analysis): string {
+  if (isStageUnavailable(analysis)) return 'Unavailable'
+  if (analysis.stage === 'llm') {
+    return analysis.explanation ? 'Explained' : 'No explanation'
   }
   if (analysis.score === null) return 'No data'
   if (analysis.score < 0.3) return 'Clean'
@@ -178,6 +217,7 @@ function stageStatusLabel(analysis: Analysis): string {
 }
 
 function stageStatusColor(analysis: Analysis): string {
+  if (isStageUnavailable(analysis)) return 'var(--text-muted)'
   if (analysis.stage === 'llm') return analysis.explanation ? 'var(--color-info)' : 'var(--text-muted)'
   if (analysis.score === null) return 'var(--text-muted)'
   return scoreColor(analysis.score)
@@ -286,7 +326,6 @@ onMounted(loadData)
       <div class="detail-header">
         <button class="btn-back" @click="router.push('/cases')">
           <span class="material-symbols-rounded">arrow_back</span>
-          Back
         </button>
         <div class="header-info">
           <h1>Case #{{ caseData.case_number }}</h1>
@@ -301,11 +340,13 @@ onMounted(loadData)
             <svg viewBox="0 0 80 80" class="score-svg">
               <circle cx="40" cy="40" r="34" fill="none" stroke="var(--border-color)" stroke-width="5" />
               <circle
+                class="score-arc"
                 cx="40" cy="40" r="34" fill="none"
                 :stroke="scoreColor(caseData.final_score)"
                 stroke-width="5"
                 stroke-linecap="round"
                 :stroke-dasharray="`${(caseData.final_score ?? 0) * 213.6} 213.6`"
+                stroke-dashoffset="213.6"
                 transform="rotate(-90 40 40)"
               />
             </svg>
@@ -313,7 +354,7 @@ onMounted(loadData)
               <span class="score-ring-value" :style="{ color: scoreColor(caseData.final_score) }">
                 {{ (caseData.final_score * 100).toFixed(0) }}
               </span>
-              <span class="score-ring-label">Score</span>
+              <span class="score-ring-label">SCORE</span>
             </div>
           </div>
         </div>
@@ -764,9 +805,11 @@ onMounted(loadData)
                 <div class="tl-node-info">
                   <span class="tl-node-name">{{ stageNames[analysis.stage] ?? analysis.stage }}</span>
                   <span class="tl-node-result" :style="{ color: stageStatusColor(analysis) }">
-                    {{ analysis.stage === 'llm'
-                      ? stageStatusLabel(analysis)
-                      : analysis.score !== null ? (analysis.score * 100).toFixed(0) + '%' : '—' }}
+                    {{ isStageUnavailable(analysis)
+                      ? 'Unavailable'
+                      : analysis.stage === 'llm'
+                        ? stageStatusLabel(analysis)
+                        : analysis.score !== null ? (analysis.score * 100).toFixed(0) + '%' : '—' }}
                   </span>
                 </div>
                 <span v-if="analysis.execution_time_ms" class="tl-node-time">{{ formatMs(analysis.execution_time_ms) }}</span>
@@ -806,21 +849,29 @@ onMounted(loadData)
 
             <!-- Content -->
             <div class="stage-content">
-              <div class="stage-v2-header" @click="toggleStage(analysis.id)">
+              <div class="stage-v2-header" :class="{ 'stage-v2-disabled': isStageUnavailable(analysis) }" @click="!isStageUnavailable(analysis) && toggleStage(analysis.id)">
                 <span class="material-symbols-rounded stage-v2-icon">{{ stageIcons[analysis.stage] ?? 'analytics' }}</span>
                 <div class="stage-v2-title">
                   <span class="stage-v2-name">{{ stageNames[analysis.stage] ?? analysis.stage }}</span>
                   <span class="stage-v2-desc">{{ stageDescs[analysis.stage] ?? '' }}</span>
                 </div>
                 <div class="stage-v2-metrics">
-                  <span v-if="analysis.score !== null" class="stage-v2-score" :style="{ color: scoreColor(analysis.score) }">
-                    {{ (analysis.score * 100).toFixed(0) }}%
-                  </span>
-                  <span v-if="analysis.confidence !== null" class="stage-v2-conf">
-                    {{ (analysis.confidence * 100).toFixed(0) }}% conf
-                  </span>
-                  <span class="stage-v2-time">{{ formatMs(analysis.execution_time_ms) }}</span>
-                  <span class="material-symbols-rounded stage-v2-toggle">
+                  <template v-if="isStageUnavailable(analysis)">
+                    <span
+                      class="stage-v2-unavailable tooltip-wrap tooltip-bottom tooltip-right"
+                      :data-tooltip="`${stageNames[analysis.stage] ?? analysis.stage} was not executed during this analysis pipeline run.`"
+                    >Unavailable</span>
+                  </template>
+                  <template v-else>
+                    <span v-if="analysis.score !== null" class="stage-v2-score" :style="{ color: scoreColor(analysis.score) }">
+                      {{ (analysis.score * 100).toFixed(0) }}%
+                    </span>
+                    <span v-if="analysis.confidence !== null" class="stage-v2-conf">
+                      {{ (analysis.confidence * 100).toFixed(0) }}% conf
+                    </span>
+                    <span class="stage-v2-time">{{ formatMs(analysis.execution_time_ms) }}</span>
+                  </template>
+                  <span v-if="!isStageUnavailable(analysis)" class="material-symbols-rounded stage-v2-toggle">
                     {{ expandedStages.has(analysis.id) ? 'expand_less' : 'expand_more' }}
                   </span>
                 </div>
@@ -875,9 +926,9 @@ onMounted(loadData)
               <!-- Evidences -->
               <div v-if="expandedStages.has(analysis.id) && analysis.evidences?.length" class="stage-v2-evidences">
                 <h5 class="evidence-title">Evidence ({{ analysis.evidences.length }})</h5>
-                <div v-for="ev in analysis.evidences" :key="ev.id" class="evidence-item">
+                <div v-for="ev in sortedEvidences(analysis.evidences)" :key="ev.id" class="evidence-item">
                   <span class="badge" :class="severityBadgeClass(ev.severity)">{{ ev.severity }}</span>
-                  <span class="evidence-type">{{ ev.type.replace(/_/g, ' ') }}</span>
+                  <span class="evidence-type">{{ evidenceLabel(ev.type) }}</span>
                   <p class="evidence-desc">{{ ev.description }}</p>
                 </div>
               </div>
@@ -1003,11 +1054,12 @@ onMounted(loadData)
 
 <style scoped>
 .case-detail {
-  padding: 24px;
+  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-md);
   max-width: 1200px;
+  font-family: var(--font-mono);
 }
 
 /* Loading / Error */
@@ -1020,7 +1072,8 @@ onMounted(loadData)
   gap: 12px;
   padding: 64px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: var(--font-md);
+  font-family: var(--font-mono);
 }
 
 .spin {
@@ -1042,19 +1095,22 @@ onMounted(loadData)
 .btn-back {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: none;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: 4px;
+  padding: 0;
   cursor: pointer;
-  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
   transition: all 0.15s;
 }
 
 .btn-back:hover {
   color: var(--text-primary);
+  background: var(--bg-tertiary);
   border-color: var(--text-muted);
 }
 
@@ -1063,14 +1119,14 @@ onMounted(loadData)
 }
 
 .header-info {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .header-info h1 {
-  font-size: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xl);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -1097,6 +1153,19 @@ onMounted(loadData)
   height: 100%;
 }
 
+.score-arc {
+  animation: score-fill 1s ease-out forwards;
+}
+
+@keyframes score-fill {
+  from {
+    stroke-dashoffset: 213.6;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 .score-ring-text {
   position: absolute;
   inset: 0;
@@ -1107,15 +1176,18 @@ onMounted(loadData)
 }
 
 .score-ring-value {
+  font-family: var(--font-mono);
   font-size: 22px;
   font-weight: 800;
   line-height: 1;
 }
 
 .score-ring-label {
+  font-family: var(--font-mono);
   font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin-top: 1px;
 }
 
@@ -1125,7 +1197,8 @@ onMounted(loadData)
   align-items: center;
   padding: 2px 10px;
   border-radius: 12px;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   font-weight: 600;
   text-transform: capitalize;
 }
@@ -1153,7 +1226,8 @@ onMounted(loadData)
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -1182,15 +1256,22 @@ onMounted(loadData)
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--border-radius);
   padding: 20px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .card-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 16px 0;
@@ -1224,14 +1305,16 @@ onMounted(loadData)
 }
 
 .info-label {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .info-value {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-primary);
   word-break: break-word;
 }
@@ -1242,7 +1325,8 @@ onMounted(loadData)
   align-items: center;
   padding: 2px 10px;
   border-radius: 4px;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   font-weight: 600;
   cursor: help;
 }
@@ -1259,9 +1343,10 @@ onMounted(loadData)
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: #1E293B;
-  color: #E2E8F0;
-  font-size: 11px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   font-weight: 400;
   line-height: 1.5;
   padding: 8px 12px;
@@ -1285,9 +1370,16 @@ onMounted(loadData)
   top: calc(100% + 8px);
 }
 
+.tooltip-right::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
 /* LLM Explanation */
 .llm-explanation {
-  font-size: 13px;
+  font-family: var(--font-family);
+  font-size: var(--font-base);
   color: var(--text-secondary);
   line-height: 1.7;
   margin: 0;
@@ -1298,7 +1390,8 @@ onMounted(loadData)
   display: flex;
   gap: 16px;
   margin-top: 12px;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
 }
 
@@ -1336,13 +1429,15 @@ onMounted(loadData)
 .auth-fail .auth-icon { color: var(--color-critical); }
 
 .auth-name {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .auth-result {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   margin-left: auto;
   text-transform: uppercase;
@@ -1370,12 +1465,14 @@ onMounted(loadData)
 }
 
 .score-big {
-  font-size: 32px;
+  font-family: var(--font-mono);
+  font-size: var(--font-3xl);
   font-weight: 800;
 }
 
 .score-desc {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-muted);
 }
 
@@ -1413,6 +1510,7 @@ onMounted(loadData)
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
+  font-family: var(--font-mono);
   font-size: 9px;
   color: var(--text-muted);
 }
@@ -1420,6 +1518,7 @@ onMounted(loadData)
 .score-bar-labels {
   display: flex;
   justify-content: space-between;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
   padding-top: 4px;
@@ -1442,17 +1541,20 @@ onMounted(loadData)
 }
 
 .sub-label {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-secondary);
 }
 
 .sub-value {
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 700;
 }
 
 .sub-time {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
 }
 
@@ -1476,21 +1578,23 @@ onMounted(loadData)
 }
 
 .action-prompt-text h3 {
-  font-size: 15px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .action-prompt-text p {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
   margin: 2px 0 0 0;
 }
 
 .btn-lg {
   padding: 10px 24px;
-  font-size: 14px;
+  font-size: var(--font-md);
 }
 
 /* Modal */
@@ -1524,7 +1628,8 @@ onMounted(loadData)
 }
 
 .modal-header h2 {
-  font-size: 17px;
+  font-family: var(--font-mono);
+  font-size: var(--font-lg);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -1559,7 +1664,8 @@ onMounted(loadData)
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   font-weight: 700;
   background: var(--bg-elevated);
   color: var(--text-muted);
@@ -1593,14 +1699,16 @@ onMounted(loadData)
 }
 
 .step-title {
-  font-size: 15px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 4px 0;
 }
 
 .step-desc {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-muted);
   margin: 0 0 16px 0;
 }
@@ -1638,14 +1746,16 @@ onMounted(loadData)
 
 .verdict-option-label {
   display: block;
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .verdict-option-desc {
   display: block;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
@@ -1675,7 +1785,8 @@ onMounted(loadData)
 }
 
 .fp-toggle-label {
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   color: var(--text-primary);
 }
 
@@ -1684,7 +1795,8 @@ onMounted(loadData)
 }
 
 .fp-hint {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
   margin: 6px 0 0 0;
 }
@@ -1706,12 +1818,14 @@ onMounted(loadData)
 }
 
 .confirm-label {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-muted);
 }
 
 .confirm-notes {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   text-align: right;
   max-width: 280px;
@@ -1740,7 +1854,8 @@ onMounted(loadData)
 }
 
 .resolved-fp-text {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
@@ -1757,8 +1872,9 @@ onMounted(loadData)
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--border-radius);
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -1787,7 +1903,8 @@ onMounted(loadData)
 }
 
 .resolved-date {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
 }
 
@@ -1802,9 +1919,10 @@ onMounted(loadData)
   padding: 8px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   color: var(--text-primary);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   min-width: 200px;
 }
 
@@ -1813,10 +1931,10 @@ onMounted(loadData)
   padding: 8px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   color: var(--text-primary);
-  font-size: 13px;
-  font-family: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   resize: vertical;
   margin-top: 8px;
 }
@@ -1829,8 +1947,9 @@ onMounted(loadData)
   background: var(--accent-cyan);
   color: #0A1628;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--border-radius);
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
@@ -1847,7 +1966,8 @@ onMounted(loadData)
 
 /* Email Content Tab */
 .header-count {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -1866,7 +1986,8 @@ onMounted(loadData)
   gap: 8px;
   padding: 4px 0;
   border-bottom: 1px solid var(--border-color);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
 }
 
 .header-key {
@@ -1895,14 +2016,15 @@ onMounted(loadData)
 }
 
 .email-body-text {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--bg-elevated);
   padding: 16px;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   max-height: 500px;
   overflow-y: auto;
   margin: 0;
@@ -1929,7 +2051,8 @@ onMounted(loadData)
 }
 
 .url-text {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--accent-cyan);
   word-break: break-all;
 }
@@ -1946,8 +2069,9 @@ onMounted(loadData)
   gap: 8px;
   padding: 8px 12px;
   background: var(--bg-elevated);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--border-radius);
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-secondary);
 }
 
@@ -1960,8 +2084,14 @@ onMounted(loadData)
 .pipeline-timeline {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 24px;
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-lg);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.pipeline-timeline:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .tl-header {
@@ -1977,14 +2107,16 @@ onMounted(loadData)
 }
 
 .tl-header-title {
-  font-size: 16px;
+  font-family: var(--font-mono);
+  font-size: var(--font-lg);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
 
 .tl-header-sub {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
   margin: 2px 0 0 0;
 }
@@ -2038,18 +2170,21 @@ onMounted(loadData)
 }
 
 .tl-node-name {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .tl-node-result {
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 800;
 }
 
 .tl-node-time {
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
 }
@@ -2098,7 +2233,8 @@ onMounted(loadData)
   height: 26px;
   border-radius: 13px;
   color: #0A1628;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -2119,9 +2255,15 @@ onMounted(loadData)
   min-width: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: var(--border-radius-lg);
   padding: 18px 20px;
   margin: 6px 0 6px 12px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.stage-content:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--glow-cyan);
 }
 
 .stage-v2-header {
@@ -2132,8 +2274,12 @@ onMounted(loadData)
   user-select: none;
 }
 
-.stage-v2-header:hover .stage-v2-name {
+.stage-v2-header:not(.stage-v2-disabled):hover .stage-v2-name {
   color: var(--accent-cyan);
+}
+
+.stage-v2-disabled {
+  cursor: default;
 }
 
 .stage-v2-toggle {
@@ -2155,14 +2301,16 @@ onMounted(loadData)
 
 .stage-v2-name {
   display: block;
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-md);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .stage-v2-desc {
   display: block;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
   margin-top: 1px;
   line-height: 1.4;
@@ -2176,12 +2324,14 @@ onMounted(loadData)
 }
 
 .stage-v2-score {
-  font-size: 18px;
+  font-family: var(--font-mono);
+  font-size: var(--font-lg);
   font-weight: 800;
 }
 
 .stage-v2-conf {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
   background: var(--color-info-bg);
   padding: 2px 8px;
@@ -2189,8 +2339,17 @@ onMounted(loadData)
 }
 
 .stage-v2-time {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
+}
+
+.stage-v2-unavailable {
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .stage-v2-bar {
@@ -2227,12 +2386,14 @@ onMounted(loadData)
 }
 
 .hsub-label {
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-secondary);
 }
 
 .hsub-value {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   font-weight: 700;
 }
 
@@ -2241,7 +2402,8 @@ onMounted(loadData)
 }
 
 .stage-v2-explanation {
-  font-size: 13px;
+  font-family: var(--font-family);
+  font-size: var(--font-base);
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 12px 0 0 30px;
@@ -2253,12 +2415,13 @@ onMounted(loadData)
 }
 
 .evidence-title {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
   margin: 0 0 8px 0;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .evidence-item {
@@ -2269,7 +2432,8 @@ onMounted(loadData)
 }
 
 .evidence-type {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-primary);
   text-transform: capitalize;
@@ -2277,7 +2441,8 @@ onMounted(loadData)
 }
 
 .evidence-desc {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   margin: 4px 0 0 0;
   line-height: 1.4;
@@ -2290,8 +2455,9 @@ onMounted(loadData)
   align-items: center;
   background: var(--bg-card);
   border: 1px solid var(--accent-cyan);
-  border-radius: 10px;
-  padding: 24px;
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--glow-cyan);
 }
 
 .verdict-v2-left {
@@ -2318,13 +2484,15 @@ onMounted(loadData)
 }
 
 .verdict-label {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-sm);
   color: var(--text-muted);
   min-width: 120px;
 }
 
 .verdict-duration {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   font-weight: 500;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -2352,7 +2520,8 @@ onMounted(loadData)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
   color: var(--text-muted);
   margin-bottom: 4px;
 }
@@ -2400,16 +2569,18 @@ onMounted(loadData)
 
 .btn-sm {
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
 
 .note-author {
+  font-family: var(--font-mono);
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .note-item p {
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -2423,6 +2594,7 @@ onMounted(loadData)
 
 .empty-text {
   color: var(--text-muted);
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--font-base);
 }
 </style>

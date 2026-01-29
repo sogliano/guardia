@@ -280,6 +280,328 @@ def newsletter_legitimate(recipient: str = "analyst@strike.sh") -> EmailMessage:
     )
 
 
+# ---------------------------------------------------------------------------
+# Wave 2 templates (10 new scenarios)
+# ---------------------------------------------------------------------------
+
+def payroll_bec_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """BEC targeting payroll/HR — bank change request. Should score HIGH."""
+    return _build_email(
+        sender_name="Sofia Martinez",
+        sender_email="sofia.martinez@strike-security.net",  # lookalike domain
+        recipient=recipient,
+        subject="Update my direct deposit information",
+        body_text=(
+            "Hi HR team,\n\n"
+            "I recently changed banks and need to update my direct deposit "
+            "information before the next payroll cycle.\n\n"
+            "New bank details:\n"
+            "Bank: Chase\n"
+            "Routing: 021000021\n"
+            "Account: 893-284-1920\n"
+            "Account type: Checking\n\n"
+            "Can you please process this change as soon as possible? "
+            "I don't want to miss the next pay period.\n\n"
+            "Thanks,\n"
+            "Sofia Martinez\n"
+            "Engineering Team"
+        ),
+        reply_to="sofia.m.private@protonmail.com",
+        auth_spf="fail",
+        auth_dkim="fail",
+        auth_dmarc="fail",
+    )
+
+
+def invoice_fraud_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Fake invoice / payment fraud. Should score HIGH."""
+    return _build_email(
+        sender_name="Accounts Payable",
+        sender_email="ap@vendor-invoices-portal.com",
+        recipient=recipient,
+        subject="OVERDUE: Invoice #INV-20260089 — Payment Required Immediately",
+        body_text=(
+            "URGENT — OVERDUE INVOICE\n\n"
+            "Dear Accounts Payable,\n\n"
+            "This is a final reminder that Invoice #INV-20260089 for $23,750.00 "
+            "is now 15 days overdue.\n\n"
+            "Failure to remit payment within 24 hours will result in late fees "
+            "and potential service suspension.\n\n"
+            "Pay now: https://vendor-invoices-portal.com/pay/INV-20260089\n\n"
+            "Wire transfer details:\n"
+            "Beneficiary: Global Services LLC\n"
+            "Account: 7382-4920-1847\n"
+            "SWIFT: GBLSUS33\n\n"
+            "Please confirm payment immediately.\n\n"
+            "Accounts Payable Department\n"
+            "Global Services LLC"
+        ),
+        auth_spf="fail",
+        auth_dkim="none",
+        auth_dmarc="fail",
+        urls=["https://vendor-invoices-portal.com/pay/INV-20260089"],
+    )
+
+
+def qr_code_phishing_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """QR code phishing (quishing) — fake MFA setup. Should score MEDIUM-HIGH."""
+    return _build_email(
+        sender_name="Strike Security IT",
+        sender_email="it-admin@strikesecurlty.com",  # typosquat: i→l
+        recipient=recipient,
+        subject="Mandatory: Multi-Factor Authentication Enrollment Required",
+        body_text=(
+            "Hello,\n\n"
+            "As part of our new security policy, all employees must enroll "
+            "in Multi-Factor Authentication (MFA) by end of day.\n\n"
+            "Please scan the QR code in the attached document or visit the link "
+            "below to complete enrollment:\n\n"
+            "https://strikesecurlty.com/mfa/enroll?user=auto\n\n"
+            "If you do not complete enrollment by 5:00 PM today, your account "
+            "will be temporarily suspended.\n\n"
+            "IT Security Team"
+        ),
+        auth_spf="softfail",
+        auth_dkim="fail",
+        auth_dmarc="none",
+        urls=["https://strikesecurlty.com/mfa/enroll?user=auto"],
+        has_attachment=True,
+        attachment_name="MFA_Setup_Instructions.pdf",
+    )
+
+
+def legitimate_github_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Legitimate GitHub notification — should score LOW, be ALLOWED."""
+    return _build_email(
+        sender_name="GitHub",
+        sender_email="notifications@github.com",
+        recipient=recipient,
+        subject="[guardia] Pull request #47: Add ML pipeline confidence thresholds",
+        body_text=(
+            "@nicolas-sogliano requested your review on pull request #47.\n\n"
+            "Add ML pipeline confidence thresholds\n\n"
+            "This PR introduces configurable confidence thresholds for the "
+            "DistilBERT classifier. Changes:\n\n"
+            "- Added threshold_ml_confidence to config.py\n"
+            "- Updated orchestrator to skip ML when confidence < threshold\n"
+            "- Added 4 new unit tests\n\n"
+            "Files changed: 3\n"
+            "Lines: +87 -12\n\n"
+            "View pull request:\n"
+            "https://github.com/strike-security/guardia/pull/47\n\n"
+            "---\n"
+            "You are receiving this because you were requested for review.\n"
+            "Unsubscribe: https://github.com/notifications/unsubscribe/abc123"
+        ),
+        auth_spf="pass",
+        auth_dkim="pass",
+        auth_dmarc="pass",
+        urls=[
+            "https://github.com/strike-security/guardia/pull/47",
+            "https://github.com/notifications/unsubscribe/abc123",
+        ],
+    )
+
+
+def crypto_scam_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Crypto/investment scam — should score HIGH."""
+    return _build_email(
+        sender_name="Binance Security",
+        sender_email="alert@binance-wallet-verify.xyz",
+        recipient=recipient,
+        subject="ACTION REQUIRED: Unauthorized withdrawal detected on your wallet",
+        body_text=(
+            "SECURITY ALERT\n\n"
+            "An unauthorized withdrawal of 2.4 BTC ($147,832.00) was detected "
+            "from your Binance account.\n\n"
+            "Transaction details:\n"
+            "Amount: 2.4 BTC\n"
+            "Destination: bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh\n"
+            "Status: PENDING (can be cancelled within 12 hours)\n\n"
+            "If you did NOT authorize this transaction, cancel it immediately:\n"
+            "https://binance-wallet-verify.xyz/cancel-withdrawal\n\n"
+            "DO NOT IGNORE THIS MESSAGE. Failure to respond will result in "
+            "permanent loss of funds.\n\n"
+            "Binance Security Team"
+        ),
+        auth_spf="fail",
+        auth_dkim="fail",
+        auth_dmarc="fail",
+        urls=[
+            "https://binance-wallet-verify.xyz/cancel-withdrawal",
+            "http://192.168.44.12/redirect",
+        ],
+    )
+
+
+def legitimate_calendar_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Legitimate Google Calendar invite — should score LOW, be ALLOWED."""
+    return _build_email(
+        sender_name="Google Calendar",
+        sender_email="calendar-notification@google.com",
+        recipient=recipient,
+        subject="Invitation: Sprint Planning — Wed Jan 29, 2026 10:00 AM",
+        body_text=(
+            "Sprint Planning\n\n"
+            "When: Wednesday, January 29, 2026 10:00 AM - 11:00 AM (UYT)\n"
+            "Where: Google Meet — https://meet.google.com/abc-defg-hij\n"
+            "Calendar: nicolas.sogliano@strike.sh\n\n"
+            "Organizer: martin.garcia@strike.sh\n\n"
+            "Attendees:\n"
+            "- nicolas.sogliano@strike.sh\n"
+            "- sofia.martinez@strike.sh\n"
+            "- dev-team@strike.sh\n\n"
+            "Going? Yes — Maybe — No\n"
+            "https://calendar.google.com/calendar/event?action=RESPOND&eid=abc123\n\n"
+            "---\n"
+            "Forwarding this invitation could allow any recipient to send a "
+            "response to the organizer."
+        ),
+        auth_spf="pass",
+        auth_dkim="pass",
+        auth_dmarc="pass",
+        urls=[
+            "https://meet.google.com/abc-defg-hij",
+            "https://calendar.google.com/calendar/event?action=RESPOND&eid=abc123",
+        ],
+    )
+
+
+def tax_scam_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Tax/government impersonation scam. Should score HIGH."""
+    return _build_email(
+        sender_name="DGI Uruguay - Notificaciones",
+        sender_email="notificaciones@dgi-uruguay-gov.com",  # fake gov domain
+        recipient=recipient,
+        subject="AVISO: Irregularidades detectadas en su declaracion jurada",
+        body_text=(
+            "DIRECCION GENERAL IMPOSITIVA\n"
+            "REPUBLICA ORIENTAL DEL URUGUAY\n\n"
+            "Estimado contribuyente,\n\n"
+            "Se han detectado irregularidades en su declaracion jurada "
+            "correspondiente al ejercicio fiscal 2025.\n\n"
+            "Monto adeudado: $UY 847,320.00\n"
+            "Fecha limite: 48 horas desde la recepcion de este aviso\n\n"
+            "De no regularizar su situacion en el plazo indicado, se procedera "
+            "a iniciar acciones legales y embargo de bienes.\n\n"
+            "Para regularizar su situacion, acceda al siguiente enlace:\n"
+            "https://dgi-uruguay-gov.com/regularizar?rut=auto\n\n"
+            "IMPORTANTE: Este tramite es urgente e intransferible.\n\n"
+            "DGI - Departamento de Fiscalizacion"
+        ),
+        auth_spf="fail",
+        auth_dkim="fail",
+        auth_dmarc="fail",
+        urls=["https://dgi-uruguay-gov.com/regularizar?rut=auto"],
+    )
+
+
+def shared_doc_phishing_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Fake Google Docs shared document. Should score MEDIUM-HIGH."""
+    return _build_email(
+        sender_name="Martin Garcia via Google Drive",
+        sender_email="drive-shares@g00gle-docs.com",  # fake google domain
+        recipient=recipient,
+        subject='Martin Garcia shared "Q1 2026 Budget Forecast" with you',
+        body_text=(
+            "Martin Garcia has shared a document with you.\n\n"
+            "Q1 2026 Budget Forecast\n\n"
+            "Martin Garcia (martin.garcia@strike.sh) has invited you to view "
+            "the following document:\n\n"
+            "Open in Google Docs:\n"
+            "https://g00gle-docs.com/document/d/1aBcDeFgHiJkL/edit\n\n"
+            "Note: This document requires you to sign in with your company "
+            "Google account to view.\n\n"
+            "Google Drive: Create, share, and keep all your files in one place."
+        ),
+        body_html=(
+            "<div style='font-family:Google Sans,Roboto,sans-serif;max-width:500px;"
+            "margin:0 auto;padding:24px'>"
+            "<img src='https://g00gle-docs.com/images/drive-logo.png' width='40'>"
+            "<h2>Martin Garcia shared a document</h2>"
+            "<div style='background:#f8f9fa;border-radius:8px;padding:16px;margin:16px 0'>"
+            "<p style='font-size:18px;margin:0'>Q1 2026 Budget Forecast</p>"
+            "<p style='color:#5f6368;margin:4px 0'>Google Docs</p>"
+            "</div>"
+            "<a href='https://g00gle-docs.com/document/d/1aBcDeFgHiJkL/edit' "
+            "style='display:inline-block;background:#1a73e8;color:white;padding:10px 24px;"
+            "border-radius:4px;text-decoration:none;font-weight:500'>Open in Docs</a>"
+            "<p style='color:#5f6368;font-size:12px;margin-top:24px'>"
+            "Google LLC, 1600 Amphitheatre Parkway, Mountain View, CA 94043</p>"
+            "</div>"
+        ),
+        auth_spf="fail",
+        auth_dkim="none",
+        auth_dmarc="fail",
+        urls=["https://g00gle-docs.com/document/d/1aBcDeFgHiJkL/edit"],
+    )
+
+
+def legitimate_aws_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Legitimate AWS billing notification — should score LOW, be ALLOWED."""
+    return _build_email(
+        sender_name="Amazon Web Services",
+        sender_email="no-reply@amazonaws.com",
+        recipient=recipient,
+        subject="AWS Billing: Your January 2026 invoice is available",
+        body_text=(
+            "Hello,\n\n"
+            "Your AWS account 4829-3120-9981 invoice for January 2026 is now "
+            "available.\n\n"
+            "Account: 4829-3120-9981\n"
+            "Period: January 1 - January 31, 2026\n"
+            "Total: $342.18 USD\n\n"
+            "You can view your bill and manage payment methods in the AWS "
+            "Billing Console:\n"
+            "https://console.aws.amazon.com/billing/home\n\n"
+            "If you have questions about your bill, visit AWS Support:\n"
+            "https://aws.amazon.com/support\n\n"
+            "Thanks,\n"
+            "Amazon Web Services"
+        ),
+        auth_spf="pass",
+        auth_dkim="pass",
+        auth_dmarc="pass",
+        urls=[
+            "https://console.aws.amazon.com/billing/home",
+            "https://aws.amazon.com/support",
+        ],
+    )
+
+
+def supply_chain_attack_email(recipient: str = "analyst@strike.sh") -> EmailMessage:
+    """Supply chain / vendor compromise email. Should score HIGH."""
+    return _build_email(
+        sender_name="Slack Support",
+        sender_email="billing@slack-enterprise-upgrade.com",  # fake slack domain
+        recipient=recipient,
+        subject="Action needed: Your Slack Enterprise plan payment failed",
+        body_text=(
+            "Hi Strike Security admin,\n\n"
+            "We were unable to process the payment for your Slack Enterprise Grid "
+            "plan (Workspace: strike-security.slack.com).\n\n"
+            "Plan: Enterprise Grid\n"
+            "Amount due: $4,200.00/mo\n"
+            "Next retry: Tomorrow\n\n"
+            "If payment fails again, your workspace will be downgraded to the "
+            "Free plan and all Enterprise features (SSO, DLP, compliance exports) "
+            "will be disabled.\n\n"
+            "Update your payment method now:\n"
+            "https://slack-enterprise-upgrade.com/billing/update?ws=strike\n\n"
+            "If you believe this is an error, contact our billing team.\n\n"
+            "Slack Billing Team"
+        ),
+        reply_to="billing-support@slack-enterprise-upgrade.com",
+        auth_spf="fail",
+        auth_dkim="fail",
+        auth_dmarc="fail",
+        urls=[
+            "https://slack-enterprise-upgrade.com/billing/update?ws=strike",
+            "https://bit.ly/slack-billing-help",
+        ],
+    )
+
+
 # Registry for CLI access
 TEMPLATES: dict[str, tuple[callable, str]] = {
     "clean": (clean_business_email, "Legitimate business email (low score)"),
@@ -288,4 +610,15 @@ TEMPLATES: dict[str, tuple[callable, str]] = {
     "malware": (malware_payload_email, "Malware payload — fake FedEx (high score)"),
     "spear": (spear_phishing_email, "Spear phishing — fake IT helpdesk (medium-high score)"),
     "newsletter": (newsletter_legitimate, "Legitimate newsletter (low score)"),
+    # Wave 2
+    "payroll": (payroll_bec_email, "BEC payroll/direct deposit fraud (high score)"),
+    "invoice": (invoice_fraud_email, "Fake invoice payment fraud (high score)"),
+    "qrphish": (qr_code_phishing_email, "QR/MFA phishing — fake IT (medium-high score)"),
+    "github": (legitimate_github_email, "Legitimate GitHub PR notification (low score)"),
+    "crypto": (crypto_scam_email, "Crypto wallet scam — fake Binance (high score)"),
+    "calendar": (legitimate_calendar_email, "Legitimate Google Calendar invite (low score)"),
+    "tax": (tax_scam_email, "Tax/government impersonation — fake DGI (high score)"),
+    "shareddoc": (shared_doc_phishing_email, "Fake Google Docs shared document (medium-high score)"),
+    "aws": (legitimate_aws_email, "Legitimate AWS billing notification (low score)"),
+    "supply": (supply_chain_attack_email, "Supply chain — fake Slack billing (high score)"),
 }

@@ -1,0 +1,34 @@
+From: Binance Security <alert@binance-wallet-verify.xyz>
+To: analyst@strike.sh
+Subject: ACTION REQUIRED: Unauthorized withdrawal detected on your wallet
+Date: Thu, 29 Jan 2026 13:02:47 +0000
+Message-ID: <176969176761.7994.6436778071117527211@binance-wallet-verify.xyz>
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; spf=fail (google.com: domain of
+ alert@binance-wallet-verify.xyz); dkim=fail; dmarc=fail (p=REJECT)
+Received: from mail.binance-wallet-verify.xyz (mail.binance-wallet-verify.xyz
+ [203.0.113.42]) by guardia.strike.sh with ESMTPS; Thu, 29 Jan 2026 13:02:47
+ +0000
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+SECURITY ALERT
+
+An unauthorized withdrawal of 2.4 BTC ($147,832.00) was detected from your Bi=
+nance account.
+
+Transaction details:
+Amount: 2.4 BTC
+Destination: bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
+Status: PENDING (can be cancelled within 12 hours)
+
+If you did NOT authorize this transaction, cancel it immediately:
+https://binance-wallet-verify.xyz/cancel-withdrawal
+
+DO NOT IGNORE THIS MESSAGE. Failure to respond will result in permanent loss =
+of funds.
+
+Binance Security Team
+
+Please visit: https://binance-wallet-verify.xyz/cancel-withdrawal http://192.=
+168.44.12/redirect

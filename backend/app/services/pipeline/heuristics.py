@@ -16,6 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import (
+    HEURISTIC_CORRELATION_BOOST_3,
+    HEURISTIC_CORRELATION_BOOST_4,
     HEURISTIC_WEIGHT_AUTH,
     HEURISTIC_WEIGHT_DOMAIN,
     HEURISTIC_WEIGHT_KEYWORD,
@@ -118,13 +120,25 @@ class HeuristicEngine:
         evidences.extend(keyword_ev)
         evidences.extend(auth_ev)
 
-        result.score = (
+        # Weighted score
+        weighted = (
             result.domain_score * HEURISTIC_WEIGHT_DOMAIN
             + result.url_score * HEURISTIC_WEIGHT_URL
             + result.keyword_score * HEURISTIC_WEIGHT_KEYWORD
             + result.auth_score * HEURISTIC_WEIGHT_AUTH
         )
-        result.score = min(1.0, max(0.0, result.score))
+
+        # Correlation boost: multiple sub-engines firing = higher confidence
+        active_engines = sum(1 for s in [
+            result.domain_score, result.url_score,
+            result.keyword_score, result.auth_score,
+        ] if s > 0)
+        if active_engines >= 4:
+            weighted *= HEURISTIC_CORRELATION_BOOST_4
+        elif active_engines >= 3:
+            weighted *= HEURISTIC_CORRELATION_BOOST_3
+
+        result.score = min(1.0, max(0.0, weighted))
         result.evidences = evidences
         result.execution_time_ms = int((time.monotonic() - start) * 1000)
 
@@ -135,6 +149,7 @@ class HeuristicEngine:
             url=result.url_score,
             keyword=result.keyword_score,
             auth=result.auth_score,
+            active_engines=active_engines,
             evidence_count=len(evidences),
             duration_ms=result.execution_time_ms,
         )
@@ -167,7 +182,7 @@ class HeuristicEngine:
             evidences.append(EvidenceItem(
                 type=EvidenceType.DOMAIN_BLACKLISTED,
                 severity=Severity.CRITICAL,
-                description=f"Sender domain '{domain}' is blacklisted",
+                description=f"The sender domain '{domain}' is on the organization's blocklist of known malicious domains. Emails from this domain should be treated as high-risk threats.",
                 raw_data={"domain": domain},
             ))
             return score, evidences
@@ -179,7 +194,7 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.DOMAIN_SUSPICIOUS_TLD,
                     severity=Severity.MEDIUM,
-                    description=f"Sender domain uses suspicious TLD '{tld}'",
+                    description=f"The sender domain '{domain}' uses the TLD '{tld}', which is commonly associated with phishing and spam campaigns due to low registration barriers.",
                     raw_data={"domain": domain, "tld": tld},
                 ))
                 break
@@ -194,7 +209,7 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.DOMAIN_TYPOSQUATTING,
                     severity=Severity.HIGH,
-                    description=f"Domain '{domain}' looks like '{known}' (distance={dist})",
+                    description=f"The domain '{domain}' is suspiciously similar to the legitimate domain '{known}' (edit distance: {dist}). This is a common typosquatting technique used to impersonate trusted organizations.",
                     raw_data={"domain": domain, "similar_to": known, "distance": dist},
                 ))
                 break
@@ -232,7 +247,7 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.URL_SHORTENER,
                     severity=Severity.MEDIUM,
-                    description=f"URL uses shortener service: {hostname}",
+                    description=f"A URL in the email uses the shortener service '{hostname}', which can be used to hide the true destination of malicious links from both users and security tools.",
                     raw_data={"url": url, "shortener": hostname},
                 ))
 
@@ -242,7 +257,7 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.URL_IP_BASED,
                     severity=Severity.HIGH,
-                    description=f"URL uses IP address instead of domain: {hostname}",
+                    description=f"A URL points directly to an IP address ({hostname}) instead of a domain name. Legitimate services rarely use raw IP addresses, making this a strong indicator of a phishing or malware delivery link.",
                     raw_data={"url": url},
                 ))
 
@@ -253,7 +268,7 @@ class HeuristicEngine:
                     evidences.append(EvidenceItem(
                         type=EvidenceType.URL_SUSPICIOUS,
                         severity=Severity.MEDIUM,
-                        description=f"URL domain uses suspicious TLD: {hostname}",
+                        description=f"A URL in the email points to '{hostname}', which uses a TLD commonly associated with malicious activity. Links to these domains carry elevated risk.",
                         raw_data={"url": url, "tld": tld},
                     ))
                     break
@@ -307,7 +322,7 @@ class HeuristicEngine:
             evidences.append(EvidenceItem(
                 type=EvidenceType.KEYWORD_URGENCY,
                 severity=Severity.MEDIUM,
-                description=f"Urgency keywords detected: {', '.join(urgency_hits[:5])}",
+                description=f"The email contains {len(urgency_hits)} urgency keyword(s): {', '.join(urgency_hits[:5])}. Attackers often create a false sense of urgency to pressure victims into acting without thinking.",
                 raw_data={"keywords": urgency_hits},
             ))
 
@@ -315,7 +330,7 @@ class HeuristicEngine:
             evidences.append(EvidenceItem(
                 type=EvidenceType.KEYWORD_PHISHING,
                 severity=Severity.HIGH,
-                description=f"Phishing keywords detected: {', '.join(phishing_hits[:5])}",
+                description=f"The email contains {len(phishing_hits)} phishing-related keyword(s): {', '.join(phishing_hits[:5])}. These terms are frequently found in credential theft and social engineering attacks.",
                 raw_data={"keywords": phishing_hits},
             ))
 
@@ -329,7 +344,7 @@ class HeuristicEngine:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.KEYWORD_CAPS_ABUSE,
                     severity=Severity.LOW,
-                    description=f"Excessive uppercase: {caps_ratio:.0%} of words",
+                    description=f"The email body contains {caps_ratio:.0%} uppercase words ({caps_words} of {len(words)}). Excessive use of capital letters is a social engineering tactic to convey urgency and grab attention.",
                     raw_data={"caps_ratio": round(caps_ratio, 3), "caps_words": caps_words},
                 ))
 
@@ -353,7 +368,15 @@ class HeuristicEngine:
     async def _analyze_auth(
         self, email_data: dict
     ) -> tuple[float, list[EvidenceItem]]:
-        """Check SPF/DKIM/DMARC results and reply-to mismatch."""
+        """Check SPF/DKIM/DMARC results and reply-to mismatch.
+
+        Scoring rationale (max 1.0):
+          DMARC fail = 0.45 (strongest single signal, combines SPF+DKIM policy)
+          SPF fail   = 0.30, softfail = 0.15
+          DKIM fail  = 0.25
+          Reply-To   = 0.20 (BEC indicator)
+        Multiple failures compound but cap at 1.0.
+        """
         evidences: list[EvidenceItem] = []
         auth: dict = email_data.get("auth_results", {})
         score = 0.0
@@ -361,33 +384,45 @@ class HeuristicEngine:
         # SPF
         spf = auth.get("spf", "none").lower()
         if spf in ("fail", "softfail"):
-            score += 0.35
+            score += 0.30 if spf == "fail" else 0.15
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_SPF_FAIL,
                 severity=Severity.HIGH if spf == "fail" else Severity.MEDIUM,
-                description=f"SPF check result: {spf}",
+                description=(
+                    f"SPF verification returned '{spf}'. "
+                    f"The sending server is {'not authorized' if spf == 'fail' else 'weakly authorized'} "
+                    f"to send email on behalf of this domain, which may indicate spoofing."
+                ),
                 raw_data={"spf": spf},
             ))
 
         # DKIM
         dkim = auth.get("dkim", "none").lower()
         if dkim == "fail":
-            score += 0.3
+            score += 0.25
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DKIM_FAIL,
                 severity=Severity.HIGH,
-                description=f"DKIM check result: {dkim}",
+                description=(
+                    "DKIM signature verification failed. The email's cryptographic signature "
+                    "does not match, indicating the message may have been tampered with in transit "
+                    "or the sender is not who they claim to be."
+                ),
                 raw_data={"dkim": dkim},
             ))
 
         # DMARC
         dmarc = auth.get("dmarc", "none").lower()
         if dmarc == "fail":
-            score += 0.35
+            score += 0.45
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DMARC_FAIL,
                 severity=Severity.CRITICAL,
-                description=f"DMARC check result: {dmarc}",
+                description=(
+                    "DMARC policy validation failed. The domain's authentication policy (combining "
+                    "SPF and DKIM) was not satisfied, strongly suggesting this email may be a "
+                    "spoofed or forged message impersonating the sender's domain."
+                ),
                 raw_data={"dmarc": dmarc},
             ))
 
@@ -398,13 +433,14 @@ class HeuristicEngine:
             sender_domain = sender.rsplit("@", 1)[-1].lower() if "@" in sender else ""
             reply_domain = reply_to.rsplit("@", 1)[-1].lower() if "@" in reply_to else ""
             if sender_domain and reply_domain and sender_domain != reply_domain:
-                score += 0.3
+                score += 0.20
                 evidences.append(EvidenceItem(
                     type=EvidenceType.AUTH_REPLY_TO_MISMATCH,
                     severity=Severity.HIGH,
                     description=(
-                        f"Reply-To domain ({reply_domain}) differs from "
-                        f"sender domain ({sender_domain})"
+                        f"The Reply-To header points to '{reply_domain}' while the sender domain is "
+                        f"'{sender_domain}'. This mismatch is a common indicator of BEC (Business Email "
+                        f"Compromise) attacks, where replies are routed to an attacker-controlled address."
                     ),
                     raw_data={
                         "sender_domain": sender_domain,
