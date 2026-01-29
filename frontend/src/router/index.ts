@@ -30,8 +30,7 @@ const router = createRouter({
         },
         {
           path: 'quarantine',
-          name: 'quarantine',
-          component: () => import('@/views/QuarantineView.vue'),
+          redirect: '/cases?tab=quarantine',
         },
         {
           path: 'emails',

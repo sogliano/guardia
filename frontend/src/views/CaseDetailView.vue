@@ -5,6 +5,7 @@ import type { CaseDetail, Analysis, Evidence, CaseNote } from '@/types/case'
 import { fetchCaseDetail, addCaseNote, updateCaseNote, resolveCase, createFPReview } from '@/services/caseService'
 import { scoreColor } from '@/utils/colors'
 import { formatDate, capitalize } from '@/utils/formatters'
+import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -222,8 +223,8 @@ function stageStatusColor(analysis: Analysis): string {
   return 'var(--text-muted)'
 }
 
-async function loadData() {
-  loading.value = true
+async function loadData(silent = false) {
+  if (!silent) loading.value = true
   error.value = ''
   try {
     caseData.value = await fetchCaseDetail(caseId)
@@ -272,7 +273,7 @@ async function handleAddNote() {
   try {
     await addCaseNote(caseId, { content: newNote.value.trim() })
     newNote.value = ''
-    await loadData()
+    await loadData(true)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to add note'
   } finally {
@@ -296,7 +297,7 @@ async function handleUpdateNote(note: CaseNote) {
     await updateCaseNote(caseData.value.id, note.id, editingNoteContent.value.trim())
     editingNoteId.value = null
     editingNoteContent.value = ''
-    await loadData()
+    await loadData(true)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to update note'
   }
@@ -445,7 +446,7 @@ onMounted(loadData)
             <span class="material-symbols-rounded">smart_toy</span>
             AI Analysis Summary
           </h3>
-          <p class="llm-explanation">{{ llmAnalysis.explanation }}</p>
+          <div class="llm-explanation" v-html="renderMarkdown(llmAnalysis.explanation)"></div>
           <div class="llm-meta">
             <span v-if="llmAnalysis.execution_time_ms">{{ formatMs(llmAnalysis.execution_time_ms) }}</span>
           </div>
@@ -934,7 +935,7 @@ onMounted(loadData)
               </div>
 
               <!-- LLM explanation -->
-              <p v-if="expandedStages.has(analysis.id) && analysis.explanation" class="stage-v2-explanation">{{ analysis.explanation }}</p>
+              <div v-if="expandedStages.has(analysis.id) && analysis.explanation" class="stage-v2-explanation" v-html="renderMarkdown(analysis.explanation)"></div>
 
               <!-- Evidences -->
               <div v-if="expandedStages.has(analysis.id) && analysis.evidences?.length" class="stage-v2-evidences">
@@ -1071,7 +1072,6 @@ onMounted(loadData)
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  max-width: 1200px;
   font-family: var(--font-mono);
 }
 
@@ -1396,7 +1396,28 @@ onMounted(loadData)
   color: var(--text-secondary);
   line-height: 1.7;
   margin: 0;
-  white-space: pre-wrap;
+}
+
+.llm-explanation p {
+  margin: 0 0 8px;
+}
+
+.llm-explanation p:last-child {
+  margin-bottom: 0;
+}
+
+.llm-explanation ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.llm-explanation li {
+  margin-bottom: 4px;
+}
+
+.llm-explanation strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .llm-meta {
@@ -2428,7 +2449,19 @@ onMounted(loadData)
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 12px 0 0 30px;
-  white-space: pre-wrap;
+}
+
+.stage-v2-explanation p {
+  margin: 0 0 6px;
+}
+
+.stage-v2-explanation ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.stage-v2-explanation strong {
+  color: var(--text-primary);
 }
 
 .stage-v2-evidences {
@@ -2617,5 +2650,35 @@ onMounted(loadData)
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--font-base);
+}
+
+@media (max-width: 1000px) {
+  .case-detail {
+    padding: var(--space-md);
+  }
+
+  .info-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .stage-v2-explanation {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .case-detail {
+    padding: var(--space-sm);
+    gap: var(--space-sm);
+  }
+
+  .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
 }
 </style>

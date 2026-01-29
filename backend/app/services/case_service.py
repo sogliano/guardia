@@ -31,7 +31,10 @@ class CaseService:
         sender: str | None = None,
     ) -> dict:
         """List cases with filters and pagination."""
-        query = select(Case).options(selectinload(Case.email))
+        query = select(Case).options(
+            selectinload(Case.email),
+            selectinload(Case.analyses),
+        )
         joined = False
 
         if status:
@@ -70,6 +73,13 @@ class CaseService:
 
         items = []
         for case in cases:
+            stage_scores: dict[str, float | None] = {
+                "heuristic": None, "ml": None, "llm": None,
+            }
+            for analysis in case.analyses:
+                if analysis.stage in stage_scores:
+                    stage_scores[analysis.stage] = analysis.score
+
             item = {
                 "id": case.id,
                 "case_number": case.case_number,
@@ -89,6 +99,9 @@ class CaseService:
                 "email_received_at": (
                     case.email.received_at if case.email else None
                 ),
+                "heuristic_score": stage_scores["heuristic"],
+                "ml_score": stage_scores["ml"],
+                "llm_score": stage_scores["llm"],
             }
             items.append(item)
 

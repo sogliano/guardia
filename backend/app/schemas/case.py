@@ -29,6 +29,9 @@ class CaseListItemResponse(CaseResponse):
     email_subject: str | None = None
     email_sender: str | None = None
     email_received_at: datetime | None = None
+    heuristic_score: float | None = None
+    ml_score: float | None = None
+    llm_score: float | None = None
 
 
 class CaseList(BaseModel):

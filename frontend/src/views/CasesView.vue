@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useCasesStore } from '@/stores/cases'
 import { resolveCase } from '@/services/caseService'
 import type { Case } from '@/types/case'
@@ -9,9 +9,19 @@ import { scoreColor, riskColor, riskBg, actionColor, actionBg, statusColor, stat
 import { computePageNumbers } from '@/utils/pagination'
 import { RISK_OPTIONS, ACTION_OPTIONS, STATUS_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
+import QuarantineQueue from '@/components/cases/QuarantineQueue.vue'
 
 const router = useRouter()
+const route = useRoute()
 const store = useCasesStore()
+
+type TabId = 'all' | 'needs-action' | 'quarantine'
+const activeTab = ref<TabId>((route.query.tab as TabId) || 'all')
+
+function setTab(tab: TabId) {
+  activeTab.value = tab
+  router.replace({ query: tab === 'all' ? {} : { tab } })
+}
 
 const searchQuery = ref('')
 const filterRisk = ref<string | undefined>()
@@ -56,13 +66,7 @@ const needsActionCases = computed(() =>
 )
 
 const resolvedCount = computed(() => store.cases.filter(c => c.status === 'resolved').length)
-const highRiskCount = computed(() => store.cases.filter(c => c.risk_level === 'high' || c.risk_level === 'critical').length)
-const avgScore = computed(() => {
-  const scored = store.cases.filter(c => c.final_score !== null)
-  if (!scored.length) return null
-  return scored.reduce((sum, c) => sum + (c.final_score ?? 0), 0) / scored.length
-})
-
+const blockedCount = computed(() => store.blockedCases.length)
 const riskOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
 const statusOrder: Record<string, number> = { quarantined: 4, analyzed: 3, analyzing: 2, pending: 1, resolved: 0 }
 
@@ -70,6 +74,9 @@ function getSortValue(c: Case, col: string): string | number {
   if (col === 'case_number') return c.case_number ?? 0
   if (col === 'received') return c.email_received_at ?? c.created_at ?? ''
   if (col === 'score') return c.final_score ?? -1
+  if (col === 'heuristic') return c.heuristic_score ?? -1
+  if (col === 'ml') return c.ml_score ?? -1
+  if (col === 'llm') return c.llm_score ?? -1
   if (col === 'risk') return riskOrder[c.risk_level ?? ''] ?? 0
   if (col === 'action') return c.verdict ?? ''
   if (col === 'status') return statusOrder[c.status ?? ''] ?? 0
@@ -132,6 +139,10 @@ function clearFilters() {
 function onSearchInput() {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(applyFilters, 300)
+}
+
+function formatCategory(cat: string): string {
+  return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
 function openCase(id: string) {
@@ -250,106 +261,155 @@ onMounted(() => {
       </div>
       <div class="kpi-card">
         <div class="kpi-icon-wrap kpi-icon-risk">
-          <span class="material-symbols-rounded">warning</span>
+          <span class="material-symbols-rounded">block</span>
         </div>
         <div class="kpi-info">
-          <span class="kpi-value">{{ highRiskCount }}</span>
-          <span class="kpi-label">High / Critical Risk</span>
+          <span class="kpi-value">{{ blockedCount }}</span>
+          <span class="kpi-label">Blocked</span>
         </div>
       </div>
     </div>
 
-    <!-- Needs Action -->
-    <div v-if="needsActionCases.length" class="needs-action">
-      <div class="na-header">
-        <div class="na-header-left">
-          <span class="material-symbols-rounded na-icon">notification_important</span>
-          <h2>Needs Action</h2>
-          <span class="na-count">{{ needsActionCases.length }}</span>
-        </div>
-        <span class="na-hint">These cases have been analyzed and are awaiting your review</span>
-      </div>
-      <table class="na-table">
-        <thead>
-          <tr>
-            <th class="na-th-id sortable-th" @click="toggleSort('na', 'case_number')">CASE <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'case_number') }}</span></th>
-            <th class="na-th-subject">SUBJECT</th>
-            <th class="na-th-sender">SENDER</th>
-            <th class="na-th-score sortable-th" @click="toggleSort('na', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'score') }}</span></th>
-            <th class="na-th-risk sortable-th" @click="toggleSort('na', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'risk') }}</span></th>
-            <th class="na-th-status sortable-th" @click="toggleSort('na', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'status') }}</span></th>
-            <th class="na-th-actions">ACTIONS</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="c in paginatedNeedsCases"
-            :key="c.id"
-            class="na-row"
-            @click="openCase(c.id)"
-          >
-            <td class="na-td-id">#{{ c.case_number }}</td>
-            <td class="na-td-subject">{{ c.email_subject ?? '(No Subject)' }}</td>
-            <td class="na-td-sender">{{ c.email_sender ?? '—' }}</td>
-            <td>
-              <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
-                {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
-              </span>
-            </td>
-            <td>
-              <span
-                v-if="c.risk_level"
-                class="pill-badge"
-                :style="{ color: riskColor(c.risk_level), background: riskBg(c.risk_level) }"
-              >{{ capitalize(c.risk_level) }}</span>
-            </td>
-            <td>
-              <span
-                class="pill-badge"
-                :style="{ color: statusColor(c.status), background: statusBg(c.status) }"
-              >{{ capitalize(c.status) }}</span>
-            </td>
-            <td class="na-td-actions">
-              <button
-                class="na-icon-btn na-icon-allow"
-                :disabled="allowingCaseId === c.id"
-                @click.stop="quickAllow(c.id)"
-                title="Allow this case"
-              >
-                <span class="material-symbols-rounded">{{ allowingCaseId === c.id ? 'progress_activity' : 'check' }}</span>
-              </button>
-              <button
-                class="na-icon-btn na-icon-block"
-                :disabled="blockingCaseId === c.id"
-                @click.stop="quickBlock(c.id)"
-                title="Block this case"
-              >
-                <span class="material-symbols-rounded">{{ blockingCaseId === c.id ? 'progress_activity' : 'close' }}</span>
-              </button>
-              <span class="material-symbols-rounded na-arrow">arrow_forward</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="na-pagination">
-        <div class="pagination-left">
-          <span class="na-page-info">{{ naStartItem }}-{{ naEndItem }} of {{ needsActionCases.length }}</span>
-          <select class="size-select" :value="naPageSize" @change="naPageSize = Number(($event.target as HTMLSelectElement).value); naPage = 1">
-            <option v-for="s in [5, 10, 15, 20]" :key="s" :value="s">{{ s }} / page</option>
-          </select>
-        </div>
-        <div v-if="naTotalPages > 1" class="na-page-btns">
-          <button class="page-btn" :disabled="naPage <= 1" @click="naPage--">Prev</button>
-          <template v-for="p in naTotalPages" :key="p">
-            <button class="page-btn" :class="{ active: p === naPage }" @click="naPage = p">{{ p }}</button>
-          </template>
-          <button class="page-btn" :disabled="naPage >= naTotalPages" @click="naPage++">Next</button>
-        </div>
-      </div>
+    <!-- Tabs -->
+    <div class="tabs-bar">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'all' }"
+        @click="setTab('all')"
+      >
+        <span class="material-symbols-rounded tab-icon">folder_open</span>
+        All Cases
+        <span class="tab-count">{{ store.total }}</span>
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'needs-action' }"
+        @click="setTab('needs-action')"
+      >
+        <span class="material-symbols-rounded tab-icon">pending_actions</span>
+        Needs Action
+        <span v-if="needsActionCases.length" class="tab-count tab-count-accent">{{ needsActionCases.length }}</span>
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'quarantine' }"
+        @click="setTab('quarantine')"
+      >
+        <span class="material-symbols-rounded tab-icon">shield</span>
+        Quarantine &amp; Blocked
+        <span v-if="store.quarantineAndBlockedCases.length" class="tab-count tab-count-warning">{{ store.quarantineAndBlockedCases.length }}</span>
+      </button>
     </div>
 
+    <!-- Tab: Quarantine Queue -->
+    <QuarantineQueue v-if="activeTab === 'quarantine'" />
 
-    <!-- All Cases -->
+    <!-- Tab: Needs Action -->
+    <template v-if="activeTab === 'needs-action'">
+      <div v-if="!needsActionCases.length" class="empty-tab">
+        <span class="material-symbols-rounded empty-tab-icon">check_circle</span>
+        <p>All caught up — no cases need action right now</p>
+      </div>
+      <template v-else>
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 65px" class="sortable-th" @click="toggleSort('na', 'case_number')">CASE ID <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'case_number') }}</span></th>
+                <th>SUBJECT</th>
+                <th style="width: 160px">SENDER</th>
+                <th style="width: 55px" class="sortable-th" @click="toggleSort('na', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'score') }}</span></th>
+                <th style="width: 70px" class="sortable-th" @click="toggleSort('na', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'risk') }}</span></th>
+                <th style="width: 85px" class="sortable-th" @click="toggleSort('na', 'action')">VERDICT <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'action') }}</span></th>
+                <th style="width: 120px">CATEGORY</th>
+                <th style="width: 80px" class="sortable-th" @click="toggleSort('na', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'status') }}</span></th>
+                <th style="width: 90px">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="c in paginatedNeedsCases"
+                :key="c.id"
+                class="case-row"
+                @click="openCase(c.id)"
+              >
+                <td><span class="case-id">#{{ c.case_number }}</span></td>
+                <td class="cell-subject">{{ c.email_subject ?? '(No Subject)' }}</td>
+                <td class="cell-sender">{{ c.email_sender ?? '—' }}</td>
+                <td>
+                  <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
+                    {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
+                  </span>
+                </td>
+                <td>
+                  <span
+                    v-if="c.risk_level"
+                    class="pill-badge"
+                    :style="{ color: riskColor(c.risk_level), background: riskBg(c.risk_level) }"
+                  >{{ capitalize(c.risk_level) }}</span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>
+                  <span
+                    v-if="c.verdict"
+                    class="pill-badge"
+                    :style="{ color: actionColor(c.verdict), background: actionBg(c.verdict) }"
+                  >{{ capitalize(c.verdict) }}</span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>
+                  <span v-if="c.threat_category" class="cell-category">{{ formatCategory(c.threat_category) }}</span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>
+                  <span
+                    class="pill-badge"
+                    :style="{ color: statusColor(c.status), background: statusBg(c.status) }"
+                  >{{ capitalize(c.status) }}</span>
+                </td>
+                <td class="td-actions">
+                  <button
+                    class="action-icon-btn action-allow"
+                    :disabled="allowingCaseId === c.id"
+                    @click.stop="quickAllow(c.id)"
+                    title="Allow this case"
+                  >
+                    <span class="material-symbols-rounded">{{ allowingCaseId === c.id ? 'progress_activity' : 'check' }}</span>
+                  </button>
+                  <button
+                    class="action-icon-btn action-block"
+                    :disabled="blockingCaseId === c.id"
+                    @click.stop="quickBlock(c.id)"
+                    title="Block this case"
+                  >
+                    <span class="material-symbols-rounded">{{ blockingCaseId === c.id ? 'progress_activity' : 'close' }}</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <div class="pagination-left">
+            <span class="pagination-info">Showing {{ naStartItem }}-{{ naEndItem }} of {{ needsActionCases.length }}</span>
+            <select class="size-select" :value="naPageSize" @change="naPageSize = Number(($event.target as HTMLSelectElement).value); naPage = 1">
+              <option v-for="s in [5, 10, 15, 20]" :key="s" :value="s">{{ s }} / page</option>
+            </select>
+          </div>
+          <div v-if="naTotalPages > 1" class="pagination-buttons">
+            <button class="page-btn" :disabled="naPage <= 1" @click="naPage--">Previous</button>
+            <template v-for="p in naTotalPages" :key="p">
+              <button class="page-btn" :class="{ active: p === naPage }" @click="naPage = p">{{ p }}</button>
+            </template>
+            <button class="page-btn" :disabled="naPage >= naTotalPages" @click="naPage++">Next</button>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <!-- Tab: All Cases -->
+    <template v-if="activeTab === 'all'">
+
     <div class="all-cases-header">
       <h2>All Cases</h2>
     </div>
@@ -397,6 +457,9 @@ onMounted(() => {
             <th>SUBJECT</th>
             <th style="width: 160px">SENDER</th>
             <th style="width: 55px" class="sortable-th" @click="toggleSort('all', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'score') }}</span></th>
+            <th style="width: 45px" class="sortable-th" @click="toggleSort('all', 'heuristic')">HEU <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'heuristic') }}</span></th>
+            <th style="width: 40px" class="sortable-th" @click="toggleSort('all', 'ml')">ML <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'ml') }}</span></th>
+            <th style="width: 45px" class="sortable-th" @click="toggleSort('all', 'llm')">LLM <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'llm') }}</span></th>
             <th style="width: 70px" class="sortable-th" @click="toggleSort('all', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'risk') }}</span></th>
             <th style="width: 85px" class="sortable-th" @click="toggleSort('all', 'action')">ACTION <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'action') }}</span></th>
             <th style="width: 70px" class="sortable-th" @click="toggleSort('all', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'status') }}</span></th>
@@ -418,6 +481,21 @@ onMounted(() => {
             <td>
               <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
                 {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
+              </span>
+            </td>
+            <td>
+              <span class="score-sub" :style="{ color: scoreColor(c.heuristic_score) }">
+                {{ c.heuristic_score !== null ? (c.heuristic_score * 100).toFixed(0) + '%' : '—' }}
+              </span>
+            </td>
+            <td>
+              <span class="score-sub" :style="{ color: scoreColor(c.ml_score) }">
+                {{ c.ml_score !== null ? (c.ml_score * 100).toFixed(0) + '%' : '—' }}
+              </span>
+            </td>
+            <td>
+              <span class="score-sub" :style="{ color: scoreColor(c.llm_score) }">
+                {{ c.llm_score !== null ? (c.llm_score * 100).toFixed(0) + '%' : '—' }}
               </span>
             </td>
             <td>
@@ -444,7 +522,7 @@ onMounted(() => {
             </td>
           </tr>
           <tr v-if="store.cases.length === 0">
-            <td colspan="8" class="empty-state">No cases found</td>
+            <td colspan="11" class="empty-state">No cases found</td>
           </tr>
         </tbody>
       </table>
@@ -482,6 +560,8 @@ onMounted(() => {
         >Next</button>
         </div>
     </div>
+
+    </template><!-- /tab: all -->
   </div>
 </template>
 
@@ -491,10 +571,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.case-row {
-  cursor: pointer;
 }
 
 /* ── KPI Cards ── */
@@ -574,132 +650,13 @@ onMounted(() => {
   letter-spacing: 0.5px;
 }
 
-/* ── Needs Action ── */
-.needs-action {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  border-left: 3px solid var(--accent-cyan);
-  overflow: hidden;
-}
-
-.na-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.na-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.na-icon {
-  font-size: 20px;
-  color: var(--accent-cyan);
-}
-
-.na-header h2 {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.na-count {
-  background: var(--accent-cyan);
-  color: var(--bg-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 8px;
-  border-radius: 10px;
-}
-
-.na-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-/* ── Needs Action Table ── */
-.na-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-mono);
-}
-
-.na-table thead th {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-  text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
-  white-space: nowrap;
-}
-
-.na-th-id { width: 70px; }
-.na-th-subject { }
-.na-th-sender { width: 200px; }
-.na-th-score { width: 65px; }
-.na-th-risk { width: 80px; }
-.na-th-status { width: 90px; }
-.na-th-actions { width: 80px; text-align: right; }
-
-.na-row {
-  cursor: pointer;
-  transition: background 0.1s;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.na-row:last-child {
-  border-bottom: none;
-}
-
-.na-row:hover {
-  background: rgba(0, 212, 255, 0.04);
-}
-
-.na-row td {
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  vertical-align: middle;
-}
-
-.na-td-id {
-  font-weight: 700;
-  color: var(--accent-cyan) !important;
-  font-size: 13px !important;
-}
-
-.na-td-subject {
-  color: var(--text-primary) !important;
-  font-size: 13px !important;
-  max-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.na-td-sender {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-}
-
-.na-td-actions {
+/* ── Action Buttons (Needs Action tab) ── */
+.td-actions {
   text-align: right;
   white-space: nowrap;
 }
 
-.na-icon-btn {
+.action-icon-btn {
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -713,83 +670,119 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-.na-icon-btn .material-symbols-rounded {
+.action-icon-btn .material-symbols-rounded {
   font-size: 16px;
 }
 
-.na-icon-allow {
+.action-allow {
   color: #22C55E;
 }
 
-.na-icon-allow:hover:not(:disabled) {
+.action-allow:hover:not(:disabled) {
   background: rgba(34, 197, 94, 0.15);
 }
 
-.na-icon-allow:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.na-icon-block {
+.action-block {
   color: #EF4444;
 }
 
-.na-icon-block:hover:not(:disabled) {
+.action-block:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.15);
 }
 
-.na-icon-block:disabled {
+.action-icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.na-arrow {
-  font-size: 16px;
-  color: var(--text-muted);
-  margin-left: 6px;
-  vertical-align: middle;
-}
-
-/* ── NA Pagination ── */
-.na-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 18px;
-  border-top: 1px solid var(--border-color);
-}
-
-.na-page-info {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.na-page-btns {
+/* ── Tabs ── */
+.tabs-bar {
   display: flex;
   gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0;
 }
 
-/* ── All Cases Header ── */
-.all-cases-header {
-  margin-top: 4px;
-}
-
-.all-cases-header h2 {
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  color: var(--text-secondary);
+}
+
+.tab-btn.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+
+.tab-icon {
+  font-size: 16px;
+}
+
+.tab-count {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(107, 114, 128, 0.15);
+  color: var(--text-muted);
+}
+
+.tab-count-accent {
+  background: rgba(0, 212, 255, 0.15);
+  color: var(--accent-cyan);
+}
+
+.tab-count-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+}
+
+/* ── Empty Tab ── */
+.empty-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.empty-tab-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+  color: #22C55E;
+}
+
+.empty-tab p {
   margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 1000px) {
   .cases-kpis {
     grid-template-columns: repeat(2, 1fr);
   }
-  .na-th-sender,
-  .na-td-sender {
-    display: none;
-  }
+}
+
+.score-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
 }
 </style>
