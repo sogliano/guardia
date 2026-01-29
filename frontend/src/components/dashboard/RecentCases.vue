@@ -2,29 +2,11 @@
 import { computed } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 import type { RecentCaseItem } from '@/types/dashboard'
+import { scoreColor, actionColor } from '@/utils/colors'
 
 const props = defineProps<{
   cases: RecentCaseItem[]
 }>()
-
-function scoreColor(score: number | null): string {
-  if (score === null) return '#6B7280'
-  if (score >= 0.8) return '#EF4444'
-  if (score >= 0.6) return '#F97316'
-  if (score >= 0.3) return '#F59E0B'
-  return '#22C55E'
-}
-
-function verdictColor(verdict: string | null): string {
-  if (!verdict) return '#6B7280'
-  const map: Record<string, string> = {
-    blocked: '#EF4444',
-    quarantined: '#F97316',
-    warned: '#F59E0B',
-    allowed: '#22C55E',
-  }
-  return map[verdict] ?? '#6B7280'
-}
 
 const rows = computed(() =>
   props.cases.map((c) => ({
@@ -32,7 +14,7 @@ const rows = computed(() =>
     timeAgo: formatDistanceToNow(new Date(c.created_at), { addSuffix: true }),
     scoreDisplay: c.score !== null ? Math.round(c.score * 100) : '—',
     sColor: scoreColor(c.score),
-    vColor: verdictColor(c.verdict),
+    vColor: actionColor(c.verdict),
     verdictLabel: c.verdict?.toUpperCase() ?? '—',
   }))
 )

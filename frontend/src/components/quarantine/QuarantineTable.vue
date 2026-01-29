@@ -5,6 +5,7 @@ import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import type { Case } from '@/types/case'
+import { scoreColor } from '@/utils/colors'
 
 defineProps<{
   cases: Case[]
@@ -26,13 +27,6 @@ function formatScore(score: number | null): string {
   return (score * 100).toFixed(0)
 }
 
-function scoreColor(score: number | null): string {
-  if (score === null) return '#6B7280'
-  if (score >= 0.8) return '#EF4444'
-  if (score >= 0.6) return '#F97316'
-  if (score >= 0.3) return '#F59E0B'
-  return '#22C55E'
-}
 </script>
 
 <template>

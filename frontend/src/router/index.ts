@@ -38,32 +38,7 @@ const router = createRouter({
           name: 'emails',
           component: () => import('@/views/EmailExplorerView.vue'),
         },
-        {
-          path: 'policies',
-          name: 'policies',
-          component: () => import('@/views/PoliciesView.vue'),
-        },
-        {
-          path: 'alerts',
-          name: 'alerts',
-          component: () => import('@/views/AlertsView.vue'),
-        },
-        {
-          path: 'reports',
-          name: 'reports',
-          component: () => import('@/views/ReportsView.vue'),
-        },
-        {
-          path: 'settings',
-          name: 'settings',
-          component: () => import('@/views/SettingsView.vue'),
-        },
-        {
-          path: 'fp-review',
-          name: 'fp-review',
-          component: () => import('@/views/FPReviewView.vue'),
-        },
-        {
+{
           path: 'notifications',
           name: 'notifications',
           component: () => import('@/views/NotificationsView.vue'),

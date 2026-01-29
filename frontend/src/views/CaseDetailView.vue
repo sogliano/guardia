@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { CaseDetail, Analysis, Evidence, CaseNote } from '@/types/case'
 import { fetchCaseDetail, addCaseNote, updateCaseNote, resolveCase, createFPReview } from '@/services/caseService'
 import { scoreColor } from '@/utils/colors'
+import { formatDate, capitalize } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -60,10 +61,6 @@ const authResults = computed(() => {
   }
 })
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
 
 function formatMs(ms: number | null): string {
   if (ms === null) return '—'
@@ -108,10 +105,6 @@ function severityBadgeClass(severity: string): string {
     critical: 'badge-critical', high: 'badge-high', medium: 'badge-warn', low: 'badge-success'
   }
   return map[severity] ?? 'badge-muted'
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 const threatCategoryMeta: Record<string, { label: string; color: string; bg: string; desc: string }> = {

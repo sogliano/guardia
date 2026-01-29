@@ -59,12 +59,19 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
+    # CORS
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
     # Slack Alerts
     slack_webhook_url: str = ""
     frontend_base_url: str = "http://localhost:3000"
 
     # Active users filter (Google Workspace per-user gateway)
     active_users: str = ""
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def accepted_domains_list(self) -> list[str]:

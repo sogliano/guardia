@@ -62,12 +62,21 @@ docker-compose.override.yml
 # ML models (large binary files)
 ml/models/distilbert-guardia/*.bin
 ml/models/distilbert-guardia/*.safetensors
+*.onnx
+*.pt
+*.h5
+*.pkl
 ml/data/raw/*.csv
 ml/data/processed/
+ml/data/splits/
 ml/mlflow/
+.ipynb_checkpoints/
 
 # Alembic
 backend/app/db/migrations/versions/*.pyc
+
+# Quarantine store (runtime email storage)
+backend/quarantine_store/
 
 # Misc
 *.bak

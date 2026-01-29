@@ -25,11 +25,6 @@ const allMenuItems: MenuItem[] = [
   { label: 'Cases', icon: 'folder', to: '/cases', badgeKey: 'cases' },
   { label: 'Quarantine', icon: 'shield', to: '/quarantine', badgeKey: 'quarantine' },
   { label: 'Emails', icon: 'mail', to: '/emails' },
-  { label: 'Policies', icon: 'tune', to: '/policies', roles: ['administrator', 'analyst'] },
-  { label: 'Alerts', icon: 'notifications', to: '/alerts', roles: ['administrator', 'analyst'] },
-  { label: 'FP Review', icon: 'rate_review', to: '/fp-review', roles: ['administrator', 'analyst'] },
-  { label: 'Reports', icon: 'bar_chart', to: '/reports' },
-  { label: 'Settings', icon: 'settings', to: '/settings', roles: ['administrator'] },
 ]
 
 const menuItems = computed(() => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TopSenderItem } from '@/types/dashboard'
 import { useGlobalFiltersStore } from '@/stores/globalFilters'
+import { scoreColor } from '@/utils/colors'
 
 defineProps<{
   senders: TopSenderItem[]
@@ -12,12 +13,6 @@ function filterBySender(sender: string) {
   globalFilters.setSender(sender)
 }
 
-function riskColor(score: number): string {
-  if (score >= 0.8) return '#EF4444'
-  if (score >= 0.6) return '#F97316'
-  if (score >= 0.3) return '#F59E0B'
-  return '#22C55E'
-}
 </script>
 
 <template>
@@ -37,7 +32,7 @@ function riskColor(score: number): string {
           <span class="sender-email">{{ s.sender }}</span>
           <span class="sender-count">{{ s.count }} email{{ s.count !== 1 ? 's' : '' }}</span>
         </div>
-        <div class="sender-score" :style="{ color: riskColor(s.avg_score) }">
+        <div class="sender-score" :style="{ color: scoreColor(s.avg_score) }">
           {{ (s.avg_score * 100).toFixed(0) }}%
         </div>
       </div>

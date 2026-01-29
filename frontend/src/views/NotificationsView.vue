@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
+import { formatDate } from '@/utils/formatters'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -23,9 +24,6 @@ function typeLabel(type: string): string {
   return map[type] ?? type
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
 
 onMounted(() => {
   store.fetchNotifications()
