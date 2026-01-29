@@ -1,5 +1,6 @@
 """Raw email storage for quarantine and deferred forwarding."""
 
+import asyncio
 import hashlib
 from pathlib import Path
 
@@ -32,27 +33,27 @@ class EmailStorage:
     async def store(self, case_id: str, raw_data: bytes) -> str:
         """Store raw email bytes. Returns the file path."""
         path = self._case_path(case_id)
-        path.write_bytes(raw_data)
+        await asyncio.to_thread(path.write_bytes, raw_data)
         logger.info("email_stored", case_id=case_id, path=str(path), size=len(raw_data))
         return str(path)
 
     async def retrieve(self, case_id: str) -> bytes | None:
         """Retrieve raw email bytes. Returns None if not found."""
         path = self._case_path(case_id)
-        if not path.exists():
+        if not await asyncio.to_thread(path.exists):
             logger.warning("email_not_found", case_id=case_id, path=str(path))
             return None
-        return path.read_bytes()
+        return await asyncio.to_thread(path.read_bytes)
 
     async def delete(self, case_id: str) -> bool:
         """Delete raw email from storage. Returns True if deleted."""
         path = self._case_path(case_id)
-        if not path.exists():
+        if not await asyncio.to_thread(path.exists):
             return False
-        path.unlink()
+        await asyncio.to_thread(path.unlink)
         logger.info("email_deleted", case_id=case_id, path=str(path))
         return True
 
     async def exists(self, case_id: str) -> bool:
         """Check if raw email exists in storage."""
-        return self._case_path(case_id).exists()
+        return await asyncio.to_thread(self._case_path(case_id).exists)

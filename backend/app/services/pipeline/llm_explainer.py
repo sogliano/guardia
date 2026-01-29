@@ -11,6 +11,8 @@ pipeline score alongside heuristic and ML scores.
 import json
 import time
 
+import anthropic
+import openai
 import structlog
 
 from app.config import settings
@@ -174,8 +176,6 @@ class LLMExplainer:
 
     async def _call_claude(self, user_prompt: str) -> LLMResult:
         """Call Anthropic API (Claude)."""
-        import anthropic
-
         start = time.monotonic()
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
@@ -213,8 +213,6 @@ class LLMExplainer:
 
     async def _call_openai(self, user_prompt: str) -> LLMResult:
         """Call OpenAI API (GPT-4.1 fallback)."""
-        import openai
-
         start = time.monotonic()
         client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
 

@@ -8,11 +8,19 @@ Graceful degradation: if model is not available, returns score=0.0
 and the pipeline continues with heuristics only.
 """
 
+import asyncio
 import time
 import threading
 from pathlib import Path
 
 import structlog
+
+try:
+    import torch
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
 
 from app.config import settings
 from app.core.constants import EvidenceType, Severity
@@ -64,10 +72,11 @@ class MLClassifier:
             )
             return
 
-        try:
-            import torch
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        if not _TORCH_AVAILABLE:
+            logger.warning("ml_torch_not_installed", msg="torch/transformers not available")
+            return
 
+        try:
             self._tokenizer = AutoTokenizer.from_pretrained(str(model_path))
             self._model = AutoModelForSequenceClassification.from_pretrained(str(model_path))
             self._model.eval()
@@ -97,12 +106,8 @@ class MLClassifier:
             self._tokenizer = None
             self._model_available = False
 
-    async def predict(self, text: str) -> MLResult:
-        """Run inference on email text.
-
-        Returns MLResult with score, confidence, and model metadata.
-        If model is unavailable, returns degraded result (score=0.0).
-        """
+    def _predict_sync(self, text: str) -> MLResult:
+        """Run inference synchronously (called via asyncio.to_thread)."""
         start = time.monotonic()
         self._load_model()
 
@@ -116,8 +121,6 @@ class MLClassifier:
             )
 
         try:
-            import torch
-
             # Tokenize
             inputs = self._tokenizer(
                 text,
@@ -182,3 +185,7 @@ class MLClassifier:
                 model_version=self._model_version,
                 execution_time_ms=elapsed,
             )
+
+    async def predict(self, text: str) -> MLResult:
+        """Run inference on email text (offloaded to thread pool)."""
+        return await asyncio.to_thread(self._predict_sync, text)

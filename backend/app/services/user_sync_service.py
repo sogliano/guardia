@@ -1,3 +1,5 @@
+import asyncio
+
 import structlog
 from clerk_backend_api import Clerk
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,9 +16,12 @@ async def sync_clerk_user(db: AsyncSession, clerk_id: str) -> User:
     Fetch user info from Clerk Backend API and create a local User record.
     Called during JIT provisioning when a Clerk user first accesses the API.
     """
-    try:
+    def _fetch_clerk_user(cid: str):
         with Clerk(bearer_auth=settings.clerk_secret_key) as clerk:
-            clerk_user = clerk.users.get(user_id=clerk_id)
+            return clerk.users.get(user_id=cid)
+
+    try:
+        clerk_user = await asyncio.to_thread(_fetch_clerk_user, clerk_id)
     except Exception as exc:
         logger.error("Failed to fetch Clerk user", clerk_id=clerk_id, error=str(exc))
         raise UnauthorizedError("Unable to verify user identity")

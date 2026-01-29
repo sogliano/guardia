@@ -130,7 +130,7 @@ onMounted(() => {
             <td class="cell-date">{{ formatDate(email.received_at) }}</td>
             <td>
               <span class="score-val" :style="{ color: scoreColor(email.final_score) }">
-                {{ email.final_score !== null && email.final_score !== undefined ? email.final_score.toFixed(2) : '—' }}
+                {{ email.final_score !== null && email.final_score !== undefined ? (email.final_score * 100).toFixed(0) + '%' : '—' }}
               </span>
             </td>
           </tr>

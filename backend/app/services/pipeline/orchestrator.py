@@ -4,6 +4,7 @@ Flow: Load email → Create case → Heuristics → ML → LLM analyst →
       Final score (3-way weighted) → Verdict → Persist all results.
 """
 
+import asyncio
 import time
 from uuid import UUID
 
@@ -48,6 +49,21 @@ class PipelineOrchestrator:
         self.db = db
 
     async def analyze(self, email_id: UUID) -> PipelineResult:
+        """Run the pipeline with a configurable timeout."""
+        try:
+            return await asyncio.wait_for(
+                self._run_pipeline(email_id),
+                timeout=settings.pipeline_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "pipeline_timeout",
+                email_id=str(email_id),
+                timeout_seconds=settings.pipeline_timeout_seconds,
+            )
+            raise
+
+    async def _run_pipeline(self, email_id: UUID) -> PipelineResult:
         """Run the 3-layer pipeline on an email.
 
         1. Load email from DB
