@@ -28,7 +28,7 @@
 - 3-layer pipeline is fully operational: Heuristic (~5ms) + ML (~18ms) + LLM (~2-3s)
 - Weighted scoring with graceful degradation (auto-adjusts if layers unavailable)
 - Heuristic engine is comprehensive: auth/domain/URL/keyword sub-engines with correlation bonuses
-- LLM Explainer has Claude primary + GPT fallback
+- LLM Explainer uses OpenAI GPT
 - Fail-open design in SMTP gateway — if pipeline crashes, email forwards
 - 20-email test suite validated scoring coherence (7 allowed, 5 warned, 6 quarantined, 2 blocked)
 

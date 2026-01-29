@@ -39,11 +39,7 @@ class Settings(BaseSettings):
     pipeline_timeout_seconds: int = 30
     pipeline_ml_enabled: bool = True
 
-    # LLM - Claude (Primary)
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-opus-4-5-20251101"
-
-    # LLM - OpenAI (Fallback)
+    # LLM - OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
 

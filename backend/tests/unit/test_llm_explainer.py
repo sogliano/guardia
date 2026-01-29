@@ -1,4 +1,4 @@
-"""Tests for LLM explainer fallback chain."""
+"""Tests for LLM explainer (OpenAI only)."""
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
@@ -26,53 +26,30 @@ def _explain_kwargs():
 
 @pytest.mark.asyncio
 @patch("app.services.pipeline.llm_explainer.settings")
-async def test_claude_primary(mock_settings):
-    """When Claude works, use it."""
-    mock_settings.anthropic_api_key = "sk-test"
-    mock_settings.openai_api_key = ""
-    mock_settings.anthropic_model = "claude-test"
-
-    explainer = LLMExplainer()
-    explainer._explain_with_claude = AsyncMock(return_value=MagicMock(
-        explanation="Claude explanation", provider="claude"
-    ))
-
-    result = await explainer.explain(**_explain_kwargs())
-    assert result.explanation == "Claude explanation"
-    explainer._explain_with_claude.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-@patch("app.services.pipeline.llm_explainer.settings")
-async def test_fallback_to_openai(mock_settings):
-    """Claude fails → fallback to OpenAI."""
-    mock_settings.anthropic_api_key = "sk-test"
+async def test_openai_primary(mock_settings):
+    """When OpenAI works, use it."""
     mock_settings.openai_api_key = "sk-openai"
-    mock_settings.anthropic_model = "claude-test"
     mock_settings.openai_model = "gpt-test"
 
     explainer = LLMExplainer()
-    explainer._explain_with_claude = AsyncMock(side_effect=Exception("Claude down"))
-    explainer._explain_with_openai = AsyncMock(return_value=MagicMock(
+    explainer._call_openai = AsyncMock(return_value=MagicMock(
         explanation="OpenAI explanation", provider="openai"
     ))
 
     result = await explainer.explain(**_explain_kwargs())
     assert result.explanation == "OpenAI explanation"
+    explainer._call_openai.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 @patch("app.services.pipeline.llm_explainer.settings")
-async def test_both_fail_returns_fallback(mock_settings):
-    """Both Claude and OpenAI fail → fallback message."""
-    mock_settings.anthropic_api_key = "sk-test"
+async def test_openai_fails_returns_fallback(mock_settings):
+    """OpenAI fails → fallback message."""
     mock_settings.openai_api_key = "sk-openai"
-    mock_settings.anthropic_model = "claude-test"
     mock_settings.openai_model = "gpt-test"
 
     explainer = LLMExplainer()
-    explainer._explain_with_claude = AsyncMock(side_effect=Exception("fail"))
-    explainer._explain_with_openai = AsyncMock(side_effect=Exception("fail"))
+    explainer._call_openai = AsyncMock(side_effect=Exception("fail"))
 
     result = await explainer.explain(**_explain_kwargs())
     assert "unavailable" in result.explanation.lower()
@@ -81,9 +58,8 @@ async def test_both_fail_returns_fallback(mock_settings):
 
 @pytest.mark.asyncio
 @patch("app.services.pipeline.llm_explainer.settings")
-async def test_no_api_keys_returns_fallback(mock_settings):
-    """No API keys configured → skip both, return fallback."""
-    mock_settings.anthropic_api_key = ""
+async def test_no_api_key_returns_fallback(mock_settings):
+    """No API key configured → skip, return fallback."""
     mock_settings.openai_api_key = ""
 
     explainer = LLMExplainer()
@@ -154,48 +130,20 @@ def test_build_user_prompt_no_optional_fields():
 
 
 # ---------------------------------------------------------------------------
-# Real API call mocks (_explain_with_claude, _explain_with_openai)
+# Real API call mock (_call_openai)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 @patch("app.services.pipeline.llm_explainer.settings")
-async def test_explain_with_claude_real_mock(mock_settings):
-    """Mock the Anthropic client to verify _explain_with_claude flow."""
-    import sys
-
-    mock_settings.anthropic_api_key = "sk-test"
-    mock_settings.anthropic_model = "claude-test"
-
-    mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="This email is suspicious because...")]
-    mock_response.usage.input_tokens = 100
-    mock_response.usage.output_tokens = 50
-
-    mock_anthropic = MagicMock()
-    mock_client = AsyncMock()
-    mock_anthropic.AsyncAnthropic.return_value = mock_client
-    mock_client.messages.create = AsyncMock(return_value=mock_response)
-
-    with patch.dict(sys.modules, {"anthropic": mock_anthropic}):
-        explainer = LLMExplainer()
-        result = await explainer._explain_with_claude("test prompt")
-
-    assert result.explanation == "This email is suspicious because..."
-    assert result.provider == "claude"
-    assert result.tokens_used == 150
-
-
-@pytest.mark.asyncio
-@patch("app.services.pipeline.llm_explainer.settings")
-async def test_explain_with_openai_real_mock(mock_settings):
-    """Mock the OpenAI client to verify _explain_with_openai flow."""
+async def test_call_openai_real_mock(mock_settings):
+    """Mock the OpenAI client to verify _call_openai flow."""
     import sys
 
     mock_settings.openai_api_key = "sk-openai"
     mock_settings.openai_model = "gpt-test"
 
     mock_choice = MagicMock()
-    mock_choice.message.content = "OpenAI analysis of threats..."
+    mock_choice.message.content = '{"score": 0.75, "explanation": "OpenAI analysis of threats..."}'
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     mock_response.usage.prompt_tokens = 80
@@ -208,7 +156,7 @@ async def test_explain_with_openai_real_mock(mock_settings):
 
     with patch.dict(sys.modules, {"openai": mock_openai}):
         explainer = LLMExplainer()
-        result = await explainer._explain_with_openai("test prompt")
+        result = await explainer._call_openai("test prompt")
 
     assert result.explanation == "OpenAI analysis of threats..."
     assert result.provider == "openai"

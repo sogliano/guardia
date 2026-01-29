@@ -1,17 +1,18 @@
 """Layer 3: LLM Analyst (~2-3s).
 
-Primary: Claude (Anthropic API)
-Fallback: GPT-4.1 (OpenAI API)
+Provider: OpenAI GPT (structured output via response_format).
 
 The LLM provides an independent risk assessment: a phishing score (0.0-1.0)
 and a human-readable explanation. Its score is weighted into the final
 pipeline score alongside heuristic and ML scores.
+
+Temperature is set to 0 for deterministic scoring.
 """
 
 import json
+import re
 import time
 
-import anthropic
 import openai
 import structlog
 
@@ -24,15 +25,12 @@ _SYSTEM_PROMPT = """You are Guard-IA's LLM Analyst, a corporate email fraud dete
 
 Your task: analyze the provided email evidence and produce a structured risk assessment.
 
-Respond ONLY with valid JSON in this exact format:
-{"score": 0.85, "explanation": "Your detailed markdown explanation here"}
-
 ## Score Guidelines
-- **0.00 – 0.20**: Clearly legitimate — no suspicious signals detected
-- **0.20 – 0.40**: Minor anomalies — likely benign, low concern
-- **0.40 – 0.60**: Moderately suspicious — warrants manual review
-- **0.60 – 0.80**: Highly suspicious — strong phishing/fraud indicators
-- **0.80 – 1.00**: Near-certain phishing, BEC, or impersonation
+- 0.00 – 0.20: Clearly legitimate — no suspicious signals detected
+- 0.20 – 0.40: Minor anomalies — likely benign, low concern
+- 0.40 – 0.60: Moderately suspicious — warrants manual review
+- 0.60 – 0.80: Highly suspicious — strong phishing/fraud indicators
+- 0.80 – 1.00: Near-certain phishing, BEC, or impersonation
 
 ## Explanation Format
 Write your explanation in plain text with markdown bold (**text**) and bullet points (- item). Do NOT use markdown headers (#, ##, ###). Structure as follows:
@@ -59,7 +57,39 @@ Only include bullets relevant to the email — skip findings with nothing notabl
 - Your score is independent — you may agree or disagree with heuristic/ML stages
 - If evidence is contradictory or weak, reflect uncertainty in your score
 - For legitimate emails, explain clearly why they are safe
-- Write in English, professional tone, 250-450 words"""
+- Write in English, professional tone, 250-450 words
+
+## Few-Shot Examples
+
+### Example 1: Clear phishing
+Input summary: From security@paypa1-security.com, Subject "Urgent: Account Suspended", SPF=fail, DKIM=fail, DMARC=fail, 2 URLs (bit.ly shorteners), heuristic score 0.72, ML score 0.88.
+Expected output: {"score": 0.92, "explanation": "This email presents a **high-confidence credential phishing** attempt impersonating PayPal. The sender domain **paypa1-security.com** uses a classic typosquatting technique (numeral '1' replacing letter 'l') and is not affiliated with the legitimate **paypal.com** domain. Multiple critical signals converge to indicate malicious intent.\\n\\n- **Authentication Analysis:** All three authentication checks failed (SPF=fail, DKIM=fail, DMARC=fail), confirming the sender has no authorization to send on behalf of any legitimate domain. This triple failure is a strong phishing indicator.\\n- **Sender Domain:** The domain **paypa1-security.com** employs character substitution (1→l) to impersonate PayPal. The addition of '-security' is a common social engineering tactic to appear official.\\n- **Social Engineering Tactics:** The subject line 'Urgent: Account Suspended' uses fear and urgency to pressure immediate action — a hallmark of credential phishing campaigns.\\n- **Reply-To / Links:** Two URLs using **bit.ly** shorteners obscure the actual destination, a technique frequently used to bypass URL reputation filters.\\n- **ML/Heuristic Correlation:** Both automated stages scored high (heuristic: 0.72, ML: 0.88), strongly aligning with this assessment.\\n\\nThis email should be **blocked** immediately. All indicators point to a credential harvesting campaign with no legitimate purpose."}
+
+### Example 2: Legitimate email
+Input summary: From notifications@vercel.com, Subject "Deployment successful: guardia-frontend", SPF=pass, DKIM=pass, DMARC=pass, 1 URL (vercel.com dashboard), heuristic score 0.05, ML score 0.03.
+Expected output: {"score": 0.05, "explanation": "This email is a **legitimate automated deployment notification** from **Vercel**, a well-known cloud platform. All signals indicate this is a routine CI/CD notification with no malicious intent.\\n\\n- **Authentication Analysis:** All authentication checks passed (SPF=pass, DKIM=pass, DMARC=pass), confirming the email originates from Vercel's authorized mail infrastructure.\\n- **Sender Domain:** **vercel.com** is a recognized, established cloud hosting provider. The 'notifications' prefix is consistent with their standard notification system.\\n- **ML/Heuristic Correlation:** Both automated stages scored very low (heuristic: 0.05, ML: 0.03), consistent with legitimate traffic.\\n\\nThis email should be **allowed** without restrictions. It is a standard platform notification."}
+
+### Example 3: Ambiguous / moderate risk
+Input summary: From contracts@vendor-payments-portal.net, Subject "Invoice #4892 - Payment Due", SPF=pass, DKIM=none, DMARC=none, 1 attachment (invoice_4892.pdf), heuristic score 0.38, ML score 0.42.
+Expected output: {"score": 0.45, "explanation": "This email presents a **moderately suspicious invoice** from an unverified vendor domain. While not definitively malicious, several characteristics warrant manual review before any action is taken.\\n\\n- **Authentication Analysis:** SPF passes but DKIM and DMARC are not configured. The lack of DKIM means the email content could have been modified in transit. While not uncommon for smaller vendors, this reduces trust.\\n- **Sender Domain:** **vendor-payments-portal.net** is a generic domain that doesn't identify a specific vendor. Legitimate vendors typically use their company domain. The .net TLD and generic naming pattern are commonly seen in BEC campaigns.\\n- **Attachments:** A single PDF attachment (invoice_4892.pdf) is present. While PDFs are standard for invoices, they can contain embedded malicious links or JavaScript.\\n- **ML/Heuristic Correlation:** Both automated stages scored in the moderate range (heuristic: 0.38, ML: 0.42), reflecting the ambiguous nature of this email.\\n\\nThis email should be **monitored** and flagged for manual review. The recipient should verify the vendor relationship before opening the attachment or processing any payment."}"""
+
+# OpenAI response_format JSON schema for structured output
+_OPENAI_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "risk_assessment",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "score": {"type": "number"},
+                "explanation": {"type": "string"},
+            },
+            "required": ["score", "explanation"],
+            "additionalProperties": False,
+        },
+    },
+}
 
 
 def _build_user_prompt(
@@ -156,10 +186,9 @@ def _parse_llm_response(text: str) -> tuple[float, float, str]:
 def _fix_json_newlines(text: str) -> str:
     """Fix literal newlines inside JSON string values.
 
-    LLMs sometimes return JSON like {"explanation": "line1\nline2"} with
+    LLMs sometimes return JSON like {"explanation": "line1\\nline2"} with
     actual newline characters inside the string, which is invalid JSON.
     """
-    import re
     # Find content between the outermost { }
     match = re.search(r'\{.*\}', text, re.DOTALL)
     if not match:
@@ -172,7 +201,7 @@ def _fix_json_newlines(text: str) -> str:
 
 
 class LLMExplainer:
-    """Generates risk assessment (score + explanation) using LLM."""
+    """Generates risk assessment (score + explanation) using OpenAI GPT."""
 
     async def explain(
         self,
@@ -183,22 +212,12 @@ class LLMExplainer:
         ml_confidence: float,
         ml_available: bool,
     ) -> LLMResult:
-        """Generate risk assessment. Try Claude first, fall back to OpenAI."""
+        """Generate risk assessment using OpenAI."""
         user_prompt = _build_user_prompt(
             email_data, heuristic_evidences, heuristic_score,
             ml_score, ml_confidence, ml_available,
         )
 
-        # Try Claude
-        if settings.anthropic_api_key:
-            try:
-                result = await self._call_claude(user_prompt)
-                if result.explanation:
-                    return result
-            except Exception as exc:
-                logger.warning("claude_analyst_failed", error=str(exc))
-
-        # Fallback to OpenAI
         if settings.openai_api_key:
             try:
                 result = await self._call_openai(user_prompt)
@@ -207,64 +226,29 @@ class LLMExplainer:
             except Exception as exc:
                 logger.warning("openai_analyst_failed", error=str(exc))
 
-        # Both failed
-        logger.error("llm_analyst_all_failed")
+        # Failed
+        logger.error("llm_analyst_failed")
         return LLMResult(
             explanation="LLM analysis unavailable. Review evidence manually.",
             provider="none",
             model_used="none",
         )
 
-    async def _call_claude(self, user_prompt: str) -> LLMResult:
-        """Call Anthropic API (Claude)."""
-        start = time.monotonic()
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-        response = await client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=1024,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
-            timeout=10.0,
-        )
-
-        raw_text = response.content[0].text if response.content else ""
-        tokens = (response.usage.input_tokens or 0) + (response.usage.output_tokens or 0)
-        elapsed = int((time.monotonic() - start) * 1000)
-
-        score, confidence, explanation = _parse_llm_response(raw_text)
-
-        logger.info(
-            "claude_analysis_generated",
-            model=settings.anthropic_model,
-            score=round(score, 4),
-            tokens=tokens,
-            duration_ms=elapsed,
-        )
-
-        return LLMResult(
-            score=score,
-            confidence=confidence,
-            explanation=explanation,
-            provider="claude",
-            model_used=settings.anthropic_model,
-            tokens_used=tokens,
-            execution_time_ms=elapsed,
-        )
-
     async def _call_openai(self, user_prompt: str) -> LLMResult:
-        """Call OpenAI API (GPT-4.1 fallback)."""
+        """Call OpenAI API with structured output."""
         start = time.monotonic()
         client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
 
         response = await client.chat.completions.create(
             model=settings.openai_model,
             max_tokens=1024,
+            temperature=0,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            timeout=10.0,
+            response_format=_OPENAI_RESPONSE_FORMAT,
+            timeout=15.0,
         )
 
         raw_text = ""
@@ -279,6 +263,7 @@ class LLMExplainer:
 
         elapsed = int((time.monotonic() - start) * 1000)
 
+        # Structured output guarantees valid JSON, but keep fallback
         score, confidence, explanation = _parse_llm_response(raw_text)
 
         logger.info(

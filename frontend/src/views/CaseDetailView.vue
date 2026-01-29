@@ -156,7 +156,7 @@ const stageIcons: Record<string, string> = {
 const stageDescs: Record<string, string> = {
   heuristic: 'Deterministic rules: SPF, DKIM, DMARC, domain reputation, URL analysis, urgency patterns',
   ml: 'DistilBERT fine-tuned classifier (66M params) — probabilistic risk scoring',
-  llm: 'Independent AI risk scoring and natural language explanation (Claude / GPT-4.1 fallback)',
+  llm: 'Independent AI risk scoring and natural language explanation (OpenAI GPT)',
 }
 
 const evidenceTypeLabels: Record<string, string> = {

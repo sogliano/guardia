@@ -51,7 +51,7 @@ class LLMResult:
     score: float = 0.0
     confidence: float = 0.0
     explanation: str = ""
-    provider: str = ""  # "claude" or "openai"
+    provider: str = ""  # "openai"
     model_used: str = ""
     tokens_used: int = 0
     execution_time_ms: int = 0
