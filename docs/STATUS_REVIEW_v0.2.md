@@ -60,7 +60,7 @@
 
 ## 3. BUGS (Must fix)
 
-### Critical
+### Critical - DONE
 
 | # | Bug | Location | Impact |
 |---|-----|----------|--------|
@@ -71,7 +71,7 @@
 | B5 | **`fp_reviews` not in CaseDetail type** — CaseDetailView accesses `caseData.fp_reviews?.length` which is always undefined | `frontend/src/types/case.ts:121-125` + `CaseDetailView.vue:592` | FP review count never shown |
 | B6 | **`p95_duration_ms` hardcoded to 0.0** in pipeline health response | `backend/app/services/dashboard_service.py:243` | Pipeline health shows wrong metric |
 
-### High
+### High - DONE
 
 | # | Bug | Location | Impact |
 |---|-----|----------|--------|
@@ -82,7 +82,7 @@
 
 ---
 
-## 4. SECURITY GAPS
+## 4. SECURITY GAPS - TO DO
 
 | # | Issue | Location | Severity |
 |---|-------|----------|----------|
@@ -95,7 +95,7 @@
 
 ---
 
-## 5. NON-FUNCTIONAL UI ELEMENTS
+## 5. NON-FUNCTIONAL UI ELEMENTS - DONE
 
 Buttons/features that are rendered but do nothing:
 
@@ -114,7 +114,7 @@ Buttons/features that are rendered but do nothing:
 
 ---
 
-## 6. UNUSED CODE / DEAD CODE
+## 6. UNUSED CODE / DEAD CODE - DONE
 
 ### Components created but never imported (14 total):
 - `components/shared/RiskBadge.vue`

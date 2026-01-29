@@ -210,8 +210,6 @@ onMounted(() => {
 
 <template>
   <div class="cases-page">
-    <GlobalFiltersBar />
-
     <!-- Header -->
     <div class="page-header">
       <div class="header-left">
@@ -227,6 +225,7 @@ onMounted(() => {
           <span class="material-symbols-rounded btn-icon">refresh</span>
           Refresh
         </button>
+        <GlobalFiltersBar />
       </div>
     </div>
 
@@ -410,10 +409,6 @@ onMounted(() => {
     <!-- Tab: All Cases -->
     <template v-if="activeTab === 'all'">
 
-    <div class="all-cases-header">
-      <h2>All Cases</h2>
-    </div>
-
     <!-- Filter Bar -->
     <div class="filter-bar">
       <div class="search-input-wrapper">
@@ -452,17 +447,17 @@ onMounted(() => {
       <table v-else class="data-table">
         <thead>
           <tr>
-            <th style="width: 65px" class="sortable-th" @click="toggleSort('all', 'case_number')">CASE ID <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'case_number') }}</span></th>
-            <th style="width: 130px" class="sortable-th" @click="toggleSort('all', 'received')">RECEIVED <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'received') }}</span></th>
+            <th style="width: 50px" class="sortable-th" @click="toggleSort('all', 'case_number')">ID <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'case_number') }}</span></th>
+            <th style="width: 120px" class="sortable-th" @click="toggleSort('all', 'received')">RECEIVED <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'received') }}</span></th>
             <th>SUBJECT</th>
-            <th style="width: 160px">SENDER</th>
-            <th style="width: 55px" class="sortable-th" @click="toggleSort('all', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'score') }}</span></th>
-            <th style="width: 45px" class="sortable-th" @click="toggleSort('all', 'heuristic')">HEU <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'heuristic') }}</span></th>
-            <th style="width: 40px" class="sortable-th" @click="toggleSort('all', 'ml')">ML <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'ml') }}</span></th>
-            <th style="width: 45px" class="sortable-th" @click="toggleSort('all', 'llm')">LLM <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'llm') }}</span></th>
-            <th style="width: 70px" class="sortable-th" @click="toggleSort('all', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'risk') }}</span></th>
-            <th style="width: 85px" class="sortable-th" @click="toggleSort('all', 'action')">ACTION <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'action') }}</span></th>
-            <th style="width: 70px" class="sortable-th" @click="toggleSort('all', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'status') }}</span></th>
+            <th style="width: 180px">SENDER</th>
+            <th style="width: 60px" class="sortable-th" @click="toggleSort('all', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'score') }}</span></th>
+            <th style="width: 50px" class="sortable-th" @click="toggleSort('all', 'heuristic')">HEU <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'heuristic') }}</span></th>
+            <th style="width: 45px" class="sortable-th" @click="toggleSort('all', 'ml')">ML <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'ml') }}</span></th>
+            <th style="width: 50px" class="sortable-th" @click="toggleSort('all', 'llm')">LLM <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'llm') }}</span></th>
+            <th style="width: 75px" class="sortable-th" @click="toggleSort('all', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'risk') }}</span></th>
+            <th style="width: 90px" class="sortable-th" @click="toggleSort('all', 'action')">ACTION <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'action') }}</span></th>
+            <th style="width: 80px" class="sortable-th" @click="toggleSort('all', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'status') }}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -484,19 +479,22 @@ onMounted(() => {
               </span>
             </td>
             <td>
-              <span class="score-sub" :style="{ color: scoreColor(c.heuristic_score) }">
-                {{ c.heuristic_score !== null ? (c.heuristic_score * 100).toFixed(0) + '%' : '—' }}
+              <span v-if="c.heuristic_score != null" class="score-sub" :style="{ color: scoreColor(c.heuristic_score) }">
+                {{ (c.heuristic_score * 100).toFixed(0) + '%' }}
               </span>
+              <span v-else class="text-muted">—</span>
             </td>
             <td>
-              <span class="score-sub" :style="{ color: scoreColor(c.ml_score) }">
-                {{ c.ml_score !== null ? (c.ml_score * 100).toFixed(0) + '%' : '—' }}
+              <span v-if="c.ml_score != null" class="score-sub" :style="{ color: scoreColor(c.ml_score) }">
+                {{ (c.ml_score * 100).toFixed(0) + '%' }}
               </span>
+              <span v-else class="text-muted">—</span>
             </td>
             <td>
-              <span class="score-sub" :style="{ color: scoreColor(c.llm_score) }">
-                {{ c.llm_score !== null ? (c.llm_score * 100).toFixed(0) + '%' : '—' }}
+              <span v-if="c.llm_score != null" class="score-sub" :style="{ color: scoreColor(c.llm_score) }">
+                {{ (c.llm_score * 100).toFixed(0) + '%' }}
               </span>
+              <span v-else class="text-muted">—</span>
             </td>
             <td>
               <span

@@ -1,6 +1,6 @@
 /**
  * Simple markdown-to-HTML renderer for LLM output text.
- * Handles bold, bullet lists, and paragraph breaks.
+ * Handles headers, bold, inline code, bullet lists, and paragraph breaks.
  */
 export function renderMarkdown(text: string): string {
   if (!text) return ''
@@ -17,6 +17,16 @@ export function renderMarkdown(text: string): string {
   for (const line of lines) {
     const trimmed = line.trim()
 
+    // Headers: # H1, ## H2, ### H3
+    const headerMatch = trimmed.match(/^(#{1,3})\s+(.+)$/)
+    if (headerMatch) {
+      if (inList) { result.push('</ul>'); inList = false }
+      const level = headerMatch[1].length
+      result.push(`<h${level + 1}>${applyInline(headerMatch[2])}</h${level + 1}>`)
+      continue
+    }
+
+    // Bullet lists
     if (/^[-*]\s+/.test(trimmed)) {
       if (!inList) {
         result.push('<ul>')
@@ -30,7 +40,7 @@ export function renderMarkdown(text: string): string {
         inList = false
       }
       if (trimmed === '') {
-        result.push('<br>')
+        // skip consecutive empty lines
       } else {
         result.push(`<p>${applyInline(trimmed)}</p>`)
       }
@@ -43,5 +53,7 @@ export function renderMarkdown(text: string): string {
 }
 
 function applyInline(text: string): string {
-  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
 }

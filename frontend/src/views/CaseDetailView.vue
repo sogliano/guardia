@@ -1391,33 +1391,63 @@ onMounted(loadData)
 
 /* LLM Explanation */
 .llm-explanation {
-  font-family: var(--font-family);
-  font-size: var(--font-base);
+  font-family: var(--font-mono);
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.7;
   margin: 0;
 }
 
-.llm-explanation p {
+.llm-explanation :deep(*) {
+  font-family: inherit;
+}
+
+.llm-explanation :deep(h2),
+.llm-explanation :deep(h3),
+.llm-explanation :deep(h4) {
+  color: var(--text-primary);
+  font-weight: 700;
+  margin: 14px 0 6px;
+}
+
+.llm-explanation :deep(h2) { font-size: 14px; }
+.llm-explanation :deep(h3) { font-size: 13px; }
+.llm-explanation :deep(h4) { font-size: 12px; }
+
+.llm-explanation :deep(h2:first-child),
+.llm-explanation :deep(h3:first-child),
+.llm-explanation :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+.llm-explanation :deep(p) {
   margin: 0 0 8px;
 }
 
-.llm-explanation p:last-child {
+.llm-explanation :deep(p:last-child) {
   margin-bottom: 0;
 }
 
-.llm-explanation ul {
+.llm-explanation :deep(ul) {
   margin: 8px 0;
   padding-left: 20px;
 }
 
-.llm-explanation li {
-  margin-bottom: 4px;
+.llm-explanation :deep(li) {
+  margin-bottom: 6px;
 }
 
-.llm-explanation strong {
+.llm-explanation :deep(strong) {
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.llm-explanation :deep(code) {
+  background: rgba(0, 212, 255, 0.08);
+  color: #00D4FF;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 
 .llm-meta {
@@ -2444,24 +2474,58 @@ onMounted(loadData)
 }
 
 .stage-v2-explanation {
-  font-family: var(--font-family);
-  font-size: var(--font-base);
+  font-family: var(--font-mono);
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 12px 0 0 30px;
 }
 
-.stage-v2-explanation p {
+.stage-v2-explanation :deep(*) {
+  font-family: inherit;
+}
+
+.stage-v2-explanation :deep(h2),
+.stage-v2-explanation :deep(h3),
+.stage-v2-explanation :deep(h4) {
+  color: var(--text-primary);
+  font-weight: 700;
+  margin: 12px 0 4px;
+}
+
+.stage-v2-explanation :deep(h2) { font-size: 14px; }
+.stage-v2-explanation :deep(h3) { font-size: 13px; }
+.stage-v2-explanation :deep(h4) { font-size: 12px; }
+
+.stage-v2-explanation :deep(h2:first-child),
+.stage-v2-explanation :deep(h3:first-child),
+.stage-v2-explanation :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+.stage-v2-explanation :deep(p) {
   margin: 0 0 6px;
 }
 
-.stage-v2-explanation ul {
+.stage-v2-explanation :deep(ul) {
   margin: 6px 0;
   padding-left: 20px;
 }
 
-.stage-v2-explanation strong {
+.stage-v2-explanation :deep(li) {
+  margin-bottom: 4px;
+}
+
+.stage-v2-explanation :deep(strong) {
   color: var(--text-primary);
+}
+
+.stage-v2-explanation :deep(code) {
+  background: rgba(0, 212, 255, 0.08);
+  color: #00D4FF;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 
 .stage-v2-evidences {

@@ -20,28 +20,46 @@ from app.services.pipeline.models import EvidenceItem, LLMResult
 
 logger = structlog.get_logger()
 
-_SYSTEM_PROMPT = """You are Guard-IA, a corporate email fraud detection system.
-Analyze the email evidence and provide:
-1. A phishing risk score from 0.0 (legitimate) to 1.0 (certain phishing)
-2. A concise explanation of your assessment
+_SYSTEM_PROMPT = """You are Guard-IA's LLM Analyst, a corporate email fraud detection system specialized in phishing, BEC (Business Email Compromise), credential theft, and impersonation attacks.
+
+Your task: analyze the provided email evidence and produce a structured risk assessment.
 
 Respond ONLY with valid JSON in this exact format:
-{"score": 0.85, "explanation": "Brief explanation here..."}
+{"score": 0.85, "explanation": "Your detailed markdown explanation here"}
 
-Scoring guidelines:
-- 0.0-0.2: Clearly legitimate, no suspicious signals
-- 0.2-0.4: Minor suspicious signals, likely benign
-- 0.4-0.6: Moderately suspicious, warrants review
-- 0.6-0.8: Highly suspicious, likely phishing or fraud
-- 0.8-1.0: Almost certainly phishing, BEC, or impersonation
+## Score Guidelines
+- **0.00 – 0.20**: Clearly legitimate — no suspicious signals detected
+- **0.20 – 0.40**: Minor anomalies — likely benign, low concern
+- **0.40 – 0.60**: Moderately suspicious — warrants manual review
+- **0.60 – 0.80**: Highly suspicious — strong phishing/fraud indicators
+- **0.80 – 1.00**: Near-certain phishing, BEC, or impersonation
 
-Rules:
+## Explanation Format
+Write your explanation in plain text with markdown bold (**text**) and bullet points (- item). Do NOT use markdown headers (#, ##, ###). Structure as follows:
+
+**Opening paragraph** (2–3 sentences): State the overall threat assessment, the primary attack vector identified (e.g., credential phishing, BEC impersonation, malware delivery, invoice fraud), and a brief summary of the most critical signals.
+
+**Key findings** as bullet points. Each bullet must start with a bold label:
+- **Authentication Analysis:** Assess SPF, DKIM, DMARC results — explain what failures or passes mean for legitimacy
+- **Sender Domain:** Check for typosquatting, lookalike patterns, suspicious TLDs, or legitimate known domains
+- **Social Engineering Tactics:** Evaluate urgency language, pressure tactics, fear-based manipulation, authority impersonation
+- **Reply-To / Links:** Flag Reply-To mismatches, suspicious URLs, URL shorteners, IP-based links, known malicious patterns
+- **Attachments:** Note double extensions, executable files, or suspicious file types
+- **Brand/Identity Impersonation:** Assess if email impersonates a known brand, internal executive, or trusted vendor
+- **ML/Heuristic Correlation:** Note whether your assessment aligns or diverges from automated stages
+
+Only include bullets relevant to the email — skip findings with nothing notable.
+
+**Closing paragraph** (1–2 sentences): Summarize the risk level and recommended action (allow, monitor, quarantine, or block).
+
+## Rules
 - Be factual and cite specific evidence from the data provided
-- Maximum 200 words for the explanation
-- Consider ALL evidence: heuristic signals, ML score, email metadata, auth results
-- Your score is an independent assessment — you may agree or disagree with other stages
-- If evidence is weak or contradictory, reflect that uncertainty in your score
-- Structure explanation as: brief summary, then bullet points for key signals"""
+- Use **bold** for key technical terms and domain names
+- Do NOT use markdown headers (#), only bold text and bullet points
+- Your score is independent — you may agree or disagree with heuristic/ML stages
+- If evidence is contradictory or weak, reflect uncertainty in your score
+- For legitimate emails, explain clearly why they are safe
+- Write in English, professional tone, 250-450 words"""
 
 
 def _build_user_prompt(
@@ -120,14 +138,37 @@ def _parse_llm_response(text: str) -> tuple[float, float, str]:
 
     try:
         data = json.loads(text)
-        score = float(data.get("score", 0.0))
-        score = min(1.0, max(0.0, score))
-        explanation = str(data.get("explanation", ""))
-        # Confidence is 1.0 if we got a valid score
-        return score, 1.0, explanation
     except (json.JSONDecodeError, ValueError, TypeError):
-        logger.warning("llm_response_parse_failed", response_preview=text[:200])
-        return 0.0, 0.0, text
+        # LLMs often put literal newlines inside JSON string values — fix them
+        try:
+            fixed = _fix_json_newlines(text)
+            data = json.loads(fixed)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            logger.warning("llm_response_parse_failed", response_preview=text[:200])
+            return 0.0, 0.0, text
+
+    score = float(data.get("score", 0.0))
+    score = min(1.0, max(0.0, score))
+    explanation = str(data.get("explanation", ""))
+    return score, 1.0, explanation
+
+
+def _fix_json_newlines(text: str) -> str:
+    """Fix literal newlines inside JSON string values.
+
+    LLMs sometimes return JSON like {"explanation": "line1\nline2"} with
+    actual newline characters inside the string, which is invalid JSON.
+    """
+    import re
+    # Find content between the outermost { }
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if not match:
+        return text
+    raw = match.group(0)
+    # Replace literal newlines inside strings with \\n
+    # Strategy: replace all newlines with \\n, which works because
+    # JSON keys/structure don't contain newlines
+    return raw.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
 
 
 class LLMExplainer:
@@ -181,7 +222,7 @@ class LLMExplainer:
 
         response = await client.messages.create(
             model=settings.anthropic_model,
-            max_tokens=512,
+            max_tokens=1024,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
             timeout=10.0,
@@ -218,7 +259,7 @@ class LLMExplainer:
 
         response = await client.chat.completions.create(
             model=settings.openai_model,
-            max_tokens=512,
+            max_tokens=1024,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
