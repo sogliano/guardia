@@ -143,7 +143,7 @@ const threatCategoryMeta: Record<string, { label: string; color: string; bg: str
 const stageNames: Record<string, string> = {
   heuristic: 'Heuristic Engine',
   ml: 'ML Classifier',
-  llm: 'LLM Explainer',
+  llm: 'LLM Analyst',
 }
 
 const stageIcons: Record<string, string> = {
@@ -155,7 +155,7 @@ const stageIcons: Record<string, string> = {
 const stageDescs: Record<string, string> = {
   heuristic: 'Deterministic rules: SPF, DKIM, DMARC, domain reputation, URL analysis, urgency patterns',
   ml: 'DistilBERT fine-tuned classifier (66M params) — probabilistic risk scoring',
-  llm: 'AI-generated natural language explanation of the analysis',
+  llm: 'Independent AI risk scoring and natural language explanation (Claude / GPT-4.1 fallback)',
 }
 
 const evidenceTypeLabels: Record<string, string> = {
@@ -206,10 +206,10 @@ function isStageUnavailable(analysis: Analysis): boolean {
 
 function stageStatusLabel(analysis: Analysis): string {
   if (isStageUnavailable(analysis)) return 'Unavailable'
-  if (analysis.stage === 'llm') {
-    return analysis.explanation ? 'Explained' : 'No explanation'
+  if (analysis.score === null) {
+    if (analysis.stage === 'llm') return analysis.explanation ? 'Explained' : 'No explanation'
+    return 'No data'
   }
-  if (analysis.score === null) return 'No data'
   if (analysis.score < 0.3) return 'Clean'
   if (analysis.score < 0.6) return 'Suspicious'
   return 'Threat detected'
@@ -217,9 +217,9 @@ function stageStatusLabel(analysis: Analysis): string {
 
 function stageStatusColor(analysis: Analysis): string {
   if (isStageUnavailable(analysis)) return 'var(--text-muted)'
+  if (analysis.score !== null) return scoreColor(analysis.score)
   if (analysis.stage === 'llm') return analysis.explanation ? 'var(--color-info)' : 'var(--text-muted)'
-  if (analysis.score === null) return 'var(--text-muted)'
-  return scoreColor(analysis.score)
+  return 'var(--text-muted)'
 }
 
 async function loadData() {
@@ -547,6 +547,13 @@ onMounted(loadData)
                 </span>
                 <span class="sub-time">{{ formatMs(mlAnalysis.execution_time_ms) }}</span>
               </div>
+              <div class="sub-score" v-if="llmAnalysis && llmAnalysis.score != null">
+                <span class="sub-label">LLM Analyst</span>
+                <span class="sub-value" :style="{ color: scoreColor(llmAnalysis.score) }">
+                  {{ formatScore(llmAnalysis.score) }}
+                </span>
+                <span class="sub-time">{{ formatMs(llmAnalysis.execution_time_ms) }}</span>
+              </div>
               <div class="sub-score">
                 <span class="sub-label">Pipeline Duration</span>
                 <span class="sub-value">{{ formatMs(caseData.pipeline_duration_ms) }}</span>
@@ -806,9 +813,9 @@ onMounted(loadData)
                   <span class="tl-node-result" :style="{ color: stageStatusColor(analysis) }">
                     {{ isStageUnavailable(analysis)
                       ? 'Unavailable'
-                      : analysis.stage === 'llm'
-                        ? stageStatusLabel(analysis)
-                        : analysis.score !== null ? (analysis.score * 100).toFixed(0) + '%' : '—' }}
+                      : analysis.score !== null ? (analysis.score * 100).toFixed(0) + '%'
+                      : analysis.stage === 'llm' ? stageStatusLabel(analysis)
+                      : '—' }}
                   </span>
                 </div>
                 <span v-if="analysis.execution_time_ms" class="tl-node-time">{{ formatMs(analysis.execution_time_ms) }}</span>
@@ -917,6 +924,13 @@ onMounted(loadData)
               <!-- ML model info -->
               <div v-if="expandedStages.has(analysis.id) && analysis.stage === 'ml' && analysis.metadata?.model_version" class="stage-v2-ml">
                 <span class="badge badge-info">v{{ analysis.metadata.model_version }}</span>
+              </div>
+
+              <!-- LLM provider info -->
+              <div v-if="expandedStages.has(analysis.id) && analysis.stage === 'llm' && analysis.metadata?.provider" class="stage-v2-ml">
+                <span class="badge badge-info">{{ analysis.metadata.provider }}</span>
+                <span v-if="analysis.metadata.model_used" class="badge badge-info">{{ analysis.metadata.model_used }}</span>
+                <span v-if="analysis.metadata.tokens_used" class="stage-v2-tokens">{{ analysis.metadata.tokens_used }} tokens</span>
               </div>
 
               <!-- LLM explanation -->
@@ -2398,6 +2412,14 @@ onMounted(loadData)
 
 .stage-v2-ml {
   margin: 10px 0 0 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-v2-tokens {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .stage-v2-explanation {

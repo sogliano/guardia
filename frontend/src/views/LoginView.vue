@@ -12,7 +12,7 @@ import { SignInButton, SignedOut } from '@clerk/vue'
         <p class="hero-tagline">AI-Powered Email Threat Intelligence</p>
         <p class="hero-desc">
           Protecting your corporate email with a 3-stage AI pipeline:
-          Heuristic Engine, ML Classifier, and LLM Explainer. Real-time detection. Zero trust.
+          Heuristic Engine, ML Classifier, and LLM Analyst. Real-time detection. Zero trust.
         </p>
         <div class="hero-stats">
           <div class="stat">

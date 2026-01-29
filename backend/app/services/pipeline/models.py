@@ -46,8 +46,10 @@ class MLResult:
 
 @dataclass
 class LLMResult:
-    """Output of the LLM explainer (Layer 3)."""
+    """Output of the LLM analyst (Layer 3): score + explanation."""
 
+    score: float = 0.0
+    confidence: float = 0.0
     explanation: str = ""
     provider: str = ""  # "claude" or "openai"
     model_used: str = ""

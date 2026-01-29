@@ -172,8 +172,12 @@ ATTACHMENT_SUSPICIOUS_BONUS = 0.10   # suspicious extension found
 ATTACHMENT_DOUBLE_EXT_BONUS = 0.15   # double extension (e.g. invoice.pdf.exe)
 
 # Pipeline score weights (final score calculation)
-SCORE_WEIGHT_HEURISTIC = 0.40
-SCORE_WEIGHT_ML = 0.60
+# 3-way: Heuristic 30% + ML 50% + LLM 20% (when all available)
+# Fallback 2-way (no LLM): Heuristic 40% + ML 60%
+# Fallback 2-way (no ML): Heuristic 60% + LLM 40%
+SCORE_WEIGHT_HEURISTIC = 0.30
+SCORE_WEIGHT_ML = 0.50
+SCORE_WEIGHT_LLM = 0.20
 
 # --- SMTP Gateway ---
 

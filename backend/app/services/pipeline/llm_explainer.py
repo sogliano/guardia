@@ -1,14 +1,14 @@
-"""Layer 3: LLM Explainer (~2-3s).
+"""Layer 3: LLM Analyst (~2-3s).
 
 Primary: Claude (Anthropic API)
 Fallback: GPT-4.1 (OpenAI API)
 
-The LLM does NOT make decisions. It generates human-readable
-explanations based on the evidence collected by the heuristic
-and ML stages. This is a defensive design choice to prevent
-the LLM from being manipulated via prompt injection.
+The LLM provides an independent risk assessment: a phishing score (0.0-1.0)
+and a human-readable explanation. Its score is weighted into the final
+pipeline score alongside heuristic and ML scores.
 """
 
+import json
 import time
 
 import structlog
@@ -19,21 +19,33 @@ from app.services.pipeline.models import EvidenceItem, LLMResult
 logger = structlog.get_logger()
 
 _SYSTEM_PROMPT = """You are Guard-IA, a corporate email fraud detection system.
-Your role is to explain WHY an email was flagged, based on the evidence provided.
+Analyze the email evidence and provide:
+1. A phishing risk score from 0.0 (legitimate) to 1.0 (certain phishing)
+2. A concise explanation of your assessment
+
+Respond ONLY with valid JSON in this exact format:
+{"score": 0.85, "explanation": "Brief explanation here..."}
+
+Scoring guidelines:
+- 0.0-0.2: Clearly legitimate, no suspicious signals
+- 0.2-0.4: Minor suspicious signals, likely benign
+- 0.4-0.6: Moderately suspicious, warrants review
+- 0.6-0.8: Highly suspicious, likely phishing or fraud
+- 0.8-1.0: Almost certainly phishing, BEC, or impersonation
 
 Rules:
-- You do NOT decide if the email is phishing. The pipeline already made that decision.
-- You explain the evidence in clear, concise language for a security analyst.
-- Write in English. Be factual and specific.
-- If evidence is weak, say so honestly.
-- Structure your response as: a brief summary (1-2 sentences), then bullet points for each signal.
-- Maximum 200 words.
-- Do NOT suggest actions. Only explain what was detected."""
+- Be factual and cite specific evidence from the data provided
+- Maximum 200 words for the explanation
+- Consider ALL evidence: heuristic signals, ML score, email metadata, auth results
+- Your score is an independent assessment — you may agree or disagree with other stages
+- If evidence is weak or contradictory, reflect that uncertainty in your score
+- Structure explanation as: brief summary, then bullet points for key signals"""
 
 
 def _build_user_prompt(
     email_data: dict,
     heuristic_evidences: list[EvidenceItem],
+    heuristic_score: float,
     ml_score: float,
     ml_confidence: float,
     ml_available: bool,
@@ -68,7 +80,7 @@ def _build_user_prompt(
 
     # Heuristic evidence
     if heuristic_evidences:
-        parts.append("\n## Heuristic Evidence")
+        parts.append(f"\n## Heuristic Engine (score: {heuristic_score:.4f})")
         for ev in heuristic_evidences:
             parts.append(f"- [{ev.severity.upper()}] {ev.description}")
 
@@ -81,55 +93,86 @@ def _build_user_prompt(
 
     parts.append(
         "\n## Task\n"
-        "Explain the detection signals above to a security analyst. "
-        "Focus on what makes this email suspicious or legitimate."
+        "Based on all evidence above, provide your independent risk assessment "
+        "as JSON with a score (0.0-1.0) and explanation."
     )
     return "\n".join(parts)
 
 
+def _parse_llm_response(text: str) -> tuple[float, float, str]:
+    """Parse LLM JSON response. Returns (score, confidence, explanation).
+
+    If parsing fails, returns (0.0, 0.0, original_text).
+    """
+    text = text.strip()
+
+    # Try to extract JSON from response (handle markdown code blocks)
+    if "```" in text:
+        for block in text.split("```"):
+            block = block.strip()
+            if block.startswith("json"):
+                block = block[4:].strip()
+            if block.startswith("{"):
+                text = block
+                break
+
+    try:
+        data = json.loads(text)
+        score = float(data.get("score", 0.0))
+        score = min(1.0, max(0.0, score))
+        explanation = str(data.get("explanation", ""))
+        # Confidence is 1.0 if we got a valid score
+        return score, 1.0, explanation
+    except (json.JSONDecodeError, ValueError, TypeError):
+        logger.warning("llm_response_parse_failed", response_preview=text[:200])
+        return 0.0, 0.0, text
+
+
 class LLMExplainer:
-    """Generates explanations using LLM based on pipeline evidence."""
+    """Generates risk assessment (score + explanation) using LLM."""
 
     async def explain(
         self,
         email_data: dict,
         heuristic_evidences: list[EvidenceItem],
+        heuristic_score: float,
         ml_score: float,
         ml_confidence: float,
         ml_available: bool,
     ) -> LLMResult:
-        """Generate explanation. Try Claude first, fall back to OpenAI."""
+        """Generate risk assessment. Try Claude first, fall back to OpenAI."""
         user_prompt = _build_user_prompt(
-            email_data, heuristic_evidences, ml_score, ml_confidence, ml_available
+            email_data, heuristic_evidences, heuristic_score,
+            ml_score, ml_confidence, ml_available,
         )
 
         # Try Claude
         if settings.anthropic_api_key:
             try:
-                result = await self._explain_with_claude(user_prompt)
+                result = await self._call_claude(user_prompt)
                 if result.explanation:
                     return result
             except Exception as exc:
-                logger.warning("claude_explainer_failed", error=str(exc))
+                logger.warning("claude_analyst_failed", error=str(exc))
 
         # Fallback to OpenAI
         if settings.openai_api_key:
             try:
-                result = await self._explain_with_openai(user_prompt)
+                result = await self._call_openai(user_prompt)
                 if result.explanation:
                     return result
             except Exception as exc:
-                logger.warning("openai_explainer_failed", error=str(exc))
+                logger.warning("openai_analyst_failed", error=str(exc))
 
         # Both failed
-        logger.error("llm_explainer_all_failed")
+        logger.error("llm_analyst_all_failed")
         return LLMResult(
-            explanation="LLM explanation unavailable. Review evidence manually.",
+            explanation="LLM analysis unavailable. Review evidence manually.",
             provider="none",
             model_used="none",
         )
 
-    async def _explain_with_claude(self, user_prompt: str) -> LLMResult:
+    async def _call_claude(self, user_prompt: str) -> LLMResult:
         """Call Anthropic API (Claude)."""
         import anthropic
 
@@ -144,18 +187,23 @@ class LLMExplainer:
             timeout=10.0,
         )
 
-        explanation = response.content[0].text if response.content else ""
+        raw_text = response.content[0].text if response.content else ""
         tokens = (response.usage.input_tokens or 0) + (response.usage.output_tokens or 0)
         elapsed = int((time.monotonic() - start) * 1000)
 
+        score, confidence, explanation = _parse_llm_response(raw_text)
+
         logger.info(
-            "claude_explanation_generated",
+            "claude_analysis_generated",
             model=settings.anthropic_model,
+            score=round(score, 4),
             tokens=tokens,
             duration_ms=elapsed,
         )
 
         return LLMResult(
+            score=score,
+            confidence=confidence,
             explanation=explanation,
             provider="claude",
             model_used=settings.anthropic_model,
@@ -163,7 +211,7 @@ class LLMExplainer:
             execution_time_ms=elapsed,
         )
 
-    async def _explain_with_openai(self, user_prompt: str) -> LLMResult:
+    async def _call_openai(self, user_prompt: str) -> LLMResult:
         """Call OpenAI API (GPT-4.1 fallback)."""
         import openai
 
@@ -180,9 +228,9 @@ class LLMExplainer:
             timeout=10.0,
         )
 
-        explanation = ""
+        raw_text = ""
         if response.choices:
-            explanation = response.choices[0].message.content or ""
+            raw_text = response.choices[0].message.content or ""
 
         tokens = 0
         if response.usage:
@@ -192,14 +240,19 @@ class LLMExplainer:
 
         elapsed = int((time.monotonic() - start) * 1000)
 
+        score, confidence, explanation = _parse_llm_response(raw_text)
+
         logger.info(
-            "openai_explanation_generated",
+            "openai_analysis_generated",
             model=settings.openai_model,
+            score=round(score, 4),
             tokens=tokens,
             duration_ms=elapsed,
         )
 
         return LLMResult(
+            score=score,
+            confidence=confidence,
             explanation=explanation,
             provider="openai",
             model_used=settings.openai_model,

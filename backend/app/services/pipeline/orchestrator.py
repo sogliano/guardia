@@ -1,7 +1,7 @@
 """Pipeline Orchestrator: coordinates the 3-layer detection pipeline.
 
-Flow: Load email → Create case → Heuristics → ML → Final score →
-      Verdict → LLM explainer → Persist all results.
+Flow: Load email → Create case → Heuristics → ML → LLM analyst →
+      Final score (3-way weighted) → Verdict → Persist all results.
 """
 
 import time
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.constants import (
     SCORE_WEIGHT_HEURISTIC,
+    SCORE_WEIGHT_LLM,
     SCORE_WEIGHT_ML,
     CaseStatus,
     PipelineStage,
@@ -52,9 +53,9 @@ class PipelineOrchestrator:
         2. Create or fetch case (status=analyzing)
         3. Run heuristic engine → persist Analysis + Evidence
         4. Run ML classifier → persist Analysis + Evidence
-        5. Calculate final score (40% heuristic + 60% ML)
-        6. Determine verdict and risk level
-        7. Run LLM explainer → persist Analysis
+        5. Run LLM analyst → persist Analysis (score + explanation)
+        6. Calculate final score (30% heuristic + 50% ML + 20% LLM)
+        7. Determine verdict and risk level
         8. Update case with final results
         """
         pipeline_start = time.monotonic()
@@ -109,21 +110,14 @@ class PipelineOrchestrator:
                 evidences=ml_result.evidences,
             )
 
-        # 5. Calculate final score
-        final_score = self._calculate_final_score(heuristic_result, ml_result)
-
-        # 6. Determine verdict and risk level
-        risk_level = self._determine_risk_level(final_score)
-        verdict = self._determine_verdict(final_score)
-        threat_category = self._determine_threat_category(heuristic_result)
-
-        # 7. LLM explainer (non-blocking: failure doesn't affect verdict)
+        # 5. LLM analyst (score + explanation)
         llm_result = LLMResult()
         try:
             explainer = LLMExplainer()
             llm_result = await explainer.explain(
                 email_data=email_data,
                 heuristic_evidences=heuristic_result.evidences,
+                heuristic_score=heuristic_result.score,
                 ml_score=ml_result.score,
                 ml_confidence=ml_result.confidence,
                 ml_available=ml_result.model_available,
@@ -131,8 +125,8 @@ class PipelineOrchestrator:
             await self._persist_analysis(
                 case_id=case.id,
                 stage=PipelineStage.LLM,
-                score=None,
-                confidence=None,
+                score=llm_result.score,
+                confidence=llm_result.confidence,
                 explanation=llm_result.explanation,
                 metadata={
                     "provider": llm_result.provider,
@@ -143,7 +137,15 @@ class PipelineOrchestrator:
                 evidences=[],
             )
         except Exception as exc:
-            logger.error("llm_explainer_error", error=str(exc), case_id=str(case.id))
+            logger.error("llm_analyst_error", error=str(exc), case_id=str(case.id))
+
+        # 6. Calculate final score (3-way weighted)
+        final_score = self._calculate_final_score(heuristic_result, ml_result, llm_result)
+
+        # 7. Determine verdict and risk level
+        risk_level = self._determine_risk_level(final_score)
+        verdict = self._determine_verdict(final_score)
+        threat_category = self._determine_threat_category(heuristic_result)
 
         # 8. Update case
         pipeline_duration = int((time.monotonic() - pipeline_start) * 1000)
@@ -233,20 +235,31 @@ class PipelineOrchestrator:
         return f"{subject}\n{body}".strip()
 
     def _calculate_final_score(
-        self, heuristic: HeuristicResult, ml: MLResult
+        self, heuristic: HeuristicResult, ml: MLResult, llm: LLMResult
     ) -> float:
-        """Calculate weighted final score.
+        """Calculate weighted final score from up to 3 stages.
 
-        If ML is available: 40% heuristic + 60% ML
-        If ML not available: 100% heuristic
+        All 3 available: 30% heuristic + 50% ML + 20% LLM
+        No LLM:          40% heuristic + 60% ML
+        No ML:           60% heuristic + 40% LLM
+        Only heuristic:  100% heuristic
         """
-        if ml.model_available and ml.confidence > 0:
+        has_ml = ml.model_available and ml.confidence > 0
+        has_llm = llm.confidence > 0
+
+        if has_ml and has_llm:
             score = (
                 heuristic.score * SCORE_WEIGHT_HEURISTIC
                 + ml.score * SCORE_WEIGHT_ML
+                + llm.score * SCORE_WEIGHT_LLM
             )
+        elif has_ml:
+            score = heuristic.score * 0.40 + ml.score * 0.60
+        elif has_llm:
+            score = heuristic.score * 0.60 + llm.score * 0.40
         else:
             score = heuristic.score
+
         return min(1.0, max(0.0, score))
 
     def _determine_risk_level(self, score: float) -> str:

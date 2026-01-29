@@ -9,7 +9,7 @@ const props = defineProps<{
 const stageNames: Record<string, string> = {
   heuristic: 'Heuristic Engine',
   ml: 'ML Classifier',
-  llm: 'LLM Explainer',
+  llm: 'LLM Analyst',
 }
 
 const stages = computed(() => {

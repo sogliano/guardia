@@ -1,9 +1,13 @@
+import os
+
 from pydantic_settings import BaseSettings
+
+_env = os.getenv("APP_ENV", "local")
 
 
 class Settings(BaseSettings):
     # Application
-    app_env: str = "development"
+    app_env: str = "local"
     app_debug: bool = True
     app_secret_key: str = "change-me-in-production"
 
@@ -54,7 +58,7 @@ class Settings(BaseSettings):
     quarantine_storage_path: str = "./quarantine_store"
 
     model_config = {
-        "env_file": ("../.env", ".env"),
+        "env_file": (f"../.env.{_env}", f".env.{_env}", "../.env", ".env"),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
