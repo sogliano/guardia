@@ -46,33 +46,33 @@ graph TB
 
     subgraph GUARDIA["Guard-IA System"]
         subgraph Gateway["SMTP Gateway :2525"]
-            SMTP["aiosmtpd\nSMTP Server"]
-            PARSER["Email Parser\n(RFC 5322)"]
+            SMTP["aiosmtpd SMTP Server"]
+            PARSER["Email Parser - RFC 5322"]
         end
 
         subgraph Pipeline["Detection Pipeline"]
             ORCH["Pipeline Orchestrator"]
-            HEUR["Heuristic Engine\n~5ms"]
-            ML["ML Classifier\nDistilBERT ~18ms"]
-            LLM["LLM Analyst\nClaude / GPT-4\n~2-3s"]
+            HEUR["Heuristic Engine ~5ms"]
+            ML["ML Classifier DistilBERT ~18ms"]
+            LLM["LLM Analyst Claude/GPT ~2-3s"]
         end
 
         subgraph Backend["FastAPI Backend :8000"]
-            API["REST API\n/api/v1"]
+            API["REST API /api/v1"]
             SERVICES["Business Services"]
         end
 
         subgraph Frontend["Vue 3 Frontend :3000"]
-            SPA["SPA Dashboard\nVite + TypeScript"]
+            SPA["SPA Dashboard Vite + TypeScript"]
         end
 
-        DB[("PostgreSQL 16\n(Neon)")]
+        DB[("PostgreSQL 16 Neon")]
     end
 
     subgraph External["External Services"]
-        CLERK["Clerk\nAuth (RS256 JWT)"]
-        SLACK["Slack\nWebhooks"]
-        GOOGLE["Google Workspace\nEmail Relay"]
+        CLERK["Clerk Auth RS256 JWT"]
+        SLACK["Slack Webhooks"]
+        GOOGLE["Google Workspace Email Relay"]
         OPENAI["OpenAI API"]
         ANTHROPIC["Anthropic API"]
     end
@@ -86,12 +86,12 @@ graph TB
     LLM -.->|Primary| ANTHROPIC
     LLM -.->|Fallback| OPENAI
     ORCH -->|Score + Verdict| DB
-    ORCH -->|"forward (allowed/warned)"| GOOGLE
+    ORCH -->|"forward allowed/warned"| GOOGLE
     ORCH -->|"high risk alert"| SLACK
 
     API --> DB
     API --> SERVICES
-    SPA -->|"HTTP (Bearer JWT)"| API
+    SPA -->|"HTTP Bearer JWT"| API
     ANALYST --> SPA
     SPA -.->|Auth| CLERK
     API -.->|JWT verify| CLERK
@@ -102,12 +102,12 @@ graph TB
 ```mermaid
 graph LR
     SCORE["Final Score"] --> A{"< 0.3"}
-    A -->|Yes| ALLOW["✅ ALLOWED\nForward to Gmail"]
+    A -->|Yes| ALLOW["ALLOWED - Forward to Gmail"]
     A -->|No| B{"< 0.6"}
-    B -->|Yes| WARN["⚠️ WARNED\nDeliver + Alert Analyst"]
+    B -->|Yes| WARN["WARNED - Deliver + Alert"]
     B -->|No| C{"< 0.8"}
-    C -->|Yes| QUAR["🔒 QUARANTINED\nHold for Review"]
-    C -->|No| BLOCK["🚫 BLOCKED\nReject at SMTP"]
+    C -->|Yes| QUAR["QUARANTINED - Hold for Review"]
+    C -->|No| BLOCK["BLOCKED - Reject at SMTP"]
 
     style ALLOW fill:#22c55e,color:#fff
     style WARN fill:#f59e0b,color:#fff
@@ -119,23 +119,23 @@ graph LR
 
 ```mermaid
 flowchart TD
-    A["📧 Email arrives via SMTP"] --> B["Parse raw email (RFC 5322)"]
-    B --> C["Persist Email + Create Case\n(status: pending)"]
+    A["Email arrives via SMTP"] --> B["Parse raw email RFC 5322"]
+    B --> C["Persist Email + Create Case"]
     C --> D["Pipeline Orchestrator"]
 
-    D --> E["1️⃣ Heuristic Engine\nscore + evidences\n(weight: 30%)"]
-    D --> F["2️⃣ ML Classifier\nscore + confidence\n(weight: 50%)"]
-    D --> G["3️⃣ LLM Analyst\nscore + explanation\n(weight: 20%)"]
+    D --> E["Heuristic Engine - score + evidences - 30%"]
+    D --> F["ML Classifier - score + confidence - 50%"]
+    D --> G["LLM Analyst - score + explanation - 20%"]
 
-    E --> H["Final Score\n= 0.3×H + 0.5×ML + 0.2×LLM"]
+    E --> H["Final Score = 0.3 H + 0.5 ML + 0.2 LLM"]
     F --> H
     G --> H
 
     H --> I{"Verdict"}
-    I -->|"Allowed / Warned"| J["Forward to\nGoogle Workspace"]
-    I -->|"Quarantined"| K["Hold in\nQuarantine Store"]
-    I -->|"Blocked"| L["550 Reject\nat SMTP"]
-    I -->|"High Risk"| M["Alert via\nSlack Webhook"]
+    I -->|"Allowed / Warned"| J["Forward to Google Workspace"]
+    I -->|"Quarantined"| K["Hold in Quarantine Store"]
+    I -->|"Blocked"| L["550 Reject at SMTP"]
+    I -->|"High Risk"| M["Alert via Slack Webhook"]
 
     style E fill:#3b82f6,color:#fff
     style F fill:#8b5cf6,color:#fff
@@ -594,7 +594,7 @@ sequenceDiagram
     F->>F: Store token (Clerk SDK)
     F->>B: API request + Authorization: Bearer JWT
     B->>B: Verify JWT with PEM public key
-    B->>DB: Hybrid sync → upsert local user
+    B->>DB: Hybrid sync, upsert local user
     B-->>F: 200 OK + response data
 ```
 
@@ -649,18 +649,18 @@ graph TB
         direction TB
 
         subgraph Compute["Compute"]
-            VERCEL["Vercel\nguardia-staging.vercel.app\nVue 3 SPA (Vite build)"]
-            CLOUDRUN["Google Cloud Run\nguardia-api (us-east1)\nFastAPI Docker\n1 CPU / 2GB RAM\nScale 0→1"]
+            VERCEL["Vercel - guardia-staging.vercel.app - Vue 3 SPA"]
+            CLOUDRUN["Cloud Run - guardia-api us-east1 - FastAPI Docker 1CPU/2GB"]
         end
 
         subgraph Data["Data & Auth"]
-            NEON["Neon\nPostgreSQL (serverless)\nsa-east-1 (São Paulo)\nConnection pooler"]
-            CLERK2["Clerk\nAuth provider\nRS256 JWT\nInvitation-only"]
+            NEON["Neon - PostgreSQL serverless - sa-east-1"]
+            CLERK2["Clerk - Auth RS256 JWT - Invitation-only"]
         end
 
         subgraph APIs["External APIs"]
-            OAI["OpenAI API\ngpt-4o-mini\nLLM Analyst"]
-            SLACK2["Slack Webhooks\nAlert notifications"]
+            OAI["OpenAI API - gpt-4o-mini"]
+            SLACK2["Slack Webhooks"]
         end
     end
 
@@ -751,20 +751,20 @@ Services:
 ```mermaid
 graph LR
     subgraph Production
-        I1["Internet"] -->|MX DNS| GW1["Guard-IA\n:2525"]
+        I1["Internet"] -->|MX DNS| GW1["Guard-IA :2525"]
         GW1 --> P1["Pipeline"]
-        P1 --> R1["Relay to\naspmx.l.google.com"]
+        P1 --> R1["Relay to aspmx.l.google.com"]
     end
 
-    subgraph Local Simulation
-        SIM["simulate_email.py"] -->|smtplib| GW2["Guard-IA\n:2525"]
+    subgraph Local["Local Simulation"]
+        SIM["simulate_email.py"] -->|smtplib| GW2["Guard-IA :2525"]
         GW2 --> P2["Pipeline"]
-        P2 --> X1["(no relay)"]
+        P2 --> X1["No relay"]
     end
 
-    subgraph Direct Seeding
+    subgraph Seeding["Direct Seeding"]
         SEED["seed_test_emails.py"] -->|SQLAlchemy| DB["DB Insert"]
-        DB --> ORCH["PipelineOrchestrator\n.analyze()"]
+        DB --> ORCH["PipelineOrchestrator.analyze"]
     end
 ```
 
