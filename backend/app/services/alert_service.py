@@ -6,10 +6,11 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import AlertDeliveryStatus
+from app.core.constants import AlertChannel, AlertDeliveryStatus
 from app.models.alert_event import AlertEvent
 from app.models.alert_rule import AlertRule
 from app.models.case import Case
+from app.services.slack_service import SlackDeliveryService
 
 logger = structlog.get_logger()
 
@@ -125,6 +126,7 @@ class AlertService:
         for rule in rules:
             if self._matches(rule, case):
                 for channel in rule.channels:
+                    email = case.email if hasattr(case, "email") and case.email else None
                     event = AlertEvent(
                         alert_rule_id=rule.id,
                         case_id=case.id,
@@ -133,10 +135,17 @@ class AlertService:
                         delivery_status=AlertDeliveryStatus.PENDING,
                         trigger_info={
                             "case_id": str(case.id),
+                            "case_number": getattr(case, "case_number", None),
                             "verdict": case.verdict,
                             "risk_level": case.risk_level,
                             "final_score": case.final_score,
+                            "threat_category": case.threat_category,
                             "rule_name": rule.name,
+                            "rule_severity": rule.severity,
+                            "sender_email": email.sender_email if email else None,
+                            "sender_name": email.sender_name if email else None,
+                            "subject": email.subject if email else None,
+                            "recipient_email": email.recipient_email if email else None,
                         },
                     )
                     self.db.add(event)
@@ -149,8 +158,24 @@ class AlertService:
                 case_id=str(case.id),
                 count=len(fired),
             )
+            await self._deliver_events(fired)
 
         return fired
+
+    async def _deliver_events(self, events: list[AlertEvent]) -> None:
+        """Deliver fired alert events through their respective channels."""
+        slack = SlackDeliveryService()
+        for event in events:
+            try:
+                if event.channel == AlertChannel.SLACK:
+                    await slack.deliver(event)
+                else:
+                    logger.warning("unsupported_alert_channel", channel=event.channel)
+                    event.delivery_status = AlertDeliveryStatus.FAILED
+            except Exception as exc:
+                logger.error("deliver_event_error", error=str(exc))
+                event.delivery_status = AlertDeliveryStatus.FAILED
+        await self.db.flush()
 
     def _matches(self, rule: AlertRule, case: Case) -> bool:
         """Check if a case matches an alert rule's conditions."""

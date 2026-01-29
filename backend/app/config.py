@@ -59,6 +59,10 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
+    # Slack Alerts
+    slack_webhook_url: str = ""
+    frontend_base_url: str = "http://localhost:3000"
+
     # Active users filter (Google Workspace per-user gateway)
     active_users: str = ""
 
