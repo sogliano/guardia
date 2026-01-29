@@ -22,6 +22,7 @@ const filterDateRange = ref<string | undefined>()
 const naPage = ref(1)
 const naPageSize = ref(10)
 const allowingCaseId = ref<string | null>(null)
+const blockingCaseId = ref<string | null>(null)
 
 type SortDir = 'asc' | 'desc'
 const naSortCol = ref<string | null>(null)
@@ -145,6 +146,19 @@ async function quickAllow(caseId: string) {
     }
   } finally {
     allowingCaseId.value = null
+  }
+}
+
+async function quickBlock(caseId: string) {
+  blockingCaseId.value = caseId
+  try {
+    await resolveCase(caseId, 'blocked')
+    await store.fetchCases()
+    if (paginatedNeedsCases.value.length === 0 && naPage.value > 1) {
+      naPage.value--
+    }
+  } finally {
+    blockingCaseId.value = null
   }
 }
 
@@ -273,6 +287,14 @@ onMounted(() => {
                 title="Allow this case"
               >
                 <span class="material-symbols-rounded">{{ allowingCaseId === c.id ? 'progress_activity' : 'check' }}</span>
+              </button>
+              <button
+                class="na-icon-btn na-icon-block"
+                :disabled="blockingCaseId === c.id"
+                @click.stop="quickBlock(c.id)"
+                title="Block this case"
+              >
+                <span class="material-symbols-rounded">{{ blockingCaseId === c.id ? 'progress_activity' : 'close' }}</span>
               </button>
               <span class="material-symbols-rounded na-arrow">arrow_forward</span>
             </td>
@@ -654,7 +676,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  border: 1px solid var(--border-color);
+  border: none;
   background: transparent;
   cursor: pointer;
   transition: all 0.15s;
@@ -667,15 +689,26 @@ onMounted(() => {
 
 .na-icon-allow {
   color: #22C55E;
-  border-color: rgba(34, 197, 94, 0.25);
 }
 
 .na-icon-allow:hover:not(:disabled) {
   background: rgba(34, 197, 94, 0.15);
-  border-color: rgba(34, 197, 94, 0.4);
 }
 
 .na-icon-allow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.na-icon-block {
+  color: #EF4444;
+}
+
+.na-icon-block:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.na-icon-block:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
