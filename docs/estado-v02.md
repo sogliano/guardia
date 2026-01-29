@@ -17,10 +17,9 @@
 | Relay a Google (aspmx.l.google.com) | ✅ Completo | `app/gateway/relay.py` — Forward con headers X-Guard-IA-*, TLS, fail-open |
 | Dominio de pruebas (strike.sh) | ✅ Configurado | `accepted_domains: "strike.sh"` en config |
 | Simulador de emails | ✅ Completo | `scripts/simulate_email.py` + 6 templates realistas (clean, phishing, BEC, malware, spear, newsletter) |
-| **Ruteo real desde Google Workspace** | ❌ Pendiente | No hay configuración de inbound gateway en Google Admin. Actualmente solo funciona con el simulador local |
-| **Recepción de copia de correos (journal/routing rules)** | ❌ Pendiente | Falta configurar routing rules en Google Workspace para redirigir copia de emails al gateway |
+| **Ruteo real desde Google Workspace** | 🔄 Diseño | Gateway preparado para recibir. Se implementará filtro por usuario en el handler para activar solo para `nicolas.sogliano@strike.sh` (ver análisis en Tarea 2) |
 
-**Resumen**: La infraestructura técnica está 100% lista. Falta la configuración del lado de Google Workspace para rutear correos reales al gateway.
+**Resumen**: La infraestructura técnica está 100% lista. La conexión con Google Workspace se posterga estratégicamente por la limitación de que el routing rule aplica a toda la organización. Se diseñó un filtro por usuario a nivel código para mitigar el riesgo.
 
 ---
 
@@ -35,12 +34,12 @@
 | Código de inferencia DistilBERT | ✅ Completo | `ml_classifier.py` — Singleton, lazy load, graceful degradation |
 | Código de entrenamiento | ✅ Completo | `ml/src/train.py` — Fine-tune DistilBERT, MLflow tracking, early stopping |
 | Código de preprocesamiento | ✅ Completo | `ml/src/preprocess.py` — Carga CSV, limpieza, split estratificado 80/10/10 |
-| **Modelo entrenado (weights)** | ❌ Pendiente | `ml/models/distilbert-guardia/` solo tiene `.gitkeep` — No hay weights ni tokenizer |
-| **Dataset de entrenamiento** | ❌ Pendiente | `ml/data/` vacío — Falta dataset de phishing para entrenar |
+| **Modelo entrenado (weights)** | 🔄 En proceso | Otro miembro del equipo se encarga del entrenamiento. Esperando integración al proyecto |
+| **Dataset de entrenamiento** | 🔄 En proceso | Dataset conseguido por el equipo de ML. Pendiente de integración |
 | **Ponderación ML+Heurísticas** | ✅ Listo (inactivo) | Configurado: 40% heurísticas + 60% ML. Actualmente cae a 100% heurísticas porque el modelo no existe |
 | LLM Explainer (Claude + GPT fallback) | ✅ Completo | `llm_explainer.py` — Solo explica, no decide. Funciona pero requiere API keys configuradas |
 
-**Resumen**: El framework completo de ML está implementado end-to-end (training → inference → pipeline integration). Falta ejecutar: conseguir dataset, entrenar modelo, deployar weights.
+**Resumen**: El framework completo de ML está implementado end-to-end (training → inference → pipeline integration). Un compañero del equipo tiene el dataset y se encarga del entrenamiento. Pendiente de integración cuando el pipeline esté estabilizado.
 
 ---
 
@@ -53,11 +52,11 @@
 | Block/Reject (score ≥ 0.8) | ✅ Completo | Gateway retorna SMTP 550 reject |
 | Quarantine management (release/keep/delete) | ✅ Completo | `quarantine_service.py` — CISO puede liberar, mantener o eliminar emails |
 | Alert rules engine | ✅ Completo | `alert_service.py` — Reglas por score, verdict, risk_level, threat_category. CRUD completo + evaluación |
-| **Entrega de alertas (email/Slack)** | ❌ Pendiente | El engine evalúa reglas y persiste AlertEvents, pero no hay worker que envíe emails/Slack |
-| **Etiquetado en Gmail (labels)** | ❌ Pendiente | No hay integración con Gmail Labels API para marcar emails como sospechosos |
-| **Mover a carpeta en Gmail** | ❌ Pendiente | No hay integración con Gmail API para mover emails a carpeta específica |
+| **Entrega de alertas Slack** | 🔧 En implementación | Se implementará Slack webhook delivery para AlertEvents pendientes |
+| ~~Etiquetado en Gmail (labels)~~ | ❌ Descartado | Se decidió no implementar. Innecesario para el scope de la tesis |
+| ~~Mover a carpeta en Gmail~~ | ❌ Descartado | Descartado junto con Gmail Labels API |
 
-**Resumen**: Las acciones a nivel SMTP están completas (block, quarantine, warn+forward). Faltan las acciones post-delivery dentro de Gmail (etiquetar, mover) y la entrega real de alertas.
+**Resumen**: Las acciones a nivel SMTP están completas (block, quarantine, warn+forward). Se está implementando entrega real de alertas vía Slack. Gmail Labels API descartado del scope.
 
 ---
 
@@ -84,10 +83,10 @@
 | Cases view completa | ✅ Completo | KPI cards, sección "Needs Action", filtros (search, risk, action, status, fecha), paginación, export CSV |
 | Case Detail con 3 tabs | ✅ Completo | Overview (KPIs, auth, risk bar), Email Content (headers, body, URLs), Pipeline Results (stages expandibles) |
 | Notifications view | ✅ Completo | Lista con unread count, mark as read, tipos y severidad |
-| **Reports UI** | ❌ Pendiente | Backend tiene CSV/PDF export implementado, pero frontend es "Coming Soon" stub |
-| **FP Review UI** | ❌ Pendiente | Frontend es "Coming Soon" stub. Backend `fp_review_service.py` existe |
+| Reports UI | ⏸️ Postergado | Backend tiene CSV/PDF export implementado. Frontend se implementará en fase posterior |
+| FP Review UI | ⏸️ Postergado | Backend `fp_review_service.py` existe. Frontend se implementará en fase posterior |
 
-**Resumen**: Dashboard completo con 10 componentes, filtros globales, Design System cybersecurity implementado. Frontend funcional para Dashboard, Cases, Case Detail y Notifications. Falta UI de Reports y FP Review.
+**Resumen**: Dashboard completo con 10 componentes, filtros globales, Design System cybersecurity implementado. Frontend funcional para Dashboard, Cases, Case Detail y Notifications. Reports y FP Review postergados.
 
 ---
 
@@ -102,6 +101,31 @@
 | **Benchmark de heurísticas** | ❌ Pendiente | No hay evaluación formal del motor heurístico contra un dataset etiquetado |
 
 **Resumen**: Documentación técnica del modelo de datos existe. Falta documentación académica/científica sobre métricas de evaluación y plan de datos.
+
+---
+
+### 1.6 Testing
+
+| Componente | Estado | Detalle |
+|---|---|---|
+| Unit tests — Heuristics engine | ✅ Completo | `test_heuristics.py` — 30 tests: 4 sub-engines completos, Levenshtein, composite score, boundary cases |
+| Unit tests — Email parser | ✅ Completo | `test_parser.py` — 19 tests: RFC 5322 parsing, multipart, URLs, auth results, attachments, dates |
+| Unit tests — Orchestrator | ✅ Completo | `test_orchestrator.py` — 30 tests: scoring, thresholds, verdicts, risk levels, threat categories, full analyze flow, LLM failure, auto-quarantine |
+| Unit tests — Alert service | ✅ Completo | `test_alert_service.py` — 13 tests: rule matching AND logic, evaluate_and_fire, channels |
+| Unit tests — ML classifier | ✅ Completo | `test_ml_classifier.py` — 8 tests: degraded mode, singleton, happy path mock, _load_model |
+| Unit tests — LLM explainer | ✅ Completo | `test_llm_explainer.py` — 9 tests: Claude primary, OpenAI fallback, both fail, no keys, _build_user_prompt, API mocks |
+| Unit tests — JWT security | ✅ Completo | `test_security.py` — 4 tests: valid RS256, expired, invalid signature, garbage token |
+| Coverage config | ✅ Completo | `pyproject.toml` con pytest-cov, HTML report en `htmlcov/`, `fail_under=90%` |
+| **Integration tests** | ❌ Pendiente | Stubs existentes: `test_email_ingestion.py`, `test_pipeline_flow.py`, `test_quarantine_flow.py` |
+| **API tests** | ❌ Pendiente | Stubs existentes: `test_dashboard.py`, `test_auth.py`, `test_cases.py`, `test_emails.py` |
+
+**Métricas actuales**:
+- **113 unit tests**, todos pasando
+- **96.47% coverage** sobre lógica de negocio (pipeline, heuristics, parser, orchestrator, alert matching, ML classifier, LLM explainer, JWT)
+- **Ejecución**: 4.24s
+- **CI gate**: `fail_under = 90%`
+
+**Resumen**: Unit tests con cobertura sólida sobre toda la lógica de negocio crítica. Faltan integration tests y API tests (requieren PostgreSQL).
 
 ---
 
@@ -125,24 +149,27 @@
 14. **Infraestructura ML** completa (training code, inference code, MLflow)
 15. **Notifications view** funcional con unread count, mark as read, tipos y severidad
 16. **Formateo de fechas** mejorado (dd/mm/yyyy HH:mm)
+17. **113 unit tests** con 96.47% de coverage sobre lógica de negocio, CI gate a 90%
 
 ### Lo que FALTA para v0.2
 
-| # | Tarea | Prioridad | Complejidad | Área |
-|---|---|---|---|---|
-| 1 | Conseguir dataset de phishing y entrenar DistilBERT | Critica | Alta | ML |
-| 2 | Configurar Google Workspace routing rules para recibir emails reales | Critica | Media | Infra/Google |
-| 3 | Documentar plan de datos y métricas de evaluación | Critica | Media | Docs/Académico |
-| 4 | Implementar UI de Reports (CSV/PDF export) | Alta | Baja | Frontend |
-| 5 | Implementar UI de FP Review | Alta | Media | Frontend |
-| 6 | Integrar Gmail Labels API para etiquetar emails | Alta | Alta | Backend/Google |
-| 7 | Implementar entrega real de alertas (email/Slack webhook) | Alta | Media | Backend |
-| 8 | Evaluar heurísticas contra dataset etiquetado (benchmark) | Alta | Media | ML/Testing |
-| 9 | Tests reales (pipeline, API, integration) — cobertura actual 0% (solo stubs) | Media | Alta | Testing |
+| # | Tarea | Prioridad | Complejidad | Estado | Área |
+|---|---|---|---|---|---|
+| 1 | Integrar modelo DistilBERT entrenado por el equipo de ML | Critica | Media | Esperando al compañero | ML |
+| 2 | Preparar gateway con filtro por usuario para Google Workspace | Critica | Media | Diseño listo, ver análisis | Infra/Gateway |
+| 3 | Documentar plan de datos y métricas de evaluación | Critica | Media | Pendiente | Docs/Académico |
+| 4 | Implementar entrega real de alertas (Slack webhook) | Alta | Media | En implementación | Backend |
+| 5 | Evaluar heurísticas contra dataset etiquetado (benchmark) | Alta | Media | Pendiente (requiere dataset) | ML/Testing |
+| 6 | Integration tests y API tests | Media | Alta | Pendiente | Testing |
+
+**Tareas descartadas del scope v0.2:**
+- ~~Gmail Labels API~~ — Innecesario
+- ~~UI de Reports~~ — Postergado a fase posterior
+- ~~UI de FP Review~~ — Postergado a fase posterior
 
 ---
 
-## Mejoras implementadas (sesión actual)
+## Mejoras implementadas (sesiones anteriores)
 
 ### Design System & Estética
 - **Dual font system**: JetBrains Mono (títulos, valores, badges, buttons, nav, breadcrumbs) + Inter (body, labels, inputs)
@@ -199,39 +226,75 @@
 - Page buttons: font-mono
 - Table card: hover glow
 
+### Testing (sesión actual)
+- **113 unit tests** implementados desde cero (antes: 0% cobertura, solo stubs)
+- **8 archivos de test**: test_heuristics (30), test_parser (19), test_orchestrator (30), test_alert_service (13), test_ml_classifier (8), test_llm_explainer (9), test_security (4)
+- **conftest.py** con fixtures compartidos: mock_db, clean_email_data, phishing_email_data, make_mock_policies
+- **96.47% coverage** sobre lógica de negocio relevante
+- **CI gate**: `fail_under = 90%` en pyproject.toml
+- **HTML report**: `htmlcov/index.html` para documentación visual
+- **pytest-cov** configurado con exclusiones inteligentes (CRUD boilerplate, models, schemas, API endpoints excluidos del scope de unit tests)
+
 ---
 
 ## 3. Detalle de Tareas Pendientes
 
-### TAREA 1: Dataset y entrenamiento de DistilBERT (Critica)
+### TAREA 1: Integrar modelo DistilBERT del equipo de ML (Critica)
 
-**Estado actual**: `ml/models/distilbert-guardia/` vacío, `ml/data/` vacío. Training code listo.
+**Estado actual**: Otro miembro del equipo se encargó del entrenamiento del modelo. Está esperando que el pipeline esté estabilizado para integrar los weights.
 
-**Pasos**:
-1. Obtener dataset de phishing emails (opciones: Nazario phishing corpus, CEAS, Nigerian fraud corpus, o dataset propio)
-2. Preparar CSVs con columnas `text` (subject + body) y `label` (0=legit, 1=phishing)
-3. Ejecutar `python -m ml.src.preprocess` para split estratificado
-4. Ejecutar `python -m ml.src.train` para fine-tune DistilBERT (3 epochs, batch 8)
-5. Verificar métricas en MLflow (http://localhost:5000)
-6. Copiar modelo a `ml/models/distilbert-guardia/` o configurar path en `.env`
-7. Verificar que el pipeline use 40% heurísticas + 60% ML (en vez del fallback 100% heurísticas)
+**Pasos para la integración**:
+1. Recibir los weights y tokenizer del compañero
+2. Copiar a `ml/models/distilbert-guardia/` o configurar path en `.env`
+3. Verificar que `ml_classifier.py` carga el modelo correctamente (singleton, lazy load)
+4. Testear que el pipeline usa 40% heurísticas + 60% ML (en vez del fallback 100% heurísticas)
+5. Verificar métricas de inferencia (latencia, score distribution)
 
-**Archivos clave**: `ml/src/train.py`, `ml/src/preprocess.py`, `ml/src/config.py`
+**Archivos clave**: `app/services/pipeline/ml_classifier.py`, `ml/models/distilbert-guardia/`
 
 ---
 
-### TAREA 2: Configurar Google Workspace routing (Critica)
+### TAREA 2: Preparar gateway con filtro por usuario para Google Workspace (Critica)
 
 **Estado actual**: Gateway escucha en :2525, relay configurado hacia aspmx.l.google.com. Solo funciona con simulador.
 
-**Pasos**:
-1. Configurar dominio de pruebas en Google Workspace Admin
-2. Crear inbound gateway rule: rutear copia de emails entrantes al IP:2525 del servidor Guard-IA
-3. Configurar TLS certificates para el gateway (`smtp_tls_cert`, `smtp_tls_key` en config)
-4. Testear con email real: enviar email al dominio de pruebas, verificar que pasa por Guard-IA
-5. Verificar que el relay forward funciona de vuelta a Gmail
+**Problema**: Google Workspace Admin Console solo permite configurar inbound gateway routing rules a nivel de toda la organización. No hay forma nativa de activarlo solo para un usuario.
 
-**Archivos clave**: `app/config.py` (líneas 18-29), `app/gateway/server.py`
+**Solución propuesta**: Implementar filtro por usuario a nivel código en el gateway handler.
+
+**Diseño**:
+- Nueva config: `GUARDIA_ACTIVE_USERS` (env var, lista de emails)
+- En `handle_DATA` del `GuardIAHandler`, antes de correr el pipeline:
+  - Verificar si ALGUNO de los recipients está en `GUARDIA_ACTIVE_USERS`
+  - Si NO → bypass pipeline, forward inmediato a Google (retornar 250 OK + relay directo)
+  - Si SI → ejecutar pipeline normalmente
+- Para la tesis: `GUARDIA_ACTIVE_USERS=nicolas.sogliano@strike.sh`
+
+**Análisis de viabilidad y riesgos**:
+
+| Aspecto | Evaluación |
+|---|---|
+| **Viabilidad** | ✅ Alta. El handler ya tiene la lista de recipients en `envelope.rcpt_tos`. Agregar un check es trivial (~10 líneas) |
+| **Rendimiento** | ✅ Sin impacto. El check es O(1) con un set. Los emails bypass no tocan DB ni pipeline |
+| **Fail-open** | ✅ Ya implementado. Si el gateway crashea, forward sin análisis. Si un usuario no está en la lista, forward sin análisis. Mismo comportamiento |
+| **Riesgo: email delay** | ⚠️ Bajo. El pipeline tarda ~3s (heurísticas ~5ms + LLM ~2-3s). Para usuarios bypass: 0ms extra. Para el usuario activo: latencia ya aceptada |
+| **Riesgo: email loss** | ✅ Mínimo. Arquitectura fail-open: si algo falla, el email se entrega. Solo se bloquean emails con score ≥ 0.8 (blocked/quarantined), y eso es intencional |
+| **Riesgo: toda la org pasa por el gateway** | ⚠️ Principal riesgo. Todos los emails de strike.sh pasarían por el servidor Guard-IA, aunque solo se analice uno. Si el servidor se cae, Gmail tiene retry pero podría haber delay temporal para todos |
+| **Mitigación: health check** | Se puede agregar un health endpoint y configurar Google Workspace para remove gateway si falla (o tener un servidor de fallback) |
+| **Riesgo: privacidad** | ⚠️ Medio. Técnicamente el gateway "ve" todos los emails aunque no los procese. No persiste nada para usuarios bypass (forward directo). Documentar en la tesis que es un entorno controlado de pruebas |
+| **Alternativa: BCC rule** | En vez de inbound gateway, configurar una regla de routing que haga BCC a una dirección que reciba Guard-IA. Esto es post-delivery (no pre-delivery) pero elimina el riesgo de bloquear emails de otros usuarios. No cumple el objetivo de pre-delivery pero es más seguro para pruebas |
+
+**Recomendación**: Implementar el filtro por usuario (es simple y el diseño fail-open mitiga los riesgos principales). Para la tesis, documentar los riesgos y la decisión.
+
+**Pasos**:
+1. Agregar `active_users: str = ""` en `config.py` con property `active_users_list`
+2. En `handle_DATA` de `handler.py`, agregar check de recipients contra active_users
+3. Si ningún recipient es active → `self.relay.forward()` directo, retornar 250 OK
+4. Si algún recipient es active → ejecutar pipeline normal
+5. Testear con simulador: email a `nicolas.sogliano@strike.sh` → pipeline; email a `otro@strike.sh` → bypass
+6. Configurar Google Workspace: inbound gateway rule hacia IP del servidor
+
+**Archivos clave**: `app/config.py`, `app/gateway/handler.py`
 
 ---
 
@@ -249,64 +312,37 @@
 
 ---
 
-### TAREA 4: UI de Reports (Alta)
-
-**Estado actual**: Backend `report_service.py` genera CSV/PDF. Frontend es stub "Coming Soon".
-
-**Pasos**:
-1. Crear formulario con filtros (fecha, verdict, risk_level, threat_category)
-2. Botones "Export CSV" y "Export PDF" que llamen a los endpoints existentes
-3. Download del archivo generado
-
-**Archivos**: `frontend/src/views/ReportsView.vue`, `backend/app/api/v1/reports.py`
-
----
-
-### TAREA 5: UI de FP Review (Alta)
-
-**Estado actual**: Backend `fp_review_service.py` existe. Frontend es stub "Coming Soon".
-
-**Pasos**:
-1. Listar casos marcados como false positive pendientes de revisión
-2. Interfaz para revisar, confirmar o rechazar cada FP
-3. Actualizar estado del caso y re-entrenar si aplica
-
-**Archivos**: `frontend/src/views/FPReviewView.vue`, `backend/app/services/fp_review_service.py`
-
----
-
-### TAREA 6: Gmail Labels API (Alta)
-
-**Estado actual**: No existe integración con Gmail API. Solo SMTP relay.
-
-**Pasos**:
-1. Crear service account en Google Cloud Console con Gmail API scope
-2. Implementar `GmailClient` en backend que use google-auth + google-api-python-client
-3. Crear labels en Gmail: "Guard-IA: Suspicious", "Guard-IA: Phishing", "Guard-IA: Safe"
-4. Después del pipeline, si verdict=WARNED, aplicar label "Suspicious" al email en Gmail
-5. Configurar en `policy_service.py` o como nueva acción automática
-
----
-
-### TAREA 7: Entrega de alertas (Alta)
+### TAREA 4: Entrega real de alertas — Slack webhook (Alta)
 
 **Estado actual**: `alert_service.py` crea AlertEvents con `delivery_status=PENDING` pero no los envía.
 
 **Pasos**:
-1. Implementar `AlertDeliveryWorker` (async background task)
-2. Para channel=EMAIL: enviar via SMTP (aiosmtplib) al CISO
-3. Para channel=SLACK: POST a Slack webhook URL
-4. Actualizar `delivery_status` a DELIVERED/FAILED
-5. Integrar con el pipeline (llamar `evaluate_and_fire` después de cada análisis)
+1. Crear canal de test en Slack de Strike Security
+2. Crear Slack App y obtener webhook URL
+3. Implementar `SlackDeliveryService` que haga POST al webhook
+4. Formato del mensaje: severity badge, rule name, case link, score, verdict
+5. Actualizar `delivery_status` a DELIVERED/FAILED
+6. Integrar: después de `evaluate_and_fire()`, procesar AlertEvents pendientes
+
+**Cómo obtener los tokens de Slack**:
+1. Ir a https://api.slack.com/apps → Create New App → From Scratch
+2. Nombre: "Guard-IA Alerts", workspace: Strike Security
+3. En "Incoming Webhooks" → Activate → Add New Webhook to Workspace
+4. Seleccionar el canal de test → Copiar la Webhook URL (formato: `https://hooks.slack.com/services/T.../B.../xxx`)
+5. Esa URL es todo lo que se necesita. No hace falta Bot Token ni OAuth para webhooks
+
+**Archivos clave**: Nuevo `app/services/slack_service.py`, `app/services/alert_service.py`
 
 ---
 
-### TAREA 8: Benchmark de heurísticas (Alta)
+### TAREA 5: Benchmark de heurísticas (Alta)
 
-**Estado actual**: Motor heurístico funciona pero no hay evaluación formal.
+**Estado actual**: Motor heurístico funciona y tiene 96%+ coverage en tests, pero no hay evaluación formal contra un dataset etiquetado.
+
+**Requiere**: Dataset de la Tarea 1 (del compañero de ML).
 
 **Pasos**:
-1. Usar el mismo dataset de la Tarea 1 como ground truth
+1. Usar el mismo dataset como ground truth
 2. Ejecutar todas las heurísticas contra el dataset
 3. Calcular precision/recall/F1 del motor heurístico solo
 4. Documentar fortalezas/debilidades (ej: bueno en auth checks, débil en BEC sin typosquatting)
@@ -314,32 +350,32 @@
 
 ---
 
-### TAREA 9: Tests reales (Media)
+### TAREA 6: Integration tests y API tests (Media)
 
-**Estado actual**: 12 archivos de test, todos son stubs con `pass` o `# TODO`. 0% de cobertura real.
+**Estado actual**: 113 unit tests con 96.47% coverage. Stubs de integration y API tests existen pero no implementados.
 
-**Archivos existentes** (todos vacíos):
-- Unit: `test_heuristics.py`, `test_llm_explainer.py`, `test_ml_classifier.py`, `test_orchestrator.py`, `test_security.py`
+**Stubs existentes**:
 - Integration: `test_email_ingestion.py`, `test_pipeline_flow.py`, `test_quarantine_flow.py`
 - API: `test_dashboard.py`, `test_auth.py`, `test_cases.py`, `test_emails.py`
 
+**Requiere**: PostgreSQL corriendo para integration/API tests.
+
 **Pasos**:
-1. Implementar unit tests para heurísticas (mayor cobertura, lógica crítica)
-2. Implementar API tests para endpoints principales
-3. Implementar integration tests para el pipeline completo
-4. Target: >= 50% cobertura para v0.2
+1. Configurar test database (fixture que crea/destruye schema por sesión)
+2. Implementar integration tests del pipeline completo (email in → case out)
+3. Implementar API tests para endpoints principales con httpx AsyncClient
 
 ---
 
 ## 4. Progreso General v0.2
 
 ```
-Integración Google Workspace:  ██████████░░░░░ 70%  (infra lista, falta ruteo real)
-Modelo ML clasificación:       ████░░░░░░░░░░░ 30%  (code listo, falta dataset+training)
-Acciones automáticas:          ████████░░░░░░░ 55%  (SMTP actions OK, falta Gmail API + alertas)
-Dashboard + Frontend:          ██████████████░ 95%  (completo, falta Reports UI + FP Review UI)
+Integración Google Workspace:  ████████░░░░░░░ 55%  (infra lista, diseño de filtro por usuario listo, falta implementar + configurar)
+Modelo ML clasificación:       ████░░░░░░░░░░░ 30%  (code listo, modelo en manos del equipo ML)
+Acciones automáticas:          █████████░░░░░░ 65%  (SMTP actions OK, alertas Slack en implementación. Gmail Labels descartado)
+Dashboard + Frontend:          ██████████████░ 95%  (completo. Reports y FP Review postergados)
 Documentación datos/métricas:  ██████░░░░░░░░░ 40%  (schema docs OK, falta plan ML)
-Testing:                       █░░░░░░░░░░░░░░  5%  (stubs creados, 0% implementación)
+Testing:                       ██████████░░░░░ 70%  (113 unit tests, 96.47% coverage. Faltan integration + API tests)
 ```
 
-**Progreso estimado total v0.2: ~60%**
+**Progreso estimado total v0.2: ~65%**

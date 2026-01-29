@@ -90,6 +90,23 @@ class GuardIAHandler:
             size=len(raw_data) if raw_data else 0,
         )
 
+        # User-level filter: if active_users is configured, only run pipeline
+        # for emails addressed to those users. Others get forwarded directly.
+        active = settings.active_users_set
+        if active and not any(r.lower() in active for r in recipients):
+            logger.info(
+                "bypass_pipeline_inactive_users",
+                sender=sender,
+                recipients=recipients,
+            )
+            try:
+                await self.relay.forward(
+                    raw_data=raw_data, sender=sender, recipients=recipients,
+                )
+            except Exception:
+                pass
+            return SMTP_RESPONSE_OK
+
         try:
             # 1. Parse email
             parsed = self.parser.parse_raw(raw_data, sender, recipients)

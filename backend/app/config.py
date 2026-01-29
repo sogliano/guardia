@@ -59,9 +59,16 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
+    # Active users filter (Google Workspace per-user gateway)
+    active_users: str = ""
+
     @property
     def accepted_domains_list(self) -> list[str]:
         return [d.strip() for d in self.accepted_domains.split(",") if d.strip()]
+
+    @property
+    def active_users_set(self) -> set[str]:
+        return {u.strip().lower() for u in self.active_users.split(",") if u.strip()}
 
 
 settings = Settings()
