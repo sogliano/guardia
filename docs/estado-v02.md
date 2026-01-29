@@ -129,20 +129,6 @@
 
 ## Mejoras mias:
 
-Sobre los Cases:
-
-1. En la vista de Overview, me gustaría:
-    - El score de ariba a la derecha me gustaría que tenga un circulo al rededor que muestre la completitud tambien, de 0 a 100 que sea, y que tenga color según el riesgo.
-    - En Email Information tenemos threat category. Buscaría alguna manera de tener definidas unas categorías y mostrarlo tipo badge ahí. Que cuando pase el mouse arriba se muestre la descripción de la category.
-    - El AI Analysis Summary me gusta que esté ahí. No mostraría lo de Provider ni Model. 
-    - Que el Authentication Status explique en algun lado que es lo que se esta mostrando, puede haber un tooltip o algo así para obtener más detalle. Aparece SPF SOFTFAIL, DKIM FAIL, DMARC FAIL y no tengo idea que es eso ni que es lo que estoy viendo ni nada.
-    - El Risk Score breakdown lo veo muy bien.
-    - La parte de Actions está bastante fea estéticamente, y dice Resolve case solamente. Te consulto, cual es la idea de esta parte? Que el usuario (CISO de Strike) pueda tomar accion sobre un caso y modificar el estado, o que? Veo que en la tabla de cases hay score, risk, action y status. Que vendria a ser el status? Quiero comprender un poco más esto de las actions sobre los cases. Lo de False Positive Review no lo entendí tampoco. Comentame tu enfoque y entendamoslo juntos.
-
-1. http://localhost:3000/cases/0e36ed6c-df2e-43e3-a61d-45e9a8564deb: hacer que cada elemento (email headers, email body, extracted urls), todo todo, sea colapsable, como el email headers que podes ocultarlo y mostrarlo, pero con todo. Además, queiro que en las Notes dentro de cada case detail se muestre el nombre del user que lo hace, en lugar de el ID del autor. También me gustaría que cada comentario tenga un icono para editarlo y modificar la nota realizada.
-
-2. http://localhost:3000/cases/ea5567e2-1173-4246-a7e7-9aadcc3eedc1
-
 
 
 

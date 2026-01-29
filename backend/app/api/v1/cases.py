@@ -11,7 +11,7 @@ from app.core.exceptions import NotFoundError
 from app.models.case import Case
 from app.schemas.analysis import AnalysisWithEvidencesResponse
 from app.schemas.case import CaseDetailResponse, CaseList, CaseResolve, CaseResponse
-from app.schemas.case_note import CaseNoteCreate, CaseNoteResponse
+from app.schemas.case_note import CaseNoteCreate, CaseNoteResponse, CaseNoteUpdate
 from app.schemas.fp_review import FPReviewCreate, FPReviewResponse
 from app.services.case_service import CaseService
 from app.services.fp_review_service import FPReviewService
@@ -110,6 +110,24 @@ async def add_note(
     if not case:
         raise NotFoundError("Case not found")
     note = await svc.add_note(resolved_id, user.id, body.content)
+    await db.commit()
+    return note
+
+
+@router.patch("/{case_id}/notes/{note_id}", response_model=CaseNoteResponse)
+async def update_note(
+    case_id: str,
+    note_id: UUID,
+    body: CaseNoteUpdate,
+    db: DbSession,
+    user: CurrentUser,
+):
+    """Update a note's content (only by original author)."""
+    await _resolve_case_id(case_id, db)
+    svc = CaseService(db)
+    note = await svc.update_note(note_id, user.id, body.content)
+    if not note:
+        raise NotFoundError("Note not found or not authorized")
     await db.commit()
     return note
 

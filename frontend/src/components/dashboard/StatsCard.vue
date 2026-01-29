@@ -1,5 +1,7 @@
 <script setup lang="ts">
 defineProps<{
+  icon?: string
+  iconColor?: string
   label: string
   value: string | number
   trend?: string
@@ -7,22 +9,50 @@ defineProps<{
   trendIcon?: string
   valueColor?: string
   details?: { text: string; color: string }[]
+  badgeDetails?: boolean
+  badgeFullText?: boolean
 }>()
+
+function extractNumber(text: string): string {
+  const match = text.match(/^[\d,.]+/)
+  return match ? match[0] : text
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 </script>
 
 <template>
   <div class="stats-card">
-    <p class="card-label">{{ label }}</p>
-    <p class="card-value" :style="valueColor ? { color: valueColor } : {}">{{ value }}</p>
-    <div v-if="trend" class="card-trend">
-      <span v-if="trendIcon" class="material-symbols-rounded trend-icon" :style="{ color: trendColor }">{{ trendIcon }}</span>
-      <span class="trend-text" :style="{ color: trendColor }">{{ trend }}</span>
+    <div v-if="icon" class="card-icon">
+      <span class="material-symbols-rounded" :style="{ color: iconColor ?? 'var(--text-muted)' }">{{ icon }}</span>
     </div>
-    <div v-if="details?.length" class="card-details">
-      <template v-for="(d, i) in details" :key="i">
-        <span v-if="i > 0" class="detail-sep">&middot;</span>
-        <span class="detail-item" :style="{ color: d.color }">{{ d.text }}</span>
-      </template>
+    <div class="card-content">
+      <p class="card-label">{{ label }}</p>
+      <p class="card-value" :style="valueColor ? { color: valueColor } : {}">{{ value }}</p>
+      <div v-if="trend" class="card-trend">
+        <span v-if="trendIcon" class="material-symbols-rounded trend-icon" :style="{ color: trendColor }">{{ trendIcon }}</span>
+        <span class="trend-text" :style="{ color: trendColor }">{{ trend }}</span>
+      </div>
+      <div v-if="details?.length && badgeDetails" class="card-details">
+        <span
+          v-for="(d, i) in details"
+          :key="i"
+          class="detail-badge"
+          :style="{ background: hexToRgba(d.color, 0.15), color: d.color }"
+          :data-tooltip="badgeFullText ? undefined : d.text"
+        >{{ badgeFullText ? d.text : extractNumber(d.text) }}</span>
+      </div>
+      <div v-else-if="details?.length" class="card-details-text">
+        <template v-for="(d, i) in details" :key="i">
+          <span v-if="i > 0" class="detail-sep">&middot;</span>
+          <span class="detail-item" :style="{ color: d.color }">{{ d.text }}</span>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -34,8 +64,28 @@ defineProps<{
   border-radius: var(--border-radius);
   padding: 20px;
   display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-icon .material-symbols-rounded {
+  font-size: 44px;
+  opacity: 0.5;
+}
+
+.card-content {
+  display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .card-label {
@@ -48,6 +98,7 @@ defineProps<{
   font-size: 32px;
   font-weight: 700;
   color: var(--text-primary);
+  line-height: 1.1;
 }
 
 .card-trend {
@@ -67,8 +118,17 @@ defineProps<{
 .card-details {
   display: flex;
   align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.card-details-text {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  white-space: nowrap;
+  overflow: hidden;
+  margin-top: 2px;
 }
 
 .detail-sep {
@@ -78,5 +138,42 @@ defineProps<{
 
 .detail-item {
   font-size: 11px;
+}
+
+.detail-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.detail-badge::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: #1F2937;
+  color: #F9FAFB;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 4px;
+  border: 1px solid #374151;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.detail-badge:hover::after {
+  opacity: 1;
 }
 </style>

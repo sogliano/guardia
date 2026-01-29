@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { CaseDetail, Analysis, Evidence, CaseNote } from '@/types/case'
-import { fetchCaseDetail, addCaseNote, resolveCase, createFPReview } from '@/services/caseService'
+import { fetchCaseDetail, addCaseNote, updateCaseNote, resolveCase, createFPReview } from '@/services/caseService'
 import { scoreColor } from '@/utils/colors'
 
 const route = useRoute()
@@ -14,21 +14,38 @@ const loading = ref(true)
 const error = ref('')
 const activeTab = ref<'overview' | 'email' | 'pipeline'>('overview')
 
-// Resolve form
-const resolveVerdict = ref('')
-const resolving = ref(false)
-
 // Note form
 const newNote = ref('')
 const addingNote = ref(false)
 
-// FP Review form
-const fpDecision = ref('')
-const fpNotes = ref('')
-const submittingFP = ref(false)
+// Action modal
+const showActionModal = ref(false)
+const actionStep = ref(1)
+const actionVerdict = ref('')
+const actionIsFP = ref(false)
+const actionFPNotes = ref('')
+const actionSubmitting = ref(false)
 
-// Email headers toggle
+// Email content section toggles
 const showHeaders = ref(false)
+const showBody = ref(true)
+const showUrls = ref(true)
+const showAttachments = ref(true)
+
+// Pipeline stage expand/collapse
+const expandedStages = ref<Set<string>>(new Set())
+
+function toggleStage(id: string) {
+  if (expandedStages.value.has(id)) {
+    expandedStages.value.delete(id)
+  } else {
+    expandedStages.value.add(id)
+  }
+}
+
+// Note editing
+const editingNoteId = ref<string | null>(null)
+const editingNoteContent = ref('')
 
 const heuristicAnalysis = computed(() => caseData.value?.analyses.find(a => a.stage === 'heuristic'))
 const mlAnalysis = computed(() => caseData.value?.analyses.find(a => a.stage === 'ml'))
@@ -124,8 +141,8 @@ const threatCategoryMeta: Record<string, { label: string; color: string; bg: str
   },
   clean: {
     label: 'Clean',
-    color: '#22C55E',
-    bg: 'rgba(34, 197, 94, 0.15)',
+    color: '#D1D5DB',
+    bg: 'rgba(209, 213, 219, 0.12)',
     desc: 'Email analizado sin amenazas detectadas',
   },
 }
@@ -142,6 +159,30 @@ const stageIcons: Record<string, string> = {
   llm: 'smart_toy',
 }
 
+const stageDescs: Record<string, string> = {
+  heuristic: 'Deterministic rules: SPF, DKIM, DMARC, domain reputation, URL analysis, urgency patterns',
+  ml: 'DistilBERT fine-tuned classifier (66M params) — probabilistic risk scoring',
+  llm: 'AI-generated natural language explanation of the analysis',
+}
+
+function stageStatusLabel(analysis: Analysis): string {
+  if (analysis.stage === 'llm') {
+    if (!analysis.explanation) return 'No explanation'
+    if (analysis.explanation.toLowerCase().includes('unavailable')) return 'Unavailable'
+    return 'Explained'
+  }
+  if (analysis.score === null) return 'No data'
+  if (analysis.score < 0.3) return 'Clean'
+  if (analysis.score < 0.6) return 'Suspicious'
+  return 'Threat detected'
+}
+
+function stageStatusColor(analysis: Analysis): string {
+  if (analysis.stage === 'llm') return analysis.explanation ? 'var(--color-info)' : 'var(--text-muted)'
+  if (analysis.score === null) return 'var(--text-muted)'
+  return scoreColor(analysis.score)
+}
+
 async function loadData() {
   loading.value = true
   error.value = ''
@@ -154,16 +195,35 @@ async function loadData() {
   }
 }
 
-async function handleResolve() {
-  if (!resolveVerdict.value || !caseData.value) return
-  resolving.value = true
+function openActionModal() {
+  actionStep.value = 1
+  actionVerdict.value = ''
+  actionIsFP.value = false
+  actionFPNotes.value = ''
+  showActionModal.value = true
+}
+
+function closeActionModal() {
+  showActionModal.value = false
+}
+
+async function submitAction() {
+  if (!actionVerdict.value || !caseData.value) return
+  actionSubmitting.value = true
   try {
-    await resolveCase(caseId, resolveVerdict.value)
+    await resolveCase(caseId, actionVerdict.value)
+    if (actionIsFP.value) {
+      await createFPReview(caseId, {
+        decision: 'confirmed_fp',
+        notes: actionFPNotes.value || undefined,
+      })
+    }
+    showActionModal.value = false
     await loadData()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to resolve'
   } finally {
-    resolving.value = false
+    actionSubmitting.value = false
   }
 }
 
@@ -181,21 +241,25 @@ async function handleAddNote() {
   }
 }
 
-async function handleFPReview() {
-  if (!fpDecision.value) return
-  submittingFP.value = true
+function startEditNote(note: CaseNote) {
+  editingNoteId.value = note.id
+  editingNoteContent.value = note.content
+}
+
+function cancelEditNote() {
+  editingNoteId.value = null
+  editingNoteContent.value = ''
+}
+
+async function handleUpdateNote(note: CaseNote) {
+  if (!editingNoteContent.value.trim() || !caseData.value) return
   try {
-    await createFPReview(caseId, {
-      decision: fpDecision.value,
-      notes: fpNotes.value || undefined,
-    })
-    fpDecision.value = ''
-    fpNotes.value = ''
+    await updateCaseNote(caseData.value.id, note.id, editingNoteContent.value.trim())
+    editingNoteId.value = null
+    editingNoteContent.value = ''
     await loadData()
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to submit FP review'
-  } finally {
-    submittingFP.value = false
+    error.value = e instanceof Error ? e.message : 'Failed to update note'
   }
 }
 
@@ -321,12 +385,12 @@ onMounted(loadData)
               <span class="info-value">
                 <span
                   v-if="caseData.threat_category && threatCategoryMeta[caseData.threat_category]"
-                  class="category-badge"
+                  class="category-badge tooltip-wrap tooltip-bottom"
                   :style="{
                     color: threatCategoryMeta[caseData.threat_category].color,
                     background: threatCategoryMeta[caseData.threat_category].bg,
                   }"
-                  :title="threatCategoryMeta[caseData.threat_category].desc"
+                  :data-tooltip="threatCategoryMeta[caseData.threat_category].desc"
                 >{{ threatCategoryMeta[caseData.threat_category].label }}</span>
                 <span v-else-if="caseData.threat_category">{{ capitalize(caseData.threat_category.replace(/_/g, ' ')) }}</span>
                 <span v-else>—</span>
@@ -355,9 +419,9 @@ onMounted(loadData)
           </h3>
           <div class="auth-badges">
             <div
-              class="auth-badge"
+              class="auth-badge tooltip-wrap"
               :class="authBadgeClass(authResults.spf)"
-              title="SPF (Sender Policy Framework): Verifica que el servidor que envió el email está autorizado por el dominio del remitente. PASS = autorizado, FAIL/SOFTFAIL = no autorizado."
+              data-tooltip="SPF (Sender Policy Framework): Verifica que el servidor que envió el email está autorizado por el dominio del remitente. PASS = autorizado, FAIL/SOFTFAIL = no autorizado."
             >
               <span class="material-symbols-rounded auth-icon">
                 {{ authResults.spf === 'pass' ? 'check_circle' : 'cancel' }}
@@ -367,9 +431,9 @@ onMounted(loadData)
               <span class="material-symbols-rounded auth-help">help</span>
             </div>
             <div
-              class="auth-badge"
+              class="auth-badge tooltip-wrap"
               :class="authBadgeClass(authResults.dkim)"
-              title="DKIM (DomainKeys Identified Mail): Verifica la integridad del email mediante firma digital. PASS = no fue alterado en tránsito, FAIL = posible manipulación."
+              data-tooltip="DKIM (DomainKeys Identified Mail): Verifica la integridad del email mediante firma digital. PASS = no fue alterado en tránsito, FAIL = posible manipulación."
             >
               <span class="material-symbols-rounded auth-icon">
                 {{ authResults.dkim === 'pass' ? 'check_circle' : 'cancel' }}
@@ -379,9 +443,9 @@ onMounted(loadData)
               <span class="material-symbols-rounded auth-help">help</span>
             </div>
             <div
-              class="auth-badge"
+              class="auth-badge tooltip-wrap"
               :class="authBadgeClass(authResults.dmarc)"
-              title="DMARC (Domain-based Message Authentication): Política del dominio que combina SPF y DKIM. PASS = cumple la política, FAIL = no cumple, posible suplantación de identidad."
+              data-tooltip="DMARC (Domain-based Message Authentication): Política del dominio que combina SPF y DKIM. PASS = cumple la política, FAIL = no cumple, posible suplantación de identidad."
             >
               <span class="material-symbols-rounded auth-icon">
                 {{ authResults.dmarc === 'pass' ? 'check_circle' : 'cancel' }}
@@ -452,58 +516,18 @@ onMounted(loadData)
         </div>
 
         <!-- Actions -->
-        <div v-if="caseData.status !== 'resolved'" class="actions-grid">
-          <!-- Resolve Case -->
-          <div class="card action-card">
-            <h3 class="card-title">
-              <span class="material-symbols-rounded">gavel</span>
-              Resolve Case
-            </h3>
-            <p class="action-desc">Select a final verdict for this case. This will close the case and mark it as resolved.</p>
-            <div class="form-row">
-              <select v-model="resolveVerdict" class="form-select">
-                <option value="">Select verdict...</option>
-                <option value="allowed">Allowed</option>
-                <option value="warned">Warned</option>
-                <option value="quarantined">Quarantined</option>
-                <option value="blocked">Blocked</option>
-              </select>
-              <button
-                class="btn-primary"
-                :disabled="!resolveVerdict || resolving"
-                @click="handleResolve"
-              >
-                <span class="material-symbols-rounded btn-icon">check_circle</span>
-                {{ resolving ? 'Resolving...' : 'Resolve' }}
-              </button>
+        <div v-if="caseData.status !== 'resolved'" class="card action-prompt">
+          <div class="action-prompt-content">
+            <div class="action-prompt-text">
+              <span class="material-symbols-rounded action-prompt-icon">gavel</span>
+              <div>
+                <h3>Ready to take action?</h3>
+                <p>Review the analysis above, then resolve this case with a final verdict.</p>
+              </div>
             </div>
-          </div>
-
-          <!-- FP Review -->
-          <div class="card action-card action-card-secondary">
-            <h3 class="card-title">
-              <span class="material-symbols-rounded">rate_review</span>
-              False Positive Review
-            </h3>
-            <p class="action-desc">Was this email incorrectly flagged? Mark it as a false positive for model improvement.</p>
-            <select v-model="fpDecision" class="form-select">
-              <option value="">Select decision...</option>
-              <option value="confirmed_fp">Confirmed False Positive</option>
-              <option value="kept_flagged">Keep Flagged</option>
-            </select>
-            <textarea
-              v-model="fpNotes"
-              placeholder="Optional notes..."
-              rows="2"
-              class="form-textarea"
-            />
-            <button
-              class="btn-outline-action"
-              :disabled="!fpDecision || submittingFP"
-              @click="handleFPReview"
-            >
-              <span class="material-symbols-rounded btn-icon">send</span>
-              {{ submittingFP ? 'Submitting...' : 'Submit Review' }}
+            <button class="btn-primary btn-lg" @click="openActionModal">
+              <span class="material-symbols-rounded btn-icon">arrow_forward</span>
+              Take Action
             </button>
           </div>
         </div>
@@ -518,7 +542,125 @@ onMounted(loadData)
             <span class="badge" :class="verdictBadgeClass(caseData.verdict)">{{ capitalize(caseData.verdict ?? '') }}</span>
             <span v-if="caseData.resolved_at" class="resolved-date">{{ formatDate(caseData.resolved_at) }}</span>
           </div>
+          <div v-if="caseData.fp_reviews?.length" class="resolved-fp">
+            <span class="material-symbols-rounded" style="font-size: 14px; color: var(--text-muted);">flag</span>
+            <span class="resolved-fp-text">Marked as false positive</span>
+          </div>
         </div>
+
+      <!-- Action Modal -->
+      <Teleport to="body">
+        <div v-if="showActionModal" class="modal-overlay" @click.self="closeActionModal">
+          <div class="modal">
+            <div class="modal-header">
+              <h2>Resolve Case #{{ caseData.case_number }}</h2>
+              <button class="modal-close" @click="closeActionModal">
+                <span class="material-symbols-rounded">close</span>
+              </button>
+            </div>
+
+            <!-- Step indicators -->
+            <div class="modal-steps">
+              <div class="step-dot" :class="{ active: actionStep >= 1, current: actionStep === 1 }">1</div>
+              <div class="step-line" :class="{ active: actionStep >= 2 }" />
+              <div class="step-dot" :class="{ active: actionStep >= 2, current: actionStep === 2 }">2</div>
+              <div class="step-line" :class="{ active: actionStep >= 3 }" />
+              <div class="step-dot" :class="{ active: actionStep >= 3, current: actionStep === 3 }">3</div>
+            </div>
+
+            <!-- Step 1: Verdict -->
+            <div v-if="actionStep === 1" class="modal-body">
+              <h3 class="step-title">Select Verdict</h3>
+              <p class="step-desc">What is your final decision for this email?</p>
+              <div class="verdict-options">
+                <label
+                  v-for="v in [
+                    { value: 'allowed', label: 'Allow', icon: 'check_circle', color: '#22C55E', desc: 'Email is legitimate, deliver normally' },
+                    { value: 'warned', label: 'Warn', icon: 'warning', color: '#F59E0B', desc: 'Deliver with a warning to the recipient' },
+                    { value: 'quarantined', label: 'Quarantine', icon: 'shield', color: '#F97316', desc: 'Hold for further review, do not deliver' },
+                    { value: 'blocked', label: 'Block', icon: 'block', color: '#EF4444', desc: 'Reject the email entirely' },
+                  ]"
+                  :key="v.value"
+                  class="verdict-option"
+                  :class="{ selected: actionVerdict === v.value }"
+                  :style="actionVerdict === v.value ? { borderColor: v.color } : {}"
+                >
+                  <input type="radio" v-model="actionVerdict" :value="v.value" class="sr-only" />
+                  <span class="material-symbols-rounded" :style="{ color: v.color }">{{ v.icon }}</span>
+                  <div>
+                    <span class="verdict-option-label">{{ v.label }}</span>
+                    <span class="verdict-option-desc">{{ v.desc }}</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Step 2: False Positive -->
+            <div v-if="actionStep === 2" class="modal-body">
+              <h3 class="step-title">False Positive Check</h3>
+              <p class="step-desc">Was this email incorrectly flagged by the detection pipeline?</p>
+              <label class="fp-toggle">
+                <input type="checkbox" v-model="actionIsFP" />
+                <span class="fp-toggle-label">Yes, this is a false positive</span>
+              </label>
+              <div v-if="actionIsFP" class="fp-notes-area">
+                <textarea
+                  v-model="actionFPNotes"
+                  placeholder="Explain why this is a false positive (optional)..."
+                  rows="3"
+                  class="form-textarea"
+                />
+                <p class="fp-hint">This feedback helps improve the ML model over time.</p>
+              </div>
+            </div>
+
+            <!-- Step 3: Confirm -->
+            <div v-if="actionStep === 3" class="modal-body">
+              <h3 class="step-title">Confirm Action</h3>
+              <div class="confirm-summary">
+                <div class="confirm-row">
+                  <span class="confirm-label">Verdict</span>
+                  <span class="badge" :class="verdictBadgeClass(actionVerdict)">{{ capitalize(actionVerdict) }}</span>
+                </div>
+                <div class="confirm-row">
+                  <span class="confirm-label">False Positive</span>
+                  <span>{{ actionIsFP ? 'Yes' : 'No' }}</span>
+                </div>
+                <div v-if="actionIsFP && actionFPNotes" class="confirm-row">
+                  <span class="confirm-label">FP Notes</span>
+                  <span class="confirm-notes">{{ actionFPNotes }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="modal-footer">
+              <button v-if="actionStep > 1" class="btn-outline-action" @click="actionStep--">
+                Back
+              </button>
+              <div class="modal-footer-right">
+                <button class="btn-outline-action" @click="closeActionModal">Cancel</button>
+                <button
+                  v-if="actionStep < 3"
+                  class="btn-primary"
+                  :disabled="actionStep === 1 && !actionVerdict"
+                  @click="actionStep++"
+                >
+                  Next
+                </button>
+                <button
+                  v-else
+                  class="btn-primary"
+                  :disabled="actionSubmitting"
+                  @click="submitAction"
+                >
+                  {{ actionSubmitting ? 'Resolving...' : 'Confirm & Resolve' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
       </div>
 
       <!-- ============================================================ -->
@@ -544,28 +686,30 @@ onMounted(loadData)
 
         <!-- Body -->
         <div class="card">
-          <h3 class="card-title">
-            <span class="material-symbols-rounded">article</span>
+          <div class="card-title clickable" @click="showBody = !showBody">
+            <span class="material-symbols-rounded">{{ showBody ? 'expand_less' : 'expand_more' }}</span>
             Email Body
-          </h3>
-          <div v-if="caseData.email?.body_html" class="email-body-html">
-            <iframe
-              :srcdoc="caseData.email.body_html"
-              sandbox=""
-              class="email-iframe"
-            />
           </div>
-          <pre v-else-if="caseData.email?.body_text" class="email-body-text">{{ caseData.email.body_text }}</pre>
-          <p v-else class="empty-text">No email body available</p>
+          <template v-if="showBody">
+            <div v-if="caseData.email?.body_html" class="email-body-html">
+              <iframe
+                :srcdoc="caseData.email.body_html"
+                sandbox=""
+                class="email-iframe"
+              />
+            </div>
+            <pre v-else-if="caseData.email?.body_text" class="email-body-text">{{ caseData.email.body_text }}</pre>
+            <p v-else class="empty-text">No email body available</p>
+          </template>
         </div>
 
         <!-- URLs -->
         <div v-if="caseData.email?.urls?.length" class="card">
-          <h3 class="card-title">
-            <span class="material-symbols-rounded">link</span>
+          <div class="card-title clickable" @click="showUrls = !showUrls">
+            <span class="material-symbols-rounded">{{ showUrls ? 'expand_less' : 'expand_more' }}</span>
             Extracted URLs ({{ caseData.email.urls.length }})
-          </h3>
-          <div class="urls-list">
+          </div>
+          <div v-if="showUrls" class="urls-list">
             <div v-for="(url, i) in caseData.email.urls" :key="i" class="url-item">
               <span class="material-symbols-rounded url-icon">link</span>
               <span class="url-text">{{ url }}</span>
@@ -575,11 +719,11 @@ onMounted(loadData)
 
         <!-- Attachments -->
         <div v-if="caseData.email?.attachments?.length" class="card">
-          <h3 class="card-title">
-            <span class="material-symbols-rounded">attach_file</span>
+          <div class="card-title clickable" @click="showAttachments = !showAttachments">
+            <span class="material-symbols-rounded">{{ showAttachments ? 'expand_less' : 'expand_more' }}</span>
             Attachments ({{ caseData.email.attachments.length }})
-          </h3>
-          <div class="attachments-list">
+          </div>
+          <div v-if="showAttachments" class="attachments-list">
             <div v-for="(att, i) in caseData.email.attachments" :key="i" class="attachment-item">
               <span class="material-symbols-rounded">description</span>
               <span>{{ (att as Record<string, unknown>).filename ?? `Attachment ${i + 1}` }}</span>
@@ -592,118 +736,204 @@ onMounted(loadData)
       <!-- TAB 3: Pipeline Results -->
       <!-- ============================================================ -->
       <div v-if="activeTab === 'pipeline'" class="tab-content">
-        <!-- Pipeline Stages -->
-        <div class="pipeline-stages">
-          <div v-for="(analysis, idx) in caseData.analyses" :key="analysis.id" class="stage-card">
-            <div class="stage-header">
-              <div class="stage-number">{{ idx + 1 }}</div>
-              <span class="material-symbols-rounded stage-icon">{{ stageIcons[analysis.stage] ?? 'analytics' }}</span>
-              <span class="stage-name">{{ stageNames[analysis.stage] ?? analysis.stage }}</span>
-              <span v-if="analysis.score !== null" class="stage-score" :style="{ color: scoreColor(analysis.score) }">
-                {{ (analysis.score * 100).toFixed(0) }}%
-              </span>
-              <span v-if="analysis.confidence !== null" class="stage-confidence">
-                {{ (analysis.confidence * 100).toFixed(0) }}% conf
-              </span>
-              <span class="stage-time">{{ formatMs(analysis.execution_time_ms) }}</span>
-            </div>
 
-            <!-- Score bar for heuristic/ml -->
-            <div v-if="analysis.score !== null" class="stage-score-bar">
-              <div class="mini-bar-track">
-                <div
-                  class="mini-bar-fill"
-                  :style="{ width: `${analysis.score * 100}%`, background: scoreColor(analysis.score) }"
-                />
+        <!-- ── Pipeline Timeline ── -->
+        <div class="pipeline-timeline">
+          <div class="tl-header">
+            <span class="material-symbols-rounded tl-header-icon">conversion_path</span>
+            <div>
+              <h3 class="tl-header-title">Detection Pipeline</h3>
+              <p class="tl-header-sub">
+                3-stage sequential analysis
+                <span v-if="caseData.pipeline_duration_ms" class="tl-duration">
+                  — completed in {{ formatMs(caseData.pipeline_duration_ms) }}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Timeline track -->
+          <div class="tl-track">
+            <template v-for="(analysis, idx) in caseData.analyses" :key="'tl-' + analysis.id">
+              <div class="tl-node" :class="{ 'tl-node-active': analysis.score !== null || analysis.explanation }">
+                <div class="tl-node-dot" :style="{ borderColor: stageStatusColor(analysis) }">
+                  <span class="material-symbols-rounded" :style="{ color: stageStatusColor(analysis) }">
+                    {{ stageIcons[analysis.stage] ?? 'analytics' }}
+                  </span>
+                </div>
+                <div class="tl-node-info">
+                  <span class="tl-node-name">{{ stageNames[analysis.stage] ?? analysis.stage }}</span>
+                  <span class="tl-node-result" :style="{ color: stageStatusColor(analysis) }">
+                    {{ analysis.stage === 'llm'
+                      ? stageStatusLabel(analysis)
+                      : analysis.score !== null ? (analysis.score * 100).toFixed(0) + '%' : '—' }}
+                  </span>
+                </div>
+                <span v-if="analysis.execution_time_ms" class="tl-node-time">{{ formatMs(analysis.execution_time_ms) }}</span>
               </div>
+              <div v-if="idx < caseData.analyses.length - 1" class="tl-connector">
+                <span class="material-symbols-rounded tl-arrow">arrow_forward</span>
+              </div>
+            </template>
+            <!-- Final verdict node -->
+            <div class="tl-connector">
+              <span class="material-symbols-rounded tl-arrow">arrow_forward</span>
             </div>
-
-            <!-- Heuristic sub-scores -->
-            <div v-if="analysis.stage === 'heuristic' && analysis.metadata" class="heuristic-sub">
-              <div v-if="analysis.metadata.domain_score !== undefined" class="hsub-item">
-                <span class="hsub-label">Domain</span>
-                <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.domain_score)) }">
-                  {{ (Number(analysis.metadata.domain_score) * 100).toFixed(0) }}%
+            <div class="tl-node tl-node-verdict">
+              <div class="tl-node-dot tl-dot-verdict" :style="{ borderColor: scoreColor(caseData.final_score) }">
+                <span class="material-symbols-rounded" :style="{ color: scoreColor(caseData.final_score) }">verified</span>
+              </div>
+              <div class="tl-node-info">
+                <span class="tl-node-name">Final Verdict</span>
+                <span class="tl-node-result" :style="{ color: scoreColor(caseData.final_score) }">
+                  {{ formatScore(caseData.final_score) }}
                 </span>
               </div>
-              <div v-if="analysis.metadata.url_score !== undefined" class="hsub-item">
-                <span class="hsub-label">URL</span>
-                <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.url_score)) }">
-                  {{ (Number(analysis.metadata.url_score) * 100).toFixed(0) }}%
-                </span>
-              </div>
-              <div v-if="analysis.metadata.keyword_score !== undefined" class="hsub-item">
-                <span class="hsub-label">Keyword</span>
-                <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.keyword_score)) }">
-                  {{ (Number(analysis.metadata.keyword_score) * 100).toFixed(0) }}%
-                </span>
-              </div>
-              <div v-if="analysis.metadata.auth_score !== undefined" class="hsub-item">
-                <span class="hsub-label">Auth</span>
-                <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.auth_score)) }">
-                  {{ (Number(analysis.metadata.auth_score) * 100).toFixed(0) }}%
-                </span>
-              </div>
             </div>
-
-            <!-- ML model info -->
-            <div v-if="analysis.stage === 'ml' && analysis.metadata" class="ml-meta">
-              <span v-if="analysis.metadata.model_version" class="badge badge-info">
-                v{{ analysis.metadata.model_version }}
-              </span>
-            </div>
-
-            <!-- LLM explanation -->
-            <p v-if="analysis.explanation" class="stage-explanation">{{ analysis.explanation }}</p>
-
-            <!-- Evidences for this stage -->
-            <div v-if="analysis.evidences?.length" class="stage-evidences">
-              <h5 class="evidence-title">Evidence ({{ analysis.evidences.length }})</h5>
-              <div v-for="ev in analysis.evidences" :key="ev.id" class="evidence-item">
-                <span class="badge" :class="severityBadgeClass(ev.severity)">{{ ev.severity }}</span>
-                <span class="evidence-type">{{ ev.type.replace(/_/g, ' ') }}</span>
-                <p class="evidence-desc">{{ ev.description }}</p>
-              </div>
-            </div>
-
-            <!-- Connector -->
-            <div v-if="idx < caseData.analyses.length - 1" class="stage-connector" />
           </div>
         </div>
 
-        <!-- Final Verdict Card -->
-        <div class="card verdict-card">
-          <h3 class="card-title">
-            <span class="material-symbols-rounded">verified</span>
-            Final Verdict
-          </h3>
-          <div class="verdict-summary">
-            <div class="verdict-score">
-              <span class="score-big" :style="{ color: scoreColor(caseData.final_score) }">
-                {{ formatScore(caseData.final_score) }}
+        <!-- ── Stage Detail Cards ── -->
+        <div class="pipeline-stages-v2">
+          <div v-for="(analysis, idx) in caseData.analyses" :key="analysis.id" class="stage-v2">
+            <!-- Left rail -->
+            <div class="stage-rail">
+              <div class="stage-rail-dot" :style="{ background: stageStatusColor(analysis) }">
+                {{ idx + 1 }}
+              </div>
+              <div v-if="idx < caseData.analyses.length - 1" class="stage-rail-line" />
+            </div>
+
+            <!-- Content -->
+            <div class="stage-content">
+              <div class="stage-v2-header" @click="toggleStage(analysis.id)">
+                <span class="material-symbols-rounded stage-v2-icon">{{ stageIcons[analysis.stage] ?? 'analytics' }}</span>
+                <div class="stage-v2-title">
+                  <span class="stage-v2-name">{{ stageNames[analysis.stage] ?? analysis.stage }}</span>
+                  <span class="stage-v2-desc">{{ stageDescs[analysis.stage] ?? '' }}</span>
+                </div>
+                <div class="stage-v2-metrics">
+                  <span v-if="analysis.score !== null" class="stage-v2-score" :style="{ color: scoreColor(analysis.score) }">
+                    {{ (analysis.score * 100).toFixed(0) }}%
+                  </span>
+                  <span v-if="analysis.confidence !== null" class="stage-v2-conf">
+                    {{ (analysis.confidence * 100).toFixed(0) }}% conf
+                  </span>
+                  <span class="stage-v2-time">{{ formatMs(analysis.execution_time_ms) }}</span>
+                  <span class="material-symbols-rounded stage-v2-toggle">
+                    {{ expandedStages.has(analysis.id) ? 'expand_less' : 'expand_more' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Score bar -->
+              <div v-if="expandedStages.has(analysis.id) && analysis.score !== null" class="stage-v2-bar">
+                <div class="mini-bar-track">
+                  <div
+                    class="mini-bar-fill"
+                    :style="{ width: `${analysis.score * 100}%`, background: scoreColor(analysis.score) }"
+                  />
+                </div>
+              </div>
+
+              <!-- Heuristic sub-scores -->
+              <div v-if="expandedStages.has(analysis.id) && analysis.stage === 'heuristic' && analysis.metadata" class="stage-v2-subs">
+                <div v-if="analysis.metadata.domain_score !== undefined" class="hsub-item">
+                  <span class="hsub-label">Domain</span>
+                  <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.domain_score)) }">
+                    {{ (Number(analysis.metadata.domain_score) * 100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div v-if="analysis.metadata.url_score !== undefined" class="hsub-item">
+                  <span class="hsub-label">URL</span>
+                  <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.url_score)) }">
+                    {{ (Number(analysis.metadata.url_score) * 100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div v-if="analysis.metadata.keyword_score !== undefined" class="hsub-item">
+                  <span class="hsub-label">Keyword</span>
+                  <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.keyword_score)) }">
+                    {{ (Number(analysis.metadata.keyword_score) * 100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div v-if="analysis.metadata.auth_score !== undefined" class="hsub-item">
+                  <span class="hsub-label">Auth</span>
+                  <span class="hsub-value" :style="{ color: scoreColor(Number(analysis.metadata.auth_score)) }">
+                    {{ (Number(analysis.metadata.auth_score) * 100).toFixed(0) }}%
+                  </span>
+                </div>
+              </div>
+
+              <!-- ML model info -->
+              <div v-if="expandedStages.has(analysis.id) && analysis.stage === 'ml' && analysis.metadata?.model_version" class="stage-v2-ml">
+                <span class="badge badge-info">v{{ analysis.metadata.model_version }}</span>
+              </div>
+
+              <!-- LLM explanation -->
+              <p v-if="expandedStages.has(analysis.id) && analysis.explanation" class="stage-v2-explanation">{{ analysis.explanation }}</p>
+
+              <!-- Evidences -->
+              <div v-if="expandedStages.has(analysis.id) && analysis.evidences?.length" class="stage-v2-evidences">
+                <h5 class="evidence-title">Evidence ({{ analysis.evidences.length }})</h5>
+                <div v-for="ev in analysis.evidences" :key="ev.id" class="evidence-item">
+                  <span class="badge" :class="severityBadgeClass(ev.severity)">{{ ev.severity }}</span>
+                  <span class="evidence-type">{{ ev.type.replace(/_/g, ' ') }}</span>
+                  <p class="evidence-desc">{{ ev.description }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Final Verdict ── -->
+        <div class="verdict-v2">
+          <div class="verdict-v2-left">
+            <div class="verdict-v2-ring">
+              <svg viewBox="0 0 80 80" class="score-svg">
+                <circle cx="40" cy="40" r="34" fill="none" stroke="var(--border-color)" stroke-width="5" />
+                <circle
+                  cx="40" cy="40" r="34" fill="none"
+                  :stroke="scoreColor(caseData.final_score)"
+                  stroke-width="5"
+                  stroke-linecap="round"
+                  :stroke-dasharray="`${(caseData.final_score ?? 0) * 213.6} 213.6`"
+                  transform="rotate(-90 40 40)"
+                />
+              </svg>
+              <div class="score-ring-text">
+                <span class="score-ring-value" :style="{ color: scoreColor(caseData.final_score) }">
+                  {{ caseData.final_score !== null ? (caseData.final_score * 100).toFixed(0) : '—' }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="verdict-v2-details">
+            <div class="verdict-row">
+              <span class="verdict-label">Risk Level</span>
+              <span class="badge" :class="riskBadgeClass(caseData.risk_level)">
+                {{ caseData.risk_level ? capitalize(caseData.risk_level) : '—' }}
               </span>
             </div>
-            <div class="verdict-details">
-              <div class="verdict-row">
-                <span class="verdict-label">Risk Level</span>
-                <span class="badge" :class="riskBadgeClass(caseData.risk_level)">
-                  {{ caseData.risk_level ? capitalize(caseData.risk_level) : '—' }}
-                </span>
-              </div>
-              <div class="verdict-row">
-                <span class="verdict-label">Verdict</span>
-                <span class="badge" :class="verdictBadgeClass(caseData.verdict)">
-                  {{ caseData.verdict ? capitalize(caseData.verdict) : '—' }}
-                </span>
-              </div>
-              <div class="verdict-row">
-                <span class="verdict-label">Threat Category</span>
-                <span>{{ caseData.threat_category ? capitalize(caseData.threat_category.replace(/_/g, ' ')) : '—' }}</span>
-              </div>
-              <div class="verdict-row">
-                <span class="verdict-label">Pipeline Duration</span>
-                <span>{{ formatMs(caseData.pipeline_duration_ms) }}</span>
-              </div>
+            <div class="verdict-row">
+              <span class="verdict-label">Verdict</span>
+              <span class="badge" :class="verdictBadgeClass(caseData.verdict)">
+                {{ caseData.verdict ? capitalize(caseData.verdict) : '—' }}
+              </span>
+            </div>
+            <div class="verdict-row">
+              <span class="verdict-label">Threat Category</span>
+              <span v-if="caseData.threat_category && threatCategoryMeta[caseData.threat_category]"
+                class="category-badge"
+                :style="{
+                  color: threatCategoryMeta[caseData.threat_category].color,
+                  background: threatCategoryMeta[caseData.threat_category].bg,
+                }"
+              >{{ threatCategoryMeta[caseData.threat_category].label }}</span>
+              <span v-else>{{ caseData.threat_category ? capitalize(caseData.threat_category.replace(/_/g, ' ')) : '—' }}</span>
+            </div>
+            <div class="verdict-row">
+              <span class="verdict-label">Pipeline Duration</span>
+              <span class="verdict-duration">{{ formatMs(caseData.pipeline_duration_ms) }}</span>
             </div>
           </div>
         </div>
@@ -720,10 +950,31 @@ onMounted(loadData)
         <div v-if="caseData.notes?.length" class="notes-list">
           <div v-for="note in caseData.notes" :key="note.id" class="note-item">
             <div class="note-meta">
-              <span class="note-author">{{ note.author_id.slice(0, 8) }}...</span>
-              <span class="note-date">{{ formatDate(note.created_at) }}</span>
+              <span class="note-author">{{ note.author_name ?? 'Unknown' }}</span>
+              <div class="note-meta-right">
+                <span class="note-date">{{ formatDate(note.created_at) }}</span>
+                <button
+                  v-if="editingNoteId !== note.id"
+                  class="note-edit-btn"
+                  title="Edit note"
+                  @click="startEditNote(note)"
+                >
+                  <span class="material-symbols-rounded">edit</span>
+                </button>
+              </div>
             </div>
-            <p>{{ note.content }}</p>
+            <template v-if="editingNoteId === note.id">
+              <textarea
+                v-model="editingNoteContent"
+                rows="2"
+                class="form-textarea note-edit-textarea"
+              />
+              <div class="note-edit-actions">
+                <button class="btn-primary btn-sm" @click="handleUpdateNote(note)">Save</button>
+                <button class="btn-outline-action btn-sm" @click="cancelEditNote">Cancel</button>
+              </div>
+            </template>
+            <p v-else>{{ note.content }}</p>
           </div>
         </div>
         <p v-else class="empty-text">No notes yet.</p>
@@ -990,10 +1241,48 @@ onMounted(loadData)
   display: inline-flex;
   align-items: center;
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
   cursor: help;
+}
+
+/* CSS Tooltips */
+.tooltip-wrap {
+  position: relative;
+  cursor: help;
+}
+
+.tooltip-wrap::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1E293B;
+  color: #E2E8F0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  white-space: normal;
+  width: 260px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tooltip-wrap:hover::after {
+  opacity: 1;
+}
+
+.tooltip-bottom::after {
+  bottom: auto;
+  top: calc(100% + 8px);
 }
 
 /* LLM Explanation */
@@ -1167,28 +1456,292 @@ onMounted(loadData)
   color: var(--text-muted);
 }
 
-/* Actions */
-.actions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* Action Prompt */
+.action-prompt-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
 }
 
-.action-card {
+.action-prompt-text {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
 }
 
-.action-card-secondary {
-  border-style: dashed;
+.action-prompt-icon {
+  font-size: 28px;
+  color: var(--accent-cyan);
 }
 
-.action-desc {
+.action-prompt-text h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.action-prompt-text p {
   font-size: 12px;
   color: var(--text-muted);
-  margin: -4px 0 0 0;
-  line-height: 1.5;
+  margin: 2px 0 0 0;
+}
+
+.btn-lg {
+  padding: 10px 24px;
+  font-size: 14px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  width: 520px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+}
+
+.modal-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+/* Steps */
+.modal-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 20px 24px 8px;
+}
+
+.step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 2px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.step-dot.active {
+  background: var(--accent-cyan);
+  color: #0A1628;
+  border-color: var(--accent-cyan);
+}
+
+.step-dot.current {
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
+}
+
+.step-line {
+  width: 48px;
+  height: 2px;
+  background: var(--border-color);
+  transition: background 0.2s;
+}
+
+.step-line.active {
+  background: var(--accent-cyan);
+}
+
+.modal-body {
+  padding: 20px 24px;
+}
+
+.step-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+}
+
+.step-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px 0;
+}
+
+/* Verdict Options */
+.verdict-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verdict-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.verdict-option:hover {
+  border-color: var(--text-muted);
+}
+
+.verdict-option.selected {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.verdict-option .material-symbols-rounded {
+  font-size: 22px;
+}
+
+.verdict-option-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.verdict-option-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* FP Toggle */
+.fp-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.fp-toggle input {
+  accent-color: var(--accent-cyan);
+  width: 16px;
+  height: 16px;
+}
+
+.fp-toggle-label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.fp-notes-area {
+  margin-top: 12px;
+}
+
+.fp-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 6px 0 0 0;
+}
+
+/* Confirm */
+.confirm-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+}
+
+.confirm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.confirm-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.confirm-notes {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+  max-width: 280px;
+}
+
+/* Modal Footer */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.modal-footer-right {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.resolved-fp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.resolved-fp-text {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .btn-icon {
@@ -1403,31 +1956,147 @@ onMounted(loadData)
   color: var(--text-muted);
 }
 
-/* Pipeline Stages */
-.pipeline-stages {
+/* ── Pipeline Timeline ── */
+.pipeline-timeline {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 24px;
+}
+
+.tl-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.tl-header-icon {
+  font-size: 24px;
+  color: var(--accent-cyan);
+}
+
+.tl-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.tl-header-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+.tl-duration {
+  color: var(--text-secondary);
+}
+
+.tl-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.tl-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.tl-node-dot {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.tl-node-active .tl-node-dot {
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.tl-node-dot .material-symbols-rounded {
+  font-size: 22px;
+}
+
+.tl-node-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.tl-node-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.tl-node-result {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.tl-node-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tl-connector {
+  flex: 1;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  margin-top: 22px;
+}
+
+.tl-arrow {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.tl-dot-verdict {
+  border-width: 2px;
+}
+
+/* ── Stage Detail Cards v2 ── */
+.pipeline-stages-v2 {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.stage-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 16px 20px;
-}
-
-.stage-header {
+.stage-v2 {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  gap: 0;
 }
 
-.stage-number {
-  width: 24px;
-  height: 24px;
-  border-radius: 12px;
-  background: var(--accent-cyan);
+.stage-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.stage-rail-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
   color: #0A1628;
   font-size: 12px;
   font-weight: 700;
@@ -1435,26 +2104,83 @@ onMounted(loadData)
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 18px;
 }
 
-.stage-icon {
-  font-size: 18px;
-  color: var(--text-secondary);
-}
-
-.stage-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+.stage-rail-line {
+  width: 2px;
   flex: 1;
+  background: var(--border-color);
+  margin: 4px 0;
 }
 
-.stage-score {
-  font-size: 16px;
+.stage-content {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin: 6px 0 6px 12px;
+}
+
+.stage-v2-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stage-v2-header:hover .stage-v2-name {
+  color: var(--accent-cyan);
+}
+
+.stage-v2-toggle {
+  font-size: 20px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.stage-v2-icon {
+  font-size: 20px;
+  color: var(--accent-cyan);
+  margin-top: 1px;
+}
+
+.stage-v2-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-v2-name {
+  display: block;
+  font-size: 14px;
   font-weight: 700;
+  color: var(--text-primary);
 }
 
-.stage-confidence {
+.stage-v2-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  line-height: 1.4;
+}
+
+.stage-v2-metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.stage-v2-score {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.stage-v2-conf {
   font-size: 11px;
   color: var(--text-muted);
   background: var(--color-info-bg);
@@ -1462,13 +2188,13 @@ onMounted(loadData)
   border-radius: 10px;
 }
 
-.stage-time {
+.stage-v2-time {
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.stage-score-bar {
-  margin: 10px 0 0 34px;
+.stage-v2-bar {
+  margin: 12px 0 0 30px;
 }
 
 .mini-bar-track {
@@ -1484,11 +2210,10 @@ onMounted(loadData)
   transition: width 0.3s ease;
 }
 
-/* Heuristic sub-scores */
-.heuristic-sub {
+.stage-v2-subs {
   display: flex;
-  gap: 16px;
-  margin: 10px 0 0 34px;
+  gap: 12px;
+  margin: 12px 0 0 30px;
   flex-wrap: wrap;
 }
 
@@ -1511,23 +2236,20 @@ onMounted(loadData)
   font-weight: 700;
 }
 
-/* ML meta */
-.ml-meta {
-  margin: 8px 0 0 34px;
+.stage-v2-ml {
+  margin: 10px 0 0 30px;
 }
 
-/* Stage explanation */
-.stage-explanation {
+.stage-v2-explanation {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
-  margin: 10px 0 0 34px;
+  margin: 12px 0 0 30px;
   white-space: pre-wrap;
 }
 
-/* Evidence */
-.stage-evidences {
-  margin: 12px 0 0 34px;
+.stage-v2-evidences {
+  margin: 12px 0 0 30px;
 }
 
 .evidence-title {
@@ -1561,34 +2283,32 @@ onMounted(loadData)
   line-height: 1.4;
 }
 
-.stage-connector {
-  width: 2px;
-  height: 16px;
-  background: var(--border-color);
-  margin: 0 auto;
-}
-
-/* Final Verdict */
-.verdict-card {
-  border-color: var(--accent-cyan);
-  border-width: 1px;
-}
-
-.verdict-summary {
+/* ── Final Verdict v2 ── */
+.verdict-v2 {
   display: flex;
   gap: 32px;
   align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 10px;
+  padding: 24px;
 }
 
-.verdict-score {
+.verdict-v2-left {
   flex-shrink: 0;
 }
 
-.verdict-details {
+.verdict-v2-ring {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.verdict-v2-details {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .verdict-row {
@@ -1601,6 +2321,13 @@ onMounted(loadData)
   font-size: 12px;
   color: var(--text-muted);
   min-width: 120px;
+}
+
+.verdict-duration {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Notes Section */
@@ -1624,9 +2351,61 @@ onMounted(loadData)
 .note-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
   color: var(--text-muted);
   margin-bottom: 4px;
+}
+
+.note-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.note-item:hover .note-edit-btn {
+  opacity: 1;
+}
+
+.note-edit-btn:hover {
+  color: var(--accent-cyan);
+}
+
+.note-edit-btn .material-symbols-rounded {
+  font-size: 14px;
+}
+
+.note-edit-textarea {
+  margin-top: 4px;
+}
+
+.note-edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.note-author {
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .note-item p {

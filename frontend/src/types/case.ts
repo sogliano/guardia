@@ -66,6 +66,7 @@ export interface CaseNote {
   id: string
   case_id: string
   author_id: string
+  author_name: string | null
   content: string
   created_at: string
 }

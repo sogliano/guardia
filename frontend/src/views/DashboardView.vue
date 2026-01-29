@@ -26,6 +26,8 @@ onMounted(() => {
     <!-- KPI Row -->
     <div class="kpi-row">
       <StatsCard
+        icon="mail"
+        icon-color="#9CA3AF"
         label="Emails Analyzed"
         :value="store.data?.stats.total_emails_analyzed?.toLocaleString() ?? '—'"
         :details="[
@@ -33,9 +35,12 @@ onMounted(() => {
         ]"
       />
       <StatsCard
+        icon="gpp_bad"
+        icon-color="#EF4444"
         label="Threats Detected"
         :value="String((store.data?.stats.blocked_count ?? 0) + (store.data?.stats.quarantined_count ?? 0) + (store.data?.stats.warned_count ?? 0))"
         value-color="#EF4444"
+        badge-details
         :details="[
           { text: `${store.data?.stats.blocked_count ?? 0} blocked`, color: '#EF4444' },
           { text: `${store.data?.stats.quarantined_count ?? 0} quarantined`, color: '#F97316' },
@@ -43,22 +48,29 @@ onMounted(() => {
         ]"
       />
       <StatsCard
+        icon="shield"
+        icon-color="#F97316"
         label="Blocked / Quarantined"
         :value="String((store.data?.stats.blocked_count ?? 0) + (store.data?.stats.quarantined_count ?? 0))"
         value-color="#F97316"
+        badge-details
         :details="[
           { text: `${store.data?.stats.blocked_count ?? 0} blocked`, color: '#EF4444' },
           { text: `${store.data?.stats.quarantined_count ?? 0} quarantined`, color: '#F97316' },
         ]"
       />
       <StatsCard
+        icon="speed"
+        icon-color="#00D4FF"
         label="Avg Response Time"
         :value="store.data?.pipeline_health ? `${(store.data.pipeline_health.avg_duration_ms / 1000).toFixed(1)}s` : '—'"
         value-color="#00D4FF"
+        badge-details
+        badge-full-text
         :details="store.data?.pipeline_health ? [
-          { text: `Heuristic ${store.data.pipeline_health.stages?.heuristic?.avg_ms?.toFixed(0) ?? '~5'}ms`, color: '#6B7280' },
-          { text: `ML ${store.data.pipeline_health.stages?.ml?.avg_ms?.toFixed(0) ?? '~18'}ms`, color: '#6B7280' },
-          { text: `LLM ${store.data.pipeline_health.stages?.llm?.avg_ms?.toFixed(0) ?? '~2s'}`, color: '#6B7280' },
+          { text: `Heuristic ${store.data.pipeline_health.stages?.heuristic?.avg_ms?.toFixed(0) ?? '~5'}ms`, color: '#9CA3AF' },
+          { text: `ML ${store.data.pipeline_health.stages?.ml?.avg_ms?.toFixed(0) ?? '~18'}ms`, color: '#9CA3AF' },
+          { text: `LLM ${store.data.pipeline_health.stages?.llm?.avg_ms?.toFixed(0) ?? '~2s'}`, color: '#9CA3AF' },
         ] : []"
       />
     </div>
@@ -95,11 +107,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  overflow-x: hidden;
 }
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr 1fr 1fr 1.4fr;
   gap: 16px;
 }
 

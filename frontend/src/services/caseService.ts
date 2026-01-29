@@ -45,6 +45,15 @@ export async function addCaseNote(caseId: string, body: CaseNoteCreate): Promise
   return data
 }
 
+export async function updateCaseNote(
+  caseId: string,
+  noteId: string,
+  content: string,
+): Promise<CaseNote> {
+  const { data } = await api.patch<CaseNote>(`/cases/${caseId}/notes/${noteId}`, { content })
+  return data
+}
+
 export async function fetchAnalyses(caseId: string): Promise<Analysis[]> {
   const { data } = await api.get<Analysis[]>(`/cases/${caseId}/analyses`)
   return data

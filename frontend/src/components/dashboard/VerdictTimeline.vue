@@ -19,6 +19,8 @@ const props = defineProps<{
   data: VerdictTrendPoint[]
 }>()
 
+const singlePoint = computed(() => props.data.length === 1)
+
 const chartData = computed(() => ({
   labels: props.data.map((d) => d.date),
   datasets: [
@@ -29,7 +31,7 @@ const chartData = computed(() => ({
       backgroundColor: 'rgba(239, 68, 68, 0.15)',
       fill: true,
       tension: 0.3,
-      pointRadius: 0,
+      pointRadius: singlePoint.value ? 4 : 0,
       pointHoverRadius: 4,
     },
     {
@@ -39,7 +41,7 @@ const chartData = computed(() => ({
       backgroundColor: 'rgba(249, 115, 22, 0.15)',
       fill: true,
       tension: 0.3,
-      pointRadius: 0,
+      pointRadius: singlePoint.value ? 4 : 0,
       pointHoverRadius: 4,
     },
     {
@@ -49,7 +51,7 @@ const chartData = computed(() => ({
       backgroundColor: 'rgba(245, 158, 11, 0.15)',
       fill: true,
       tension: 0.3,
-      pointRadius: 0,
+      pointRadius: singlePoint.value ? 4 : 0,
       pointHoverRadius: 4,
     },
     {
@@ -59,7 +61,7 @@ const chartData = computed(() => ({
       backgroundColor: 'rgba(34, 197, 94, 0.15)',
       fill: true,
       tension: 0.3,
-      pointRadius: 0,
+      pointRadius: singlePoint.value ? 4 : 0,
       pointHoverRadius: 4,
     },
   ],
@@ -95,6 +97,7 @@ const chartOptions = {
   },
   scales: {
     x: {
+      stacked: true,
       grid: { display: false },
       ticks: { color: '#6B7280', font: { size: 10 }, maxTicksLimit: 10 },
     },

@@ -108,7 +108,7 @@ class CaseService:
             .options(
                 selectinload(Case.email),
                 selectinload(Case.analyses).selectinload(Analysis.evidences),
-                selectinload(Case.notes),
+                selectinload(Case.notes).selectinload(CaseNote.author),
                 selectinload(Case.quarantine_actions),
                 selectinload(Case.fp_reviews),
             )
@@ -141,6 +141,19 @@ class CaseService:
             content=content,
         )
         self.db.add(note)
+        await self.db.flush()
+        return note
+
+    async def update_note(
+        self, note_id: UUID, author_id: UUID, content: str
+    ) -> CaseNote | None:
+        """Update a note's content (only by original author)."""
+        stmt = select(CaseNote).where(CaseNote.id == note_id)
+        result = await self.db.execute(stmt)
+        note = result.scalar_one_or_none()
+        if not note or note.author_id != author_id:
+            return None
+        note.content = content
         await self.db.flush()
         return note
 
