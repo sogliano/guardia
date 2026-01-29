@@ -78,7 +78,7 @@ function hexToRgba(hex: string, alpha: number): string {
 
 .card-icon .material-symbols-rounded {
   font-size: 44px;
-  opacity: 0.5;
+  opacity: 0.35;
 }
 
 .card-content {
@@ -89,12 +89,14 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 .card-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
+  letter-spacing: 0.5px;
 }
 
 .card-value {
+  font-family: var(--font-mono);
   font-size: 32px;
   font-weight: 700;
   color: var(--text-primary);
@@ -148,7 +150,8 @@ function hexToRgba(hex: string, alpha: number): string {
   min-width: 22px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--border-radius-xs);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   cursor: default;

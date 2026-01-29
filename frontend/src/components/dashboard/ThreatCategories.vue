@@ -104,6 +104,7 @@ function formatLabel(cat: string): string {
 }
 
 .section-title {
+  font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);

@@ -336,7 +336,7 @@ onMounted(() => {
   padding: 16px 18px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: var(--border-radius);
 }
 
 .kpi-card-accent {
@@ -347,7 +347,7 @@ onMounted(() => {
 .kpi-icon-wrap {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--border-radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -385,6 +385,7 @@ onMounted(() => {
 }
 
 .kpi-value {
+  font-family: var(--font-mono);
   font-size: 22px;
   font-weight: 800;
   color: var(--text-primary);
@@ -395,13 +396,14 @@ onMounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 /* ── Needs Action ── */
 .needs-action {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: var(--border-radius);
   border-left: 3px solid var(--accent-cyan);
   overflow: hidden;
 }
@@ -426,6 +428,7 @@ onMounted(() => {
 }
 
 .na-header h2 {
+  font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
@@ -434,7 +437,8 @@ onMounted(() => {
 
 .na-count {
   background: var(--accent-cyan);
-  color: #0A1628;
+  color: var(--bg-primary);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
   padding: 1px 8px;
@@ -477,6 +481,7 @@ onMounted(() => {
 }
 
 .na-case-id {
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
   color: var(--accent-cyan);
@@ -524,6 +529,7 @@ onMounted(() => {
 }
 
 .all-cases-header h2 {
+  font-family: var(--font-mono);
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);

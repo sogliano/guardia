@@ -67,6 +67,7 @@ function severityColor(severity: string): string {
 }
 
 .alert-title-text {
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   color: #F59E0B;
@@ -94,6 +95,7 @@ function severityColor(severity: string): string {
 }
 
 .alert-rule {
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);

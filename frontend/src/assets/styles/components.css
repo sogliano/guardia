@@ -18,6 +18,7 @@
 
 .header-left h1 {
   margin: 0;
+  font-family: var(--font-mono);
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
@@ -37,6 +38,7 @@
   border-radius: 12px;
   background: rgba(0, 212, 255, 0.15);
   color: #00D4FF;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
 }
@@ -46,7 +48,8 @@
   align-items: center;
   height: 22px;
   padding: 0 8px;
-  border-radius: 11px;
+  border-radius: var(--border-radius-xs);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -63,13 +66,14 @@
   align-items: center;
   gap: 6px;
   height: 36px;
-  padding: 0 14px;
+  padding: 10px 20px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--border-radius);
   background: transparent;
   color: var(--text-secondary);
+  font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -84,11 +88,12 @@
   align-items: center;
   gap: 6px;
   height: 36px;
-  padding: 0 14px;
+  padding: 10px 20px;
   border: none;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--border-radius);
   background: #00D4FF;
-  color: #0A1628;
+  color: #060B14;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -104,11 +109,12 @@
   align-items: center;
   gap: 6px;
   height: 36px;
-  padding: 0 14px;
+  padding: 10px 20px;
   border: none;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--border-radius);
   background: #22C55E;
   color: #fff;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -158,8 +164,8 @@
   height: 36px;
   padding: 0 12px 0 34px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--bg-card);
+  border-radius: var(--border-radius);
+  background: var(--bg-inset);
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
@@ -178,8 +184,8 @@
   height: 36px;
   padding: 0 10px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--bg-card);
+  border-radius: var(--border-radius);
+  background: var(--bg-inset);
   color: var(--text-secondary);
   font-size: 13px;
   outline: none;
@@ -238,17 +244,18 @@
 }
 
 .data-table thead tr {
-  background: #0D1B2A;
+  background: var(--bg-inset);
 }
 
 .data-table th {
   padding: 10px 16px;
   text-align: left;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  color: #9CA3AF;
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
@@ -297,12 +304,14 @@
 }
 
 .score-val {
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
 }
 
 .case-id {
   color: #00D4FF;
+  font-family: var(--font-mono);
   font-weight: 600;
   font-size: 12px;
 }
@@ -333,9 +342,10 @@
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--border-radius);
   background: transparent;
   color: var(--text-secondary);
+  font-family: var(--font-mono);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;

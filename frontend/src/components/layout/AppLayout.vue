@@ -28,10 +28,13 @@ import AppTopbar from './AppTopbar.vue'
   flex-direction: column;
   margin-left: var(--sidebar-width);
   min-height: 100vh;
+  min-width: 0;
+  max-width: calc(100vw - var(--sidebar-width));
 }
 
 .app-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 </style>

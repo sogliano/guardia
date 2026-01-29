@@ -114,18 +114,33 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1.4fr;
   gap: 16px;
+  min-width: 0;
+}
+
+.kpi-row > * {
+  min-width: 0;
 }
 
 .charts-row {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 16px;
+  min-width: 0;
+}
+
+.charts-row > * {
+  min-width: 0;
 }
 
 .dual-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  min-width: 0;
+}
+
+.dual-row > * {
+  min-width: 0;
 }
 
 .bottom-row {

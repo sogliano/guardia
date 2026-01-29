@@ -83,6 +83,7 @@ const rows = computed(() =>
 }
 
 .section-title {
+  font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -96,9 +97,11 @@ const rows = computed(() =>
 }
 
 .col-header {
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
 }
 
 .case-row {
@@ -142,10 +145,11 @@ const rows = computed(() =>
 }
 
 .score-badge {
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--border-radius-xs);
 }
 
 .col-action {
@@ -154,10 +158,11 @@ const rows = computed(() =>
 }
 
 .action-badge {
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--border-radius-xs);
 }
 
 .empty-state {

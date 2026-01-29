@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -15,6 +15,18 @@ const props = defineProps<{
   data: ChartDataPoint[]
 }>()
 
+const viewMode = ref<'bars' | 'pie'>('bars')
+const barsAnimated = ref(false)
+
+function triggerBarsAnimation() {
+  barsAnimated.value = false
+  nextTick(() => {
+    requestAnimationFrame(() => { barsAnimated.value = true })
+  })
+}
+
+watch(viewMode, (v) => { if (v === 'bars') triggerBarsAnimation() }, { immediate: true })
+
 const riskColors: Record<string, string> = {
   low: '#22C55E',
   medium: '#F59E0B',
@@ -22,7 +34,33 @@ const riskColors: Record<string, string> = {
   critical: '#EF4444',
 }
 
+const riskLabels: Record<string, string> = {
+  low: 'Low Risk',
+  medium: 'Medium Risk',
+  high: 'High Risk',
+  critical: 'Critical',
+}
+
 const total = computed(() => props.data.reduce((sum, d) => sum + d.value, 0) || 1)
+
+const riskOrder = ['low', 'medium', 'high', 'critical']
+
+const barItems = computed(() => {
+  const items = props.data.map((d) => {
+    const key = d.label.toLowerCase()
+    const pct = Math.round((d.value / total.value) * 100)
+    return {
+      key,
+      label: riskLabels[key] ?? d.label,
+      value: d.value,
+      pct,
+      color: riskColors[key] ?? '#6B7280',
+      order: riskOrder.indexOf(key),
+    }
+  })
+  items.sort((a, b) => a.order - b.order)
+  return items
+})
 
 const chartData = computed(() => ({
   labels: props.data.map((d) => d.label),
@@ -37,8 +75,6 @@ const chartData = computed(() => ({
     },
   ],
 }))
-
-const riskOrder = ['low', 'medium', 'high', 'critical']
 
 const chartOptions = computed(() => ({
   responsive: true,
@@ -81,23 +117,84 @@ const legendItems = computed(() => {
 
 <template>
   <div class="risk-distribution">
-    <h3 class="section-title">Risk Distribution</h3>
-
-    <div v-if="data.length" class="chart-wrap">
-      <div class="chart-container">
-        <Doughnut :data="chartData" :options="chartOptions" />
-        <div class="chart-center">
-          <span class="chart-center-value">{{ total }}</span>
-          <span class="chart-center-label">cases</span>
-        </div>
-      </div>
-      <div class="legend">
-        <div v-for="item in legendItems" :key="item.label" class="legend-item">
-          <span class="legend-dot" :style="{ background: item.color }" />
-          <span class="legend-text">{{ item.label }}</span>
-        </div>
+    <div class="section-header">
+      <h3 class="section-title">Risk Distribution</h3>
+      <div class="view-toggle">
+        <button
+          class="toggle-btn"
+          :class="{ active: viewMode === 'bars' }"
+          @click="viewMode = 'bars'"
+        >
+          <span class="material-symbols-rounded toggle-icon">bar_chart</span>
+        </button>
+        <button
+          class="toggle-btn"
+          :class="{ active: viewMode === 'pie' }"
+          @click="viewMode = 'pie'"
+        >
+          <span class="material-symbols-rounded toggle-icon">pie_chart</span>
+        </button>
       </div>
     </div>
+
+    <template v-if="data.length">
+      <!-- Bar View -->
+      <div v-if="viewMode === 'bars'" class="bars-view">
+        <div v-for="item in barItems" :key="item.key" class="bar-row">
+          <div class="bar-label">
+            <span class="bar-label-text" :style="{ color: item.color }">{{ item.label }}</span>
+            <span class="bar-label-pct" :style="{ color: item.color }">{{ item.value }} ({{ item.pct }}%)</span>
+          </div>
+          <div class="bar-track">
+            <div
+              class="bar-fill"
+              :style="{ width: barsAnimated ? item.pct + '%' : '0%', background: item.color }"
+            />
+          </div>
+        </div>
+
+        <!-- Stacked bar -->
+        <div class="stacked-section">
+          <span class="stacked-label">Overall Distribution</span>
+          <div class="stacked-track">
+            <div
+              v-for="item in barItems"
+              :key="'s-' + item.key"
+              class="stacked-segment"
+              :style="{ width: barsAnimated ? item.pct + '%' : '0%', background: item.color }"
+            />
+          </div>
+          <div class="stacked-legend">
+            <span
+              v-for="item in barItems"
+              :key="'l-' + item.key"
+              class="stacked-legend-item"
+              :style="{ color: item.color }"
+            >
+              <span class="stacked-legend-dot" :style="{ background: item.color }" />
+              {{ item.pct }}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pie View -->
+      <div v-else class="chart-wrap">
+        <div class="chart-container">
+          <Doughnut :data="chartData" :options="chartOptions" />
+          <div class="chart-center">
+            <span class="chart-center-value">{{ total }}</span>
+            <span class="chart-center-label">cases</span>
+          </div>
+        </div>
+        <div class="legend">
+          <div v-for="item in legendItems" :key="item.label" class="legend-item">
+            <span class="legend-dot" :style="{ background: item.color }" />
+            <span class="legend-text">{{ item.label }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
     <div v-else class="empty-state">No risk data available</div>
   </div>
 </template>
@@ -113,13 +210,149 @@ const legendItems = computed(() => {
   gap: 16px;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .section-title {
+  font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
+.view-toggle {
+  display: flex;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--border-radius-xs);
+  transition: background 0.15s;
+}
+
+.toggle-btn.active {
+  background: var(--accent-cyan-muted);
+}
+
+.toggle-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.toggle-btn.active .toggle-icon {
+  color: var(--accent-cyan);
+}
+
+/* ── Bar View ── */
+.bars-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bar-label-text {
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.bar-label-pct {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.stacked-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.stacked-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+
+.stacked-track {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.stacked-segment {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.stacked-legend {
+  display: flex;
+  gap: 12px;
+}
+
+.stacked-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.stacked-legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* ── Pie View ── */
 .chart-wrap {
   display: flex;
   flex-direction: column;
@@ -145,6 +378,7 @@ const legendItems = computed(() => {
 }
 
 .chart-center-value {
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
@@ -181,11 +415,6 @@ const legendItems = computed(() => {
   font-size: 12px;
   color: var(--text-secondary);
   text-transform: capitalize;
-}
-
-.legend-pct {
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .empty-state {

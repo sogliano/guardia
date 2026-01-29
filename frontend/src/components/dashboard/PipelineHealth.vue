@@ -69,10 +69,12 @@ const overallStatus = computed(() => {
   flex-direction: column;
   gap: 12px;
   width: 380px;
+  max-width: 100%;
   flex-shrink: 0;
 }
 
 .section-title {
+  font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -88,6 +90,7 @@ const overallStatus = computed(() => {
 }
 
 .overall-text {
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
 }
@@ -122,12 +125,14 @@ const overallStatus = computed(() => {
 }
 
 .stage-name {
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .stage-detail {
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 
