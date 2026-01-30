@@ -194,7 +194,7 @@ Buttons/features that are rendered but do nothing:
 | C1 | NotificationsView uses PrimeVue (Button, Tag, ProgressSpinner) while rest of app uses custom dark-theme CSS |
 | C2 | Email scores show `toFixed(2)` in EmailExplorerView but percentage in CasesView — inconsistent format |
 | C3 | No i18n framework — all UI text hardcoded, Spanish mixed in CaseDetailView threat descriptions (lines 110-141) |
-| C4 | Lazy imports inside methods (`import torch`, `import anthropic`, `import openai`) violate project's "imports at top" rule |
+| C4 | Lazy imports inside methods (`import torch`, `import openai`) violate project's "imports at top" rule |
 | C5 | `datetime.utcnow()` deprecated usage in report_service.py (should use `datetime.now(timezone.utc)`) |
 
 ---

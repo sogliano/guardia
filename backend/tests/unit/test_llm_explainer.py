@@ -1,7 +1,8 @@
 """Tests for LLM explainer (OpenAI only)."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
 from app.services.pipeline.llm_explainer import LLMExplainer, _build_user_prompt
 from app.services.pipeline.models import EvidenceItem
@@ -18,6 +19,7 @@ def _explain_kwargs():
             "auth_results": {"spf": "pass", "dkim": "pass", "dmarc": "pass"},
         },
         heuristic_evidences=[],
+        heuristic_score=0.2,
         ml_score=0.5,
         ml_confidence=0.8,
         ml_available=True,
@@ -83,9 +85,14 @@ def test_build_user_prompt_basic():
         "auth_results": {"spf": "fail", "dkim": "pass", "dmarc": "none"},
     }
     evidences = [
-        EvidenceItem(type="keyword_phishing", severity="high", description="Phishing keywords found"),
+        EvidenceItem(
+            type="keyword_phishing", severity="high",
+            description="Phishing keywords found",
+        ),
     ]
-    prompt = _build_user_prompt(email, evidences, ml_score=0.75, ml_confidence=0.9, ml_available=True)
+    prompt = _build_user_prompt(
+        email, evidences, heuristic_score=0.4, ml_score=0.75, ml_confidence=0.9, ml_available=True,
+    )
 
     assert "attacker@evil.com" in prompt
     assert "Evil Person" in prompt
@@ -108,7 +115,7 @@ def test_build_user_prompt_ml_unavailable():
         "attachments": [],
         "auth_results": {},
     }
-    prompt = _build_user_prompt(email, [], ml_score=0.0, ml_confidence=0.0, ml_available=False)
+    prompt = _build_user_prompt(email, [], heuristic_score=0.0, ml_score=0.0, ml_confidence=0.0, ml_available=False)
     assert "not available" in prompt
 
 
@@ -122,7 +129,7 @@ def test_build_user_prompt_no_optional_fields():
         "attachments": [],
         "auth_results": {},
     }
-    prompt = _build_user_prompt(email, [], ml_score=0.5, ml_confidence=0.8, ml_available=True)
+    prompt = _build_user_prompt(email, [], heuristic_score=0.1, ml_score=0.5, ml_confidence=0.8, ml_available=True)
     assert "Display Name" not in prompt
     assert "Reply-To" not in prompt
     assert "URLs found" not in prompt

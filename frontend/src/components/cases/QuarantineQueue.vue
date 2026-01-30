@@ -4,12 +4,52 @@ import { useRouter } from 'vue-router'
 import { useCasesStore } from '@/stores/cases'
 import { formatTimeAgo, capitalize } from '@/utils/formatters'
 import { scoreColor, riskColor, riskBg, actionColor, actionBg } from '@/utils/colors'
+import { RISK_OPTIONS, ACTION_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import type { Case } from '@/types/case'
 
 const router = useRouter()
 const store = useCasesStore()
 
-const cases = computed(() => store.quarantineAndBlockedCases)
+const searchQuery = ref('')
+const filterRisk = ref<string | undefined>()
+const filterAction = ref<string | undefined>()
+const filterDateRange = ref<string | undefined>()
+
+const hasActiveFilters = computed(() => {
+  return searchQuery.value || filterRisk.value || filterAction.value || filterDateRange.value
+})
+
+function clearFilters() {
+  searchQuery.value = ''
+  filterRisk.value = undefined
+  filterAction.value = undefined
+  filterDateRange.value = undefined
+}
+
+const cases = computed(() => {
+  let base = store.quarantineAndBlockedCases
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    base = base.filter(c =>
+      (c.email_subject ?? '').toLowerCase().includes(q) ||
+      (c.email_sender ?? '').toLowerCase().includes(q) ||
+      String(c.case_number ?? '').includes(q)
+    )
+  }
+  if (filterRisk.value) {
+    base = base.filter(c => c.risk_level?.toLowerCase() === filterRisk.value!.toLowerCase())
+  }
+  if (filterAction.value) {
+    base = base.filter(c => c.verdict?.toLowerCase() === filterAction.value!.toLowerCase())
+  }
+  if (filterDateRange.value) {
+    const params = dateRangeToParams(filterDateRange.value)
+    if (params.date_from) {
+      base = base.filter(c => (c.email_received_at ?? c.created_at) >= params.date_from!)
+    }
+  }
+  return base
+})
 
 type SortDir = 'asc' | 'desc'
 const sortCol = ref<string | null>(null)
@@ -71,7 +111,33 @@ function openCase(id: string) {
       <span class="empty-tab-hint">All clear — no emails are waiting for review</span>
     </div>
 
-    <div v-else class="table-card">
+    <div v-else class="quarantine-content">
+      <div class="filter-bar">
+        <div class="search-input-wrapper">
+          <span class="material-symbols-rounded search-icon">search</span>
+          <input
+            v-model="searchQuery"
+            type="text"
+            class="search-input"
+            placeholder="Search subjects, senders, IDs..."
+          />
+        </div>
+        <select v-model="filterRisk" class="filter-select">
+          <option :value="undefined">Risk Level</option>
+          <option v-for="opt in RISK_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+        <select v-model="filterAction" class="filter-select">
+          <option :value="undefined">Action</option>
+          <option v-for="opt in ACTION_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+        <select v-model="filterDateRange" class="filter-select">
+          <option :value="undefined">Date Range</option>
+          <option v-for="opt in DATE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <a v-if="hasActiveFilters" href="#" class="clear-link" @click.prevent="clearFilters">Clear Filters</a>
+        <span class="results-count">{{ cases.length }} cases</span>
+      </div>
+    <div class="table-card">
       <table class="data-table">
         <thead>
           <tr>
@@ -137,11 +203,18 @@ function openCase(id: string) {
         </tbody>
       </table>
     </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .quarantine-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.quarantine-content {
   display: flex;
   flex-direction: column;
   gap: 16px;

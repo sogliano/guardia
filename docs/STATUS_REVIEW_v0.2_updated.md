@@ -199,7 +199,7 @@ All dead code identified in the original review has been removed:
 | C1 | NotificationsView used PrimeVue components | FIXED — replaced with custom dark-theme CSS, `material-symbols-rounded` icons |
 | C2 | Score format inconsistent (decimal vs percentage) | FIXED — unified to `(score * 100).toFixed(0) + '%'` everywhere |
 | C3 | Spanish mixed in CaseDetailView threat descriptions | FIXED — all translated to English |
-| C4 | Lazy imports inside methods violated "imports at top" rule | FIXED — `torch`/`transformers` at top with `try/except`, `anthropic`/`openai` at top |
+| C4 | Lazy imports inside methods violated "imports at top" rule | FIXED — `torch`/`transformers` at top with `try/except`, `openai` at top |
 | C5 | `datetime.utcnow()` deprecated usage | FIXED — uses `datetime.now(timezone.utc)` |
 
 **No known style inconsistencies remain.**

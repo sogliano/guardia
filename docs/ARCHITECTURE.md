@@ -268,7 +268,7 @@ backend/app/
     │   ├── heuristics.py     # Rule-based analysis
     │   ├── heuristic_data.py # Pattern databases
     │   ├── ml_classifier.py  # DistilBERT inference
-    │   ├── llm_explainer.py  # Claude/GPT risk assessment
+    │   ├── llm_explainer.py  # GPT risk assessment
     │   └── models.py         # Pipeline data models
     ├── email_service.py
     ├── case_service.py

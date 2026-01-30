@@ -1,6 +1,6 @@
 """Layer 1: Heuristic analysis engine (~5ms).
 
-Four weighted sub-engines + attachment/impersonation bonuses:
+Four weighted sub-engines + attachment/impersonation/header bonuses:
 - Auth analysis  (35%): SPF/DKIM/DMARC failures, DMARC missing, compound failures, reply-to mismatch
 - Domain analysis (25%): blacklist (DB), typosquatting, suspicious TLDs
 - URL analysis    (25%): shorteners, IP-based URLs, suspicious TLD links
@@ -8,6 +8,7 @@ Four weighted sub-engines + attachment/impersonation bonuses:
 
 Additive bonuses (on top of weighted score):
 - Attachment risk: suspicious extensions, double extensions
+- Header analysis: Received chain hops, suspicious mailers, Message-ID mismatch
 - Correlation boost: 3+ sub-engines firing simultaneously
 
 Security design: this is a pre-delivery email security gateway.
@@ -44,8 +45,11 @@ from app.services.pipeline.heuristic_data import (
     FINANCIAL_KEYWORDS,
     IMPERSONATION_TITLES,
     KNOWN_DOMAINS,
+    MAX_EXPECTED_HOPS,
+    MSGID_DOMAIN_MAP,
     PHISHING_KEYWORDS,
     SUSPICIOUS_EXTENSIONS,
+    SUSPICIOUS_MAILERS,
     SUSPICIOUS_TLDS,
     URGENCY_KEYWORDS,
     URL_SHORTENER_DOMAINS,
@@ -126,6 +130,7 @@ class HeuristicEngine:
         auth_score, auth_ev = await self._analyze_auth(email_data)
         attach_bonus, attach_ev = self._analyze_attachments(email_data)
         impersonation_ev = self._analyze_impersonation(email_data)
+        header_bonus, header_ev = self._analyze_headers(email_data)
 
         result.domain_score = domain_score
         result.url_score = url_score
@@ -137,6 +142,7 @@ class HeuristicEngine:
         evidences.extend(auth_ev)
         evidences.extend(attach_ev)
         evidences.extend(impersonation_ev)
+        evidences.extend(header_ev)
 
         # Weighted score from 4 main sub-engines
         weighted = (
@@ -156,8 +162,9 @@ class HeuristicEngine:
         elif active_engines >= 3:
             weighted *= HEURISTIC_CORRELATION_BOOST_3
 
-        # Additive bonuses (attachment risk)
+        # Additive bonuses (attachment risk + header anomalies)
         weighted += attach_bonus
+        weighted += header_bonus
 
         # Impersonation signals boost keyword weight (BEC indicator)
         if impersonation_ev:
@@ -176,6 +183,7 @@ class HeuristicEngine:
             auth=result.auth_score,
             active_engines=active_engines,
             attach_bonus=attach_bonus,
+            header_bonus=header_bonus,
             impersonation=len(impersonation_ev),
             evidence_count=len(evidences),
             duration_ms=result.execution_time_ms,
@@ -776,3 +784,123 @@ class HeuristicEngine:
                     break
 
         return evidences
+
+    # ------------------------------------------------------------------
+    # Sub-engine 7: Header Analysis (additive bonus)
+    # ------------------------------------------------------------------
+
+    def _analyze_headers(
+        self, email_data: dict
+    ) -> tuple[float, list[EvidenceItem]]:
+        """Analyze email headers beyond SPF/DKIM/DMARC.
+
+        Checks:
+        1. Received chain hop count (excessive hops = relay through suspicious infra)
+        2. X-Mailer / User-Agent (mass-mailing tools)
+        3. Message-ID domain vs sender domain consistency
+        4. Missing standard headers for known providers
+        """
+        evidences: list[EvidenceItem] = []
+        headers: dict = email_data.get("headers", {})
+        bonus = 0.0
+
+        if not headers:
+            return 0.0, []
+
+        # 1. Received chain analysis
+        received = headers.get("received", [])
+        if isinstance(received, list) and len(received) > MAX_EXPECTED_HOPS:
+            hop_count = len(received)
+            bonus += 0.08
+            evidences.append(EvidenceItem(
+                type=EvidenceType.HEADER_EXCESSIVE_HOPS,
+                severity=Severity.MEDIUM,
+                description=(
+                    f"The email passed through {hop_count} mail servers "
+                    f"(expected ≤{MAX_EXPECTED_HOPS}). An unusually long "
+                    f"relay chain may indicate routing through anonymous "
+                    f"or compromised infrastructure to obscure the true "
+                    f"origin of the message."
+                ),
+                raw_data={"hop_count": hop_count, "max_expected": MAX_EXPECTED_HOPS},
+            ))
+
+        # 2. X-Mailer / User-Agent analysis
+        mailer = (
+            headers.get("x-mailer", "")
+            or headers.get("user-agent", "")
+        ).lower()
+        if mailer:
+            for suspicious in SUSPICIOUS_MAILERS:
+                if suspicious in mailer:
+                    bonus += 0.10
+                    evidences.append(EvidenceItem(
+                        type=EvidenceType.HEADER_SUSPICIOUS_MAILER,
+                        severity=Severity.HIGH,
+                        description=(
+                            f"The email was sent using '{mailer}', a tool "
+                            f"commonly associated with mass-mailing or "
+                            f"phishing campaigns. Legitimate business "
+                            f"emails are typically sent from standard "
+                            f"email clients or enterprise platforms."
+                        ),
+                        raw_data={"mailer": mailer, "matched": suspicious},
+                    ))
+                    break
+
+        # 3. Message-ID domain vs sender domain consistency
+        message_id = headers.get("message-id", "")
+        sender_email = (email_data.get("sender_email") or "").lower()
+        if message_id and sender_email and "@" in sender_email:
+            sender_domain = sender_email.rsplit("@", 1)[1]
+            # Extract domain from Message-ID (format: <random@domain>)
+            msgid_domain = ""
+            if "@" in message_id:
+                msgid_part = message_id.split("@")[-1].strip().rstrip(">")
+                msgid_domain = msgid_part.lower()
+
+            if msgid_domain and sender_domain in MSGID_DOMAIN_MAP:
+                expected_domains = MSGID_DOMAIN_MAP[sender_domain]
+                if not any(exp in msgid_domain for exp in expected_domains):
+                    bonus += 0.12
+                    evidences.append(EvidenceItem(
+                        type=EvidenceType.HEADER_MSGID_MISMATCH,
+                        severity=Severity.HIGH,
+                        description=(
+                            f"The Message-ID header domain '{msgid_domain}' "
+                            f"does not match the expected infrastructure "
+                            f"for sender domain '{sender_domain}'. "
+                            f"Legitimate emails from {sender_domain} should "
+                            f"have Message-IDs from "
+                            f"{', '.join(sorted(expected_domains))}. "
+                            f"This mismatch suggests the email did not "
+                            f"originate from the claimed mail system."
+                        ),
+                        raw_data={
+                            "message_id_domain": msgid_domain,
+                            "sender_domain": sender_domain,
+                            "expected": sorted(expected_domains),
+                        },
+                    ))
+
+        # 4. Missing standard headers for known providers
+        # Gmail always adds X-Google-DKIM-Signature
+        if sender_email and "@" in sender_email:
+            sender_domain = sender_email.rsplit("@", 1)[1]
+            if sender_domain in ("gmail.com", "googlemail.com"):
+                if not headers.get("x-google-dkim-signature"):
+                    bonus += 0.10
+                    evidences.append(EvidenceItem(
+                        type=EvidenceType.HEADER_MISSING_STANDARD,
+                        severity=Severity.HIGH,
+                        description=(
+                            "The email claims to be from Gmail but is "
+                            "missing the X-Google-DKIM-Signature header, "
+                            "which is always present in authentic Gmail "
+                            "messages. This strongly suggests the email "
+                            "did not originate from Google's mail servers."
+                        ),
+                        raw_data={"sender_domain": sender_domain},
+                    ))
+
+        return min(0.25, bonus), evidences

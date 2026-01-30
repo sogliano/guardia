@@ -19,9 +19,9 @@ El pipeline de Guard-IA opera en 3 capas secuenciales:
 **Score final** = `heuristic * 0.30 + ml * 0.50 + llm * 0.20`
 
 **Mejoras ya implementadas (v0.3):**
-- Structured output: Claude tool_use + OpenAI response_format (elimina parsing JSON fragil)
+- Structured output: OpenAI response_format (elimina parsing JSON fragil)
 - Few-shot examples: 3 ejemplos clasificados (phishing, legitimo, ambiguo) en el prompt
-- Temperature 0: scoring deterministico en ambos providers
+- Temperature 0: scoring deterministico
 
 ---
 

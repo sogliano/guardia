@@ -29,6 +29,10 @@ const filterAction = ref<string | undefined>()
 const filterStatus = ref<string | undefined>()
 const filterDateRange = ref<string | undefined>()
 
+const naSearchQuery = ref('')
+const naFilterRisk = ref<string | undefined>()
+const naFilterAction = ref<string | undefined>()
+const naFilterDateRange = ref<string | undefined>()
 const naPage = ref(1)
 const naPageSize = ref(10)
 const allowingCaseId = ref<string | null>(null)
@@ -61,9 +65,41 @@ const hasActiveFilters = computed(() => {
 const pageNumbers = computed(() => computePageNumbers(store.page, totalPages.value))
 
 // Overview computeds
-const needsActionCases = computed(() =>
-  store.cases.filter(c => c.status === 'analyzed' || c.status === 'quarantined')
-)
+const naHasActiveFilters = computed(() => {
+  return naSearchQuery.value || naFilterRisk.value || naFilterAction.value || naFilterDateRange.value
+})
+
+function clearNaFilters() {
+  naSearchQuery.value = ''
+  naFilterRisk.value = undefined
+  naFilterAction.value = undefined
+  naFilterDateRange.value = undefined
+}
+
+const needsActionCases = computed(() => {
+  let base = store.cases.filter(c => c.status === 'analyzed' || c.status === 'quarantined')
+  const q = naSearchQuery.value.trim().toLowerCase()
+  if (q) {
+    base = base.filter(c =>
+      (c.email_subject ?? '').toLowerCase().includes(q) ||
+      (c.email_sender ?? '').toLowerCase().includes(q) ||
+      String(c.case_number ?? '').includes(q)
+    )
+  }
+  if (naFilterRisk.value) {
+    base = base.filter(c => c.risk_level?.toLowerCase() === naFilterRisk.value!.toLowerCase())
+  }
+  if (naFilterAction.value) {
+    base = base.filter(c => c.verdict?.toLowerCase() === naFilterAction.value!.toLowerCase())
+  }
+  if (naFilterDateRange.value) {
+    const params = dateRangeToParams(naFilterDateRange.value)
+    if (params.date_from) {
+      base = base.filter(c => (c.email_received_at ?? c.created_at) >= params.date_from!)
+    }
+  }
+  return base
+})
 
 const resolvedCount = computed(() => store.cases.filter(c => c.status === 'resolved').length)
 const blockedCount = computed(() => store.blockedCases.length)
@@ -310,6 +346,31 @@ onMounted(() => {
         <p>All caught up — no cases need action right now</p>
       </div>
       <template v-else>
+        <div class="filter-bar">
+          <div class="search-input-wrapper">
+            <span class="material-symbols-rounded search-icon">search</span>
+            <input
+              v-model="naSearchQuery"
+              type="text"
+              class="search-input"
+              placeholder="Search subjects, senders, IDs..."
+            />
+          </div>
+          <select v-model="naFilterRisk" class="filter-select">
+            <option :value="undefined">Risk Level</option>
+            <option v-for="opt in RISK_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+          </select>
+          <select v-model="naFilterAction" class="filter-select">
+            <option :value="undefined">Action</option>
+            <option v-for="opt in ACTION_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+          </select>
+          <select v-model="naFilterDateRange" class="filter-select">
+            <option :value="undefined">Date Range</option>
+            <option v-for="opt in DATE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+          <a v-if="naHasActiveFilters" href="#" class="clear-link" @click.prevent="clearNaFilters">Clear Filters</a>
+          <span class="results-count">{{ needsActionCases.length }} cases</span>
+        </div>
         <div class="table-card">
           <table class="data-table">
             <thead>
@@ -336,9 +397,35 @@ onMounted(() => {
                 <td class="cell-subject">{{ c.email_subject ?? '(No Subject)' }}</td>
                 <td class="cell-sender">{{ c.email_sender ?? '—' }}</td>
                 <td>
-                  <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
-                    {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
-                  </span>
+                  <div class="score-cell">
+                    <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
+                      {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
+                    </span>
+                    <span
+                      v-if="c.final_score !== null"
+                      class="material-symbols-rounded score-detail-icon"
+                    >info</span>
+                    <div v-if="c.final_score !== null" class="score-tooltip">
+                      <div class="score-tooltip-row">
+                        <span class="score-tooltip-label">Heuristic</span>
+                        <span class="score-tooltip-val" :style="{ color: c.heuristic_score != null ? scoreColor(c.heuristic_score) : 'var(--text-muted)' }">
+                          {{ c.heuristic_score != null ? (c.heuristic_score * 100).toFixed(0) + '%' : '—' }}
+                        </span>
+                      </div>
+                      <div class="score-tooltip-row">
+                        <span class="score-tooltip-label">ML</span>
+                        <span class="score-tooltip-val" :style="{ color: c.ml_score != null ? scoreColor(c.ml_score) : 'var(--text-muted)' }">
+                          {{ c.ml_score != null ? (c.ml_score * 100).toFixed(0) + '%' : '—' }}
+                        </span>
+                      </div>
+                      <div class="score-tooltip-row">
+                        <span class="score-tooltip-label">LLM</span>
+                        <span class="score-tooltip-val" :style="{ color: c.llm_score != null ? scoreColor(c.llm_score) : 'var(--text-muted)' }">
+                          {{ c.llm_score != null ? (c.llm_score * 100).toFixed(0) + '%' : '—' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <span
@@ -451,10 +538,7 @@ onMounted(() => {
             <th style="width: 120px" class="sortable-th" @click="toggleSort('all', 'received')">RECEIVED <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'received') }}</span></th>
             <th>SUBJECT</th>
             <th style="width: 180px">SENDER</th>
-            <th style="width: 60px" class="sortable-th" @click="toggleSort('all', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'score') }}</span></th>
-            <th style="width: 50px" class="sortable-th" @click="toggleSort('all', 'heuristic')">HEU <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'heuristic') }}</span></th>
-            <th style="width: 45px" class="sortable-th" @click="toggleSort('all', 'ml')">ML <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'ml') }}</span></th>
-            <th style="width: 50px" class="sortable-th" @click="toggleSort('all', 'llm')">LLM <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'llm') }}</span></th>
+            <th style="width: 70px" class="sortable-th" @click="toggleSort('all', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'score') }}</span></th>
             <th style="width: 75px" class="sortable-th" @click="toggleSort('all', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'risk') }}</span></th>
             <th style="width: 90px" class="sortable-th" @click="toggleSort('all', 'action')">ACTION <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'action') }}</span></th>
             <th style="width: 80px" class="sortable-th" @click="toggleSort('all', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('all', 'status') }}</span></th>
@@ -474,27 +558,35 @@ onMounted(() => {
             <td class="cell-subject">{{ c.email_subject ?? '(No Subject)' }}</td>
             <td class="cell-sender">{{ c.email_sender ?? '—' }}</td>
             <td>
-              <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
-                {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
-              </span>
-            </td>
-            <td>
-              <span v-if="c.heuristic_score != null" class="score-sub" :style="{ color: scoreColor(c.heuristic_score) }">
-                {{ (c.heuristic_score * 100).toFixed(0) + '%' }}
-              </span>
-              <span v-else class="text-muted">—</span>
-            </td>
-            <td>
-              <span v-if="c.ml_score != null" class="score-sub" :style="{ color: scoreColor(c.ml_score) }">
-                {{ (c.ml_score * 100).toFixed(0) + '%' }}
-              </span>
-              <span v-else class="text-muted">—</span>
-            </td>
-            <td>
-              <span v-if="c.llm_score != null" class="score-sub" :style="{ color: scoreColor(c.llm_score) }">
-                {{ (c.llm_score * 100).toFixed(0) + '%' }}
-              </span>
-              <span v-else class="text-muted">—</span>
+              <div class="score-cell">
+                <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
+                  {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
+                </span>
+                <span
+                  v-if="c.final_score !== null"
+                  class="material-symbols-rounded score-detail-icon"
+                >info</span>
+                <div v-if="c.final_score !== null" class="score-tooltip">
+                  <div class="score-tooltip-row">
+                    <span class="score-tooltip-label">Heuristic</span>
+                    <span class="score-tooltip-val" :style="{ color: c.heuristic_score != null ? scoreColor(c.heuristic_score) : 'var(--text-muted)' }">
+                      {{ c.heuristic_score != null ? (c.heuristic_score * 100).toFixed(0) + '%' : '—' }}
+                    </span>
+                  </div>
+                  <div class="score-tooltip-row">
+                    <span class="score-tooltip-label">ML</span>
+                    <span class="score-tooltip-val" :style="{ color: c.ml_score != null ? scoreColor(c.ml_score) : 'var(--text-muted)' }">
+                      {{ c.ml_score != null ? (c.ml_score * 100).toFixed(0) + '%' : '—' }}
+                    </span>
+                  </div>
+                  <div class="score-tooltip-row">
+                    <span class="score-tooltip-label">LLM</span>
+                    <span class="score-tooltip-val" :style="{ color: c.llm_score != null ? scoreColor(c.llm_score) : 'var(--text-muted)' }">
+                      {{ c.llm_score != null ? (c.llm_score * 100).toFixed(0) + '%' : '—' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </td>
             <td>
               <span
@@ -520,7 +612,7 @@ onMounted(() => {
             </td>
           </tr>
           <tr v-if="store.cases.length === 0">
-            <td colspan="11" class="empty-state">No cases found</td>
+            <td colspan="8" class="empty-state">No cases found</td>
           </tr>
         </tbody>
       </table>
@@ -777,10 +869,64 @@ onMounted(() => {
   }
 }
 
-.score-sub {
+/* ── Score cell with tooltip ── */
+.score-cell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.score-detail-icon {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.4;
+  cursor: help;
+  transition: opacity 0.15s;
+}
+
+.score-cell:hover .score-detail-icon {
+  opacity: 0.8;
+}
+
+.score-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  background: var(--bg-elevated, #1a1d23);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  z-index: 100;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.score-cell:hover .score-tooltip {
+  display: block;
+}
+
+.score-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 3px 0;
+}
+
+.score-tooltip-label {
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 600;
-  opacity: 0.8;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.score-tooltip-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
 }
 </style>

@@ -345,8 +345,8 @@ EMAILS = [
         "headers": {"Return-Path": "<contracts@trusted-vendor.com>"},
     },
     {
-        "message_id": "<extra2-ambig-password-017@no-reply-strikesecurity.com>",
-        "sender_email": "security@no-reply-strikesecurity.com",
+        "message_id": "<extra2-ambig-password-017@strike.sh>",
+        "sender_email": "security@strike.sh",
         "sender_name": "Strike Security IT",
         "recipient_email": "analyst@strike.sh",
         "subject": "Password change confirmation",
@@ -362,7 +362,7 @@ EMAILS = [
         ),
         "urls": [],
         "auth_results": {"spf": "softfail", "dkim": "none", "dmarc": "none"},
-        "headers": {"Return-Path": "<security@no-reply-strikesecurity.com>"},
+        "headers": {"Return-Path": "<security@strike.sh>"},
     },
     {
         "message_id": "<extra2-ambig-survey-018@surveymonkey.com>",

@@ -445,6 +445,9 @@ onMounted(loadData)
           <h3 class="card-title">
             <span class="material-symbols-rounded">smart_toy</span>
             AI Analysis Summary
+            <span v-if="llmAnalysis.score != null" class="llm-score-badge" :style="{ color: scoreColor(llmAnalysis.score) }">
+              {{ (llmAnalysis.score * 100).toFixed(0) }}%
+            </span>
           </h3>
           <div class="llm-explanation" v-html="renderMarkdown(llmAnalysis.explanation)"></div>
           <div class="llm-meta">
@@ -1448,6 +1451,13 @@ onMounted(loadData)
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 12px;
+}
+
+.llm-score-badge {
+  margin-left: 10px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .llm-meta {
