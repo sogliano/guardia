@@ -51,6 +51,7 @@ Plain text with **bold** and bullet points only. No markdown headers (#).
    - **Authentication:** SPF/DKIM/DMARC assessment and what it means
    - **Sender Domain:** Typosquatting, lookalike, suspicious TLD, or known legitimate
    - **Social Engineering:** Urgency, pressure, fear, authority impersonation
+   - **Body Content:** Analyze message tone, requests for action, embedded credentials requests, social engineering tactics
    - **Links / Reply-To:** Mismatches, shorteners, IP-based URLs, suspicious destinations
    - **Attachments:** Dangerous extensions, double extensions, executable types
    - **Impersonation:** Brand, executive, or vendor impersonation patterns
@@ -60,6 +61,7 @@ Plain text with **bold** and bullet points only. No markdown headers (#).
 ## Rules
 - Be factual; cite specific evidence from the data provided.
 - Bold key technical terms and domain names.
+- When body content is provided, analyze it for social engineering tactics, mismatches between subject and body, and requests for sensitive actions.
 - Your score is independent — you may agree or disagree with heuristic/ML.
 - Reflect uncertainty when evidence is weak or contradictory.
 - For legitimate emails, explain concisely why they are safe — do not pad with unnecessary caveats.
@@ -102,6 +104,40 @@ _OPENAI_RESPONSE_FORMAT = {
 }
 
 
+def _strip_html_tags(html: str) -> str:
+    """Strip HTML tags and convert to plain text."""
+    if not html:
+        return ""
+    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&")
+    text = text.replace("&lt;", "<").replace("&gt;", ">")
+    text = text.replace("&quot;", '"').replace("&#39;", "'")
+    text = re.sub(r" +", " ", text)
+    text = re.sub(r"\n\n+", "\n\n", text)
+    return text.strip()
+
+
+def _truncate_body(body: str, max_chars: int = 800) -> str:
+    """Truncate body text, breaking at sentence boundary when possible."""
+    if len(body) <= max_chars:
+        return body
+    truncated = body[:max_chars]
+    sentence_end = max(
+        truncated.rfind(". "),
+        truncated.rfind("! "),
+        truncated.rfind("? "),
+        truncated.rfind(".\n"),
+    )
+    if sentence_end > max_chars * 0.7:
+        truncated = truncated[: sentence_end + 1]
+    return truncated.rstrip() + "\n\n[... truncated]"
+
+
 def _build_user_prompt(
     email_data: dict,
     heuristic_evidences: list[EvidenceItem],
@@ -121,13 +157,26 @@ def _build_user_prompt(
     if email_data.get("reply_to"):
         parts.append(f"- **Reply-To:** {email_data['reply_to']}")
 
-    url_count = len(email_data.get("urls", []))
-    if url_count:
-        parts.append(f"- **URLs found:** {url_count}")
+    # URLs — show actual list (up to 5)
+    urls = email_data.get("urls", [])
+    if urls:
+        parts.append(f"- **URLs found:** {len(urls)}")
+        for url in urls[:5]:
+            parts.append(f"  - {url}")
+        if len(urls) > 5:
+            parts.append(f"  - ... and {len(urls) - 5} more")
 
-    attachment_count = len(email_data.get("attachments", []))
-    if attachment_count:
-        parts.append(f"- **Attachments:** {attachment_count}")
+    # Attachments — show filenames
+    attachments = email_data.get("attachments", [])
+    if attachments:
+        parts.append(f"- **Attachments:** {len(attachments)}")
+        for att in attachments[:5]:
+            fname = att.get("filename", "unknown")
+            ctype = att.get("content_type", "")
+            size_kb = (att.get("size", 0) or 0) / 1024
+            parts.append(f"  - {fname} ({ctype}, {size_kb:.1f} KB)")
+        if len(attachments) > 5:
+            parts.append(f"  - ... and {len(attachments) - 5} more")
 
     # Auth results
     auth = email_data.get("auth_results", {})
@@ -137,6 +186,15 @@ def _build_user_prompt(
             f"DKIM={auth.get('dkim', 'none')}, "
             f"DMARC={auth.get('dmarc', 'none')}"
         )
+
+    # Body content
+    body_text = email_data.get("body_text") or ""
+    if not body_text:
+        body_html = email_data.get("body_html") or ""
+        if body_html:
+            body_text = _strip_html_tags(body_html)
+    if body_text:
+        parts.append(f"\n## Email Body Content\n```\n{_truncate_body(body_text)}\n```")
 
     # Heuristic evidence
     if heuristic_evidences:

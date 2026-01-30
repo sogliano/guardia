@@ -27,6 +27,7 @@ class Verdict(StrEnum):
 # --- Pipeline ---
 
 class PipelineStage(StrEnum):
+    BYPASS = "bypass"
     HEURISTIC = "heuristic"
     ML = "ml"
     LLM = "llm"
@@ -98,6 +99,7 @@ class QuarantineAction(StrEnum):
 class PolicyListType(StrEnum):
     WHITELIST = "whitelist"
     BLACKLIST = "blacklist"
+    ALLOWLIST = "allowlist"
 
 
 class PolicyEntryType(StrEnum):

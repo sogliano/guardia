@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.pipeline.llm_explainer import LLMExplainer, _build_user_prompt
+from app.services.pipeline.llm_explainer import (
+    LLMExplainer,
+    _build_user_prompt,
+    _strip_html_tags,
+    _truncate_body,
+)
 from app.services.pipeline.models import EvidenceItem
 
 
@@ -168,3 +173,134 @@ async def test_call_openai_real_mock(mock_settings):
     assert result.explanation == "OpenAI analysis of threats..."
     assert result.provider == "openai"
     assert result.tokens_used == 120
+
+
+# ---------------------------------------------------------------------------
+# _strip_html_tags
+# ---------------------------------------------------------------------------
+
+def test_strip_html_tags_basic():
+    """Strips tags, keeps text."""
+    assert _strip_html_tags("<p>Hello <b>world</b></p>") == "Hello world"
+
+
+def test_strip_html_tags_script_style():
+    """Removes script and style blocks entirely."""
+    html = "<style>body{}</style><p>Hi</p><script>alert(1)</script>"
+    assert "alert" not in _strip_html_tags(html)
+    assert "Hi" in _strip_html_tags(html)
+
+
+def test_strip_html_tags_entities():
+    """Decodes HTML entities."""
+    assert _strip_html_tags("&amp; &lt; &gt; &quot;") == '& < > "'
+
+
+def test_strip_html_tags_empty():
+    assert _strip_html_tags("") == ""
+    assert _strip_html_tags(None) == ""  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# _truncate_body
+# ---------------------------------------------------------------------------
+
+def test_truncate_body_short():
+    """Short body returned as-is."""
+    assert _truncate_body("Hello world") == "Hello world"
+
+
+def test_truncate_body_long():
+    """Long body is truncated."""
+    body = "A" * 1000
+    result = _truncate_body(body, max_chars=100)
+    assert len(result) <= 120  # 100 + "[... truncated]"
+    assert result.endswith("[... truncated]")
+
+
+def test_truncate_body_sentence_boundary():
+    """Truncation respects sentence boundaries."""
+    body = "First sentence. " * 60  # ~960 chars
+    result = _truncate_body(body, max_chars=800)
+    assert result.endswith("sentence.\n\n[... truncated]")
+
+
+# ---------------------------------------------------------------------------
+# _build_user_prompt — enhanced fields
+# ---------------------------------------------------------------------------
+
+def test_build_prompt_includes_body_text():
+    """Body text appears in prompt."""
+    email = {
+        "sender_email": "a@b.com",
+        "subject": "Test",
+        "reply_to": None,
+        "urls": [],
+        "attachments": [],
+        "auth_results": {},
+        "body_text": "Please wire $5000 to this account.",
+    }
+    prompt = _build_user_prompt(
+        email, [], heuristic_score=0.1, ml_score=0.5,
+        ml_confidence=0.8, ml_available=True,
+    )
+    assert "wire $5000" in prompt
+    assert "Email Body Content" in prompt
+
+
+def test_build_prompt_html_fallback():
+    """When body_text is empty, HTML is stripped and used."""
+    email = {
+        "sender_email": "a@b.com",
+        "subject": "Test",
+        "reply_to": None,
+        "urls": [],
+        "attachments": [],
+        "auth_results": {},
+        "body_text": "",
+        "body_html": "<p>Click <a href='http://evil.com'>here</a></p>",
+    }
+    prompt = _build_user_prompt(
+        email, [], heuristic_score=0.1, ml_score=0.5,
+        ml_confidence=0.8, ml_available=True,
+    )
+    assert "Click" in prompt
+    assert "<p>" not in prompt
+
+
+def test_build_prompt_shows_urls():
+    """Actual URLs appear in prompt, not just count."""
+    email = {
+        "sender_email": "a@b.com",
+        "subject": "Test",
+        "reply_to": None,
+        "urls": ["https://evil.com/login", "https://bit.ly/abc"],
+        "attachments": [],
+        "auth_results": {},
+    }
+    prompt = _build_user_prompt(
+        email, [], heuristic_score=0.1, ml_score=0.5,
+        ml_confidence=0.8, ml_available=True,
+    )
+    assert "https://evil.com/login" in prompt
+    assert "https://bit.ly/abc" in prompt
+
+
+def test_build_prompt_shows_attachment_filenames():
+    """Attachment filenames appear in prompt."""
+    email = {
+        "sender_email": "a@b.com",
+        "subject": "Test",
+        "reply_to": None,
+        "urls": [],
+        "attachments": [
+            {"filename": "invoice.pdf.exe", "content_type": "application/octet-stream", "size": 51200},
+        ],
+        "auth_results": {},
+    }
+    prompt = _build_user_prompt(
+        email, [], heuristic_score=0.1, ml_score=0.5,
+        ml_confidence=0.8, ml_available=True,
+    )
+    assert "invoice.pdf.exe" in prompt
+    assert "50.0 KB" in prompt

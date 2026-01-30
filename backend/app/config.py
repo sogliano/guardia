@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
 
+    # Pipeline Allowlist (full bypass for trusted domains)
+    allowlist_domains: str = "strike.sh"
+    allowlist_require_spf: bool = True
+    allowlist_require_dkim: bool = False
+    allowlist_require_dmarc: bool = False
+
+    @property
+    def allowlist_domains_set(self) -> set[str]:
+        return {d.strip().lower() for d in self.allowlist_domains.split(",") if d.strip()}
+
     # ML Model
     ml_model_path: str = "./ml_models/distilbert-guardia"
     ml_max_seq_length: int = 256

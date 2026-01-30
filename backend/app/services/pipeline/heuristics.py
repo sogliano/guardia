@@ -16,6 +16,7 @@ False negatives (missing threats) are worse than false positives.
 Scoring is intentionally aggressive on auth failures.
 """
 
+import asyncio
 import re
 import time
 from urllib.parse import urlparse
@@ -55,6 +56,7 @@ from app.services.pipeline.heuristic_data import (
     URL_SHORTENER_DOMAINS,
 )
 from app.services.pipeline.models import EvidenceItem, HeuristicResult
+from app.services.pipeline.url_resolver import URLResolver, is_shortener
 
 logger = structlog.get_logger()
 
@@ -273,12 +275,41 @@ class HeuristicEngine:
     async def _analyze_urls(
         self, email_data: dict
     ) -> tuple[float, list[EvidenceItem]]:
-        """Analyze URLs for shorteners, IP-based, suspicious patterns."""
+        """Analyze URLs for shorteners, IP-based, suspicious patterns.
+
+        Shortened URLs are resolved to their final destination and the
+        resolved URL is also checked for IP-based, suspicious TLD, etc.
+        """
         evidences: list[EvidenceItem] = []
         urls: list[str] = email_data.get("urls", [])
 
         if not urls:
             return 0.0, []
+
+        # Resolve shortened URLs concurrently (5s global timeout)
+        resolver = URLResolver()
+        resolve_tasks: dict[str, asyncio.Task] = {}
+        for url in urls:
+            if is_shortener(url):
+                resolve_tasks[url] = asyncio.create_task(resolver.resolve(url))
+
+        resolved_map: dict[str, str | None] = {}
+        if resolve_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*resolve_tasks.values(), return_exceptions=True),
+                    timeout=5.0,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("url_resolution_global_timeout")
+
+            for url, task in resolve_tasks.items():
+                if task.done() and not task.cancelled():
+                    result = task.result()
+                    if isinstance(result, tuple):
+                        resolved_map[url] = result[0]  # resolved_url or None
+                    else:
+                        resolved_map[url] = None
 
         shortener_count = 0
         ip_count = 0
@@ -291,20 +322,43 @@ class HeuristicEngine:
             except Exception:
                 continue
 
-            # 1. URL shortener
+            # 1. URL shortener detection + resolution
             if hostname in URL_SHORTENER_DOMAINS:
                 shortener_count += 1
+                resolved_url = resolved_map.get(url)
+                resolved_host = ""
+                if resolved_url:
+                    try:
+                        resolved_host = (urlparse(resolved_url).hostname or "").lower()
+                    except Exception:
+                        pass
+
+                desc = (
+                    f"A URL in the email uses the shortener service "
+                    f"'{hostname}', which can be used to hide the "
+                    f"true destination of malicious links."
+                )
+                raw = {"url": url, "shortener": hostname}
+                if resolved_url:
+                    desc += f" Resolved destination: {resolved_url}"
+                    raw["resolved_url"] = resolved_url
+                    raw["resolved_hostname"] = resolved_host
+
                 evidences.append(EvidenceItem(
                     type=EvidenceType.URL_SHORTENER,
                     severity=Severity.MEDIUM,
-                    description=(
-                        f"A URL in the email uses the shortener service "
-                        f"'{hostname}', which can be used to hide the "
-                        f"true destination of malicious links from both "
-                        f"users and security tools."
-                    ),
-                    raw_data={"url": url, "shortener": hostname},
+                    description=desc,
+                    raw_data=raw,
                 ))
+
+                # Check resolved URL for additional threats
+                if resolved_url and resolved_host:
+                    ip_c, sus_c = self._check_resolved_url(
+                        resolved_url, resolved_host, url, evidences
+                    )
+                    ip_count += ip_c
+                    suspicious_count += sus_c
+                continue
 
             # 2. IP-based URL
             if _IP_URL_REGEX.match(url):
@@ -339,7 +393,7 @@ class HeuristicEngine:
                     ))
                     break
 
-        # Score: combine signals
+        # Score: combine signals (elevated scores for threats behind shorteners)
         score = 0.0
         if ip_count > 0:
             score = max(score, 0.7)
@@ -349,6 +403,59 @@ class HeuristicEngine:
             score = max(score, 0.3 + 0.1 * min(suspicious_count, 3))
 
         return min(1.0, score), evidences
+
+    def _check_resolved_url(
+        self,
+        resolved_url: str,
+        resolved_host: str,
+        original_url: str,
+        evidences: list[EvidenceItem],
+    ) -> tuple[int, int]:
+        """Check a resolved URL for IP-based and suspicious TLD patterns.
+
+        Returns (ip_count, suspicious_count) added.
+        """
+        ip_count = 0
+        suspicious_count = 0
+
+        if _IP_URL_REGEX.match(resolved_url):
+            ip_count += 1
+            evidences.append(EvidenceItem(
+                type=EvidenceType.URL_IP_BASED,
+                severity=Severity.HIGH,
+                description=(
+                    f"A shortened URL ({original_url}) resolves to an "
+                    f"IP-based destination ({resolved_host}). This is a "
+                    f"strong phishing indicator — the shortener hides "
+                    f"a raw IP address."
+                ),
+                raw_data={
+                    "url": resolved_url,
+                    "original_url": original_url,
+                },
+            ))
+
+        for tld in SUSPICIOUS_TLDS:
+            if resolved_host.endswith(tld.lstrip(".")):
+                suspicious_count += 1
+                evidences.append(EvidenceItem(
+                    type=EvidenceType.URL_SUSPICIOUS,
+                    severity=Severity.HIGH,
+                    description=(
+                        f"A shortened URL ({original_url}) resolves to "
+                        f"'{resolved_host}', which uses a suspicious TLD. "
+                        f"The shortener obscures a potentially malicious "
+                        f"destination."
+                    ),
+                    raw_data={
+                        "url": resolved_url,
+                        "original_url": original_url,
+                        "tld": tld,
+                    },
+                ))
+                break
+
+        return ip_count, suspicious_count
 
     # ------------------------------------------------------------------
     # Sub-engine 3: Keyword Analysis
