@@ -18,3 +18,25 @@ export async function fetchEmail(id: string): Promise<Email> {
   const { data } = await api.get<Email>(`/emails/${id}`)
   return data
 }
+
+export interface EmailIngestPayload {
+  message_id: string
+  sender_email: string
+  sender_name: string | null
+  reply_to: string | null
+  recipient_email: string
+  recipients_cc: string[]
+  subject: string | null
+  body_text: string | null
+  body_html: string | null
+  headers: Record<string, any>
+  urls: any[]
+  attachments: any[]
+  auth_results: Record<string, any>
+  received_at: string | null
+}
+
+export async function ingestEmail(payload: EmailIngestPayload): Promise<Email> {
+  const { data } = await api.post<Email>('/emails/ingest', payload)
+  return data
+}

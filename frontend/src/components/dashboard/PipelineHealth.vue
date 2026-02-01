@@ -14,11 +14,17 @@ const stageNames: Record<string, string> = {
 
 const stages = computed(() => {
   if (!props.health) return []
-  return Object.entries(props.health.stage_avg_ms).map(([key, avgMs]) => ({
-    name: stageNames[key] ?? key,
-    detail: `Avg ${avgMs.toFixed(1)}ms`,
-    color: avgMs < 5000 ? '#22C55E' : avgMs < 10000 ? '#F59E0B' : '#EF4444',
-  }))
+  const order = ['heuristic', 'ml', 'llm']
+  return order
+    .filter(key => key in props.health.stage_avg_ms)
+    .map(key => {
+      const avgMs = props.health.stage_avg_ms[key]
+      return {
+        name: stageNames[key] ?? key,
+        detail: `Avg ${avgMs.toFixed(1)}ms`,
+        color: avgMs < 5000 ? '#22C55E' : avgMs < 10000 ? '#F59E0B' : '#EF4444',
+      }
+    })
 })
 
 const overallStatus = computed(() => {

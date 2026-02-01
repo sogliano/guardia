@@ -21,7 +21,16 @@ onMounted(() => {
 
 <template>
   <div class="dashboard">
-    <GlobalFiltersBar />
+    <!-- Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <h1>Dashboard</h1>
+        <p class="subtitle">Real-time threat detection and security overview</p>
+      </div>
+      <div class="header-right">
+        <GlobalFiltersBar />
+      </div>
+    </div>
 
     <!-- KPI Row -->
     <div class="kpi-row">
@@ -169,5 +178,19 @@ onMounted(() => {
   .bottom-row {
     flex-direction: column;
   }
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  font-weight: 400;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 12px;
 }
 </style>

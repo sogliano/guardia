@@ -6,6 +6,7 @@ from app.api.v1 import (
     cases,
     dashboard,
     emails,
+    monitoring,
     notifications,
     policies,
     quarantine,
@@ -22,6 +23,7 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboar
 api_router.include_router(quarantine.router, prefix="/quarantine", tags=["quarantine"])
 api_router.include_router(policies.router, prefix="/policies", tags=["policies"])
 api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+api_router.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])

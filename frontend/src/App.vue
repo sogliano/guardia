@@ -10,7 +10,10 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 // Bridge Clerk's getToken to our axios interceptor
-setClerkGetToken(() => getToken.value())
+setClerkGetToken(async () => {
+  if (!getToken.value) return null
+  return await getToken.value()
+})
 
 // Guard all navigation: wait for Clerk to load, then enforce auth
 router.beforeEach(async (to) => {
