@@ -77,7 +77,6 @@ graph TB
         SLACK["Slack"]
         GOOGLE["Google Workspace"]
         OPENAI["OpenAI API"]
-        ANTHROPIC["Anthropic API"]
     end
 
     EMAIL -->|SMTP| SMTP
@@ -85,8 +84,7 @@ graph TB
     ORCH --> HEUR
     ORCH --> ML
     ORCH --> LLM
-    LLM -.->|Primary| ANTHROPIC
-    LLM -.->|Fallback| OPENAI
+    LLM -.-> OPENAI
     ORCH --> DB
     ORCH -->|Forward| GOOGLE
     ORCH -->|Alert| SLACK
@@ -127,7 +125,7 @@ flowchart LR
 |-------|------|--------|-------------|
 | **Heuristic Engine** | ~5ms | 30% | Rule-based analysis: SPF/DKIM/DMARC authentication, domain typosquatting, URL reputation, keyword patterns. 4 sub-engines with correlation bonuses. |
 | **ML Classifier** | ~18ms | 50% | DistilBERT fine-tuned (66M params) binary classifier. Input: subject + body. Output: phishing probability. |
-| **LLM Analyst** | ~2-3s | 20% | Independent AI risk assessment via Claude (primary) or GPT-4o-mini (fallback). Returns score + human-readable explanation. |
+| **LLM Analyst** | ~2-3s | 20% | Independent AI risk assessment via OpenAI GPT. Returns score + human-readable explanation. |
 
 **Final Score** = `0.30 x Heuristic + 0.50 x ML + 0.20 x LLM`
 
@@ -155,7 +153,7 @@ When layers are unavailable, weights redistribute automatically (e.g., Heuristic
 | **Validation** | Pydantic v2 |
 | **SMTP** | aiosmtpd |
 | **Logging** | structlog (JSON) |
-| **LLM** | Anthropic Claude + OpenAI GPT (httpx) |
+| **LLM** | OpenAI GPT (httpx) |
 | **Linting** | ruff, mypy |
 | **Tests** | pytest + pytest-asyncio |
 
@@ -295,7 +293,7 @@ python -m scripts.seed_test_emails
 |------------|---------|----------|----------|-----|
 | **Local** | localhost:8000 | localhost:3000 | Neon (shared) | gpt-4o-mini |
 | **Staging** | Cloud Run (us-east1) | Vercel | Neon (shared) | gpt-4o-mini |
-| **Production** | Cloud Run | Vercel | Neon (dedicated) | Claude + GPT fallback |
+| **Production** | Cloud Run | Vercel | Neon (dedicated) | OpenAI GPT |
 
 ### Configuration
 

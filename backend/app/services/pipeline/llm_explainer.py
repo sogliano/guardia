@@ -1,17 +1,18 @@
 """Layer 3: LLM Analyst (~2-3s).
 
-Primary: Claude (Anthropic API)
-Fallback: GPT-4.1 (OpenAI API)
+Provider: OpenAI GPT (structured output via response_format).
 
 The LLM provides an independent risk assessment: a phishing score (0.0-1.0)
 and a human-readable explanation. Its score is weighted into the final
 pipeline score alongside heuristic and ML scores.
+
+Temperature is set to 0 for deterministic scoring.
 """
 
 import json
+import re
 import time
 
-import anthropic
 import openai
 import structlog
 
@@ -20,28 +21,121 @@ from app.services.pipeline.models import EvidenceItem, LLMResult
 
 logger = structlog.get_logger()
 
-_SYSTEM_PROMPT = """You are Guard-IA, a corporate email fraud detection system.
-Analyze the email evidence and provide:
-1. A phishing risk score from 0.0 (legitimate) to 1.0 (certain phishing)
-2. A concise explanation of your assessment
+_SYSTEM_PROMPT = """\
+You are Guard-IA's LLM Analyst — a corporate email-fraud detection module specialized in phishing, BEC, credential theft, and impersonation.
 
-Respond ONLY with valid JSON in this exact format:
-{"score": 0.85, "explanation": "Brief explanation here..."}
+## Organization Context
+Protected organization: **Strike Security** (cybersecurity company).
+- Primary domain: **strike.sh**
+- Employee email pattern: firstname.lastname@strike.sh (e.g. nicolas.sogliano@strike.sh, tomas.sehabiaga@strike.sh, joaquin.varela@strike.sh)
+- Internal notification senders: addresses ending in @strike.sh (e.g. security@strike.sh, noreply@strike.sh)
+- Lookalike domains to watch: any domain resembling "strike" that is NOT exactly strike.sh (e.g. strikesecurity.com, strike-security.com, strikesecurity-it.com, str1ke.sh)
 
-Scoring guidelines:
-- 0.0-0.2: Clearly legitimate, no suspicious signals
-- 0.2-0.4: Minor suspicious signals, likely benign
-- 0.4-0.6: Moderately suspicious, warrants review
-- 0.6-0.8: Highly suspicious, likely phishing or fraud
-- 0.8-1.0: Almost certainly phishing, BEC, or impersonation
+When an email originates from @strike.sh with valid authentication, weigh this strongly toward legitimacy. When an email uses a lookalike domain, treat it as a high-risk impersonation signal regardless of content.
 
-Rules:
-- Be factual and cite specific evidence from the data provided
-- Maximum 200 words for the explanation
-- Consider ALL evidence: heuristic signals, ML score, email metadata, auth results
-- Your score is an independent assessment — you may agree or disagree with other stages
-- If evidence is weak or contradictory, reflect that uncertainty in your score
-- Structure explanation as: brief summary, then bullet points for key signals"""
+## Score Calibration
+0.00–0.15  Clearly legitimate — known sender, full auth pass, benign content
+0.15–0.30  Low risk — minor anomalies only (e.g. missing DKIM on known platform)
+0.30–0.50  Moderate — mixed signals, manual review warranted
+0.50–0.70  Suspicious — multiple fraud indicators present
+0.70–0.85  High risk — strong phishing / BEC pattern
+0.85–1.00  Near-certain threat — converging critical signals
+
+IMPORTANT: Do NOT inflate scores based on single weak signals. Authentication gaps alone (e.g. missing DKIM/DMARC on an otherwise normal email with no malicious URLs, no attachments, and no social engineering) should not push a score above 0.30. Reserve scores above 0.50 for emails where multiple independent threat signals converge.
+
+## Output Format
+Plain text with **bold** and bullet points only. No markdown headers (#).
+
+1. **Opening** (2–3 sentences): Overall threat level, primary attack vector, most critical signals.
+2. **Findings** — only include relevant bullets:
+   - **Authentication:** SPF/DKIM/DMARC assessment and what it means
+   - **Sender Domain:** Typosquatting, lookalike, suspicious TLD, or known legitimate
+   - **Social Engineering:** Urgency, pressure, fear, authority impersonation
+   - **Body Content:** Analyze message tone, requests for action, embedded credentials requests, social engineering tactics
+   - **Links / Reply-To:** Mismatches, shorteners, IP-based URLs, suspicious destinations
+   - **Attachments:** Dangerous extensions, double extensions, executable types
+   - **Impersonation:** Brand, executive, or vendor impersonation patterns
+   - **Automated Correlation:** Agreement or divergence with heuristic/ML scores
+3. **Closing** (1–2 sentences): Risk summary and recommended action (allow / monitor / quarantine / block).
+
+## Rules
+- Be factual; cite specific evidence from the data provided.
+- Bold key technical terms and domain names.
+- When body content is provided, analyze it for social engineering tactics, mismatches between subject and body, and requests for sensitive actions.
+- Your score is independent — you may agree or disagree with heuristic/ML.
+- Reflect uncertainty when evidence is weak or contradictory.
+- For legitimate emails, explain concisely why they are safe — do not pad with unnecessary caveats.
+- English, professional tone, 200–400 words.
+
+## Examples
+
+**Example 1 — Clear phishing (score: 0.92)**
+Input: From security@paypa1-security.com, Subject "Urgent: Account Suspended", SPF=fail, DKIM=fail, DMARC=fail, 2 URLs (bit.ly shorteners), heuristic 0.72, ML 0.88.
+Output: {"score": 0.92, "explanation": "This email is a **high-confidence credential phishing** attempt impersonating PayPal. The domain **paypa1-security.com** uses typosquatting (numeral 1 replacing l) and all authentication checks failed.\\n\\n- **Authentication:** Triple failure (SPF=fail, DKIM=fail, DMARC=fail) confirms the sender is unauthorized.\\n- **Sender Domain:** **paypa1-security.com** employs character substitution to mimic paypal.com.\\n- **Social Engineering:** Subject uses fear and urgency ('Account Suspended') to pressure immediate action.\\n- **Links / Reply-To:** Two **bit.ly** shorteners obscure actual destinations, a common filter-evasion technique.\\n- **Automated Correlation:** Both stages scored high (heuristic: 0.72, ML: 0.88), strongly aligned.\\n\\nThis email should be **blocked** immediately."}
+
+**Example 2 — Legitimate (score: 0.05)**
+Input: From notifications@vercel.com, Subject "Deployment successful: guardia-frontend", SPF=pass, DKIM=pass, DMARC=pass, 1 URL (vercel.com), heuristic 0.05, ML 0.03.
+Output: {"score": 0.05, "explanation": "This is a **legitimate deployment notification** from **Vercel**, a well-known cloud platform. All authentication passed and the content is a routine CI/CD alert.\\n\\n- **Authentication:** Full pass (SPF, DKIM, DMARC) confirms authorized origin.\\n- **Sender Domain:** **vercel.com** is a recognized hosting provider.\\n- **Automated Correlation:** Both stages scored very low (heuristic: 0.05, ML: 0.03), consistent.\\n\\nThis email should be **allowed** without restrictions."}
+
+**Example 3 — Internal notification (score: 0.08)**
+Input: From security@strike.sh, Subject "Password changed successfully", SPF=pass, DKIM=pass, DMARC=pass, 0 URLs, 0 attachments, heuristic 0.04, ML 0.06.
+Output: {"score": 0.08, "explanation": "This is a **legitimate internal notification** from Strike Security's own domain **strike.sh**. The email is a standard password-change confirmation with no suspicious elements.\\n\\n- **Authentication:** Full pass (SPF, DKIM, DMARC) confirms the email originates from Strike's authorized mail infrastructure.\\n- **Sender Domain:** **strike.sh** is the protected organization's primary domain. The sender address security@strike.sh matches known internal notification patterns.\\n- **Automated Correlation:** Both stages scored very low (heuristic: 0.04, ML: 0.06), consistent with legitimate internal traffic.\\n\\nThis email should be **allowed**. It is a routine internal IT notification."}
+
+**Example 4 — Ambiguous (score: 0.45)**
+Input: From contracts@vendor-payments-portal.net, Subject "Invoice #4892 - Payment Due", SPF=pass, DKIM=none, DMARC=none, 1 attachment (invoice_4892.pdf), heuristic 0.38, ML 0.42.
+Output: {"score": 0.45, "explanation": "This email presents a **moderately suspicious invoice** from an unverified vendor domain. Several characteristics warrant manual review.\\n\\n- **Authentication:** SPF passes but DKIM and DMARC are absent, reducing confidence in content integrity.\\n- **Sender Domain:** **vendor-payments-portal.net** is generic and does not identify a specific vendor — a pattern common in BEC campaigns.\\n- **Attachments:** A PDF (invoice_4892.pdf) is present. While standard for invoices, PDFs can contain embedded malicious links.\\n- **Automated Correlation:** Both stages scored moderate (heuristic: 0.38, ML: 0.42), reflecting ambiguity.\\n\\nThis email should be **monitored** and flagged for manual review."}"""
+
+# OpenAI response_format JSON schema for structured output
+_OPENAI_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "risk_assessment",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "score": {"type": "number"},
+                "explanation": {"type": "string"},
+            },
+            "required": ["score", "explanation"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+def _strip_html_tags(html: str) -> str:
+    """Strip HTML tags and convert to plain text."""
+    if not html:
+        return ""
+    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&")
+    text = text.replace("&lt;", "<").replace("&gt;", ">")
+    text = text.replace("&quot;", '"').replace("&#39;", "'")
+    text = re.sub(r" +", " ", text)
+    text = re.sub(r"\n\n+", "\n\n", text)
+    return text.strip()
+
+
+def _truncate_body(body: str, max_chars: int = 800) -> str:
+    """Truncate body text, breaking at sentence boundary when possible."""
+    if len(body) <= max_chars:
+        return body
+    truncated = body[:max_chars]
+    sentence_end = max(
+        truncated.rfind(". "),
+        truncated.rfind("! "),
+        truncated.rfind("? "),
+        truncated.rfind(".\n"),
+    )
+    if sentence_end > max_chars * 0.7:
+        truncated = truncated[: sentence_end + 1]
+    return truncated.rstrip() + "\n\n[... truncated]"
 
 
 def _build_user_prompt(
@@ -63,13 +157,26 @@ def _build_user_prompt(
     if email_data.get("reply_to"):
         parts.append(f"- **Reply-To:** {email_data['reply_to']}")
 
-    url_count = len(email_data.get("urls", []))
-    if url_count:
-        parts.append(f"- **URLs found:** {url_count}")
+    # URLs — show actual list (up to 5)
+    urls = email_data.get("urls", [])
+    if urls:
+        parts.append(f"- **URLs found:** {len(urls)}")
+        for url in urls[:5]:
+            parts.append(f"  - {url}")
+        if len(urls) > 5:
+            parts.append(f"  - ... and {len(urls) - 5} more")
 
-    attachment_count = len(email_data.get("attachments", []))
-    if attachment_count:
-        parts.append(f"- **Attachments:** {attachment_count}")
+    # Attachments — show filenames
+    attachments = email_data.get("attachments", [])
+    if attachments:
+        parts.append(f"- **Attachments:** {len(attachments)}")
+        for att in attachments[:5]:
+            fname = att.get("filename", "unknown")
+            ctype = att.get("content_type", "")
+            size_kb = (att.get("size", 0) or 0) / 1024
+            parts.append(f"  - {fname} ({ctype}, {size_kb:.1f} KB)")
+        if len(attachments) > 5:
+            parts.append(f"  - ... and {len(attachments) - 5} more")
 
     # Auth results
     auth = email_data.get("auth_results", {})
@@ -79,6 +186,15 @@ def _build_user_prompt(
             f"DKIM={auth.get('dkim', 'none')}, "
             f"DMARC={auth.get('dmarc', 'none')}"
         )
+
+    # Body content
+    body_text = email_data.get("body_text") or ""
+    if not body_text:
+        body_html = email_data.get("body_html") or ""
+        if body_html:
+            body_text = _strip_html_tags(body_html)
+    if body_text:
+        parts.append(f"\n## Email Body Content\n```\n{_truncate_body(body_text)}\n```")
 
     # Heuristic evidence
     if heuristic_evidences:
@@ -120,18 +236,40 @@ def _parse_llm_response(text: str) -> tuple[float, float, str]:
 
     try:
         data = json.loads(text)
-        score = float(data.get("score", 0.0))
-        score = min(1.0, max(0.0, score))
-        explanation = str(data.get("explanation", ""))
-        # Confidence is 1.0 if we got a valid score
-        return score, 1.0, explanation
     except (json.JSONDecodeError, ValueError, TypeError):
-        logger.warning("llm_response_parse_failed", response_preview=text[:200])
-        return 0.0, 0.0, text
+        # LLMs often put literal newlines inside JSON string values — fix them
+        try:
+            fixed = _fix_json_newlines(text)
+            data = json.loads(fixed)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            logger.warning("llm_response_parse_failed", response_preview=text[:200])
+            return 0.0, 0.0, text
+
+    score = float(data.get("score", 0.0))
+    score = min(1.0, max(0.0, score))
+    explanation = str(data.get("explanation", ""))
+    return score, 1.0, explanation
+
+
+def _fix_json_newlines(text: str) -> str:
+    """Fix literal newlines inside JSON string values.
+
+    LLMs sometimes return JSON like {"explanation": "line1\\nline2"} with
+    actual newline characters inside the string, which is invalid JSON.
+    """
+    # Find content between the outermost { }
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if not match:
+        return text
+    raw = match.group(0)
+    # Replace literal newlines inside strings with \\n
+    # Strategy: replace all newlines with \\n, which works because
+    # JSON keys/structure don't contain newlines
+    return raw.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
 
 
 class LLMExplainer:
-    """Generates risk assessment (score + explanation) using LLM."""
+    """Generates risk assessment (score + explanation) using OpenAI GPT."""
 
     async def explain(
         self,
@@ -142,22 +280,12 @@ class LLMExplainer:
         ml_confidence: float,
         ml_available: bool,
     ) -> LLMResult:
-        """Generate risk assessment. Try Claude first, fall back to OpenAI."""
+        """Generate risk assessment using OpenAI."""
         user_prompt = _build_user_prompt(
             email_data, heuristic_evidences, heuristic_score,
             ml_score, ml_confidence, ml_available,
         )
 
-        # Try Claude
-        if settings.anthropic_api_key:
-            try:
-                result = await self._call_claude(user_prompt)
-                if result.explanation:
-                    return result
-            except Exception as exc:
-                logger.warning("claude_analyst_failed", error=str(exc))
-
-        # Fallback to OpenAI
         if settings.openai_api_key:
             try:
                 result = await self._call_openai(user_prompt)
@@ -166,64 +294,29 @@ class LLMExplainer:
             except Exception as exc:
                 logger.warning("openai_analyst_failed", error=str(exc))
 
-        # Both failed
-        logger.error("llm_analyst_all_failed")
+        # Failed
+        logger.error("llm_analyst_failed")
         return LLMResult(
             explanation="LLM analysis unavailable. Review evidence manually.",
             provider="none",
             model_used="none",
         )
 
-    async def _call_claude(self, user_prompt: str) -> LLMResult:
-        """Call Anthropic API (Claude)."""
-        start = time.monotonic()
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-        response = await client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=512,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
-            timeout=10.0,
-        )
-
-        raw_text = response.content[0].text if response.content else ""
-        tokens = (response.usage.input_tokens or 0) + (response.usage.output_tokens or 0)
-        elapsed = int((time.monotonic() - start) * 1000)
-
-        score, confidence, explanation = _parse_llm_response(raw_text)
-
-        logger.info(
-            "claude_analysis_generated",
-            model=settings.anthropic_model,
-            score=round(score, 4),
-            tokens=tokens,
-            duration_ms=elapsed,
-        )
-
-        return LLMResult(
-            score=score,
-            confidence=confidence,
-            explanation=explanation,
-            provider="claude",
-            model_used=settings.anthropic_model,
-            tokens_used=tokens,
-            execution_time_ms=elapsed,
-        )
-
     async def _call_openai(self, user_prompt: str) -> LLMResult:
-        """Call OpenAI API (GPT-4.1 fallback)."""
+        """Call OpenAI API with structured output."""
         start = time.monotonic()
         client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
 
         response = await client.chat.completions.create(
             model=settings.openai_model,
-            max_tokens=512,
+            max_tokens=1024,
+            temperature=0,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            timeout=10.0,
+            response_format=_OPENAI_RESPONSE_FORMAT,
+            timeout=15.0,
         )
 
         raw_text = ""
@@ -238,6 +331,7 @@ class LLMExplainer:
 
         elapsed = int((time.monotonic() - start) * 1000)
 
+        # Structured output guarantees valid JSON, but keep fallback
         score, confidence, explanation = _parse_llm_response(raw_text)
 
         logger.info(

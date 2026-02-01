@@ -12,7 +12,7 @@ guardia/
 └── infra/      → Docker / Nginx / GCP
 ```
 
-**Pipeline:** Heuristics (~5ms) → DistilBERT ML (~18ms) → LLM Explainer (2-3s, Claude/GPT-4.1 fallback). LLM explains only, never decides.
+**Pipeline:** Heuristics (~5ms) → DistilBERT ML (~18ms) → LLM Explainer (2-3s, OpenAI GPT). LLM explains only, never decides.
 
 **Thresholds:** ALLOW < 0.3, WARN 0.3-0.6, QUARANTINE ≥ 0.8
 

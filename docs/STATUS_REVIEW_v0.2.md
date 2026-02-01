@@ -28,7 +28,7 @@
 - 3-layer pipeline is fully operational: Heuristic (~5ms) + ML (~18ms) + LLM (~2-3s)
 - Weighted scoring with graceful degradation (auto-adjusts if layers unavailable)
 - Heuristic engine is comprehensive: auth/domain/URL/keyword sub-engines with correlation bonuses
-- LLM Explainer has Claude primary + GPT fallback
+- LLM Explainer uses OpenAI GPT
 - Fail-open design in SMTP gateway — if pipeline crashes, email forwards
 - 20-email test suite validated scoring coherence (7 allowed, 5 warned, 6 quarantined, 2 blocked)
 
@@ -60,7 +60,7 @@
 
 ## 3. BUGS (Must fix)
 
-### Critical
+### Critical - DONE
 
 | # | Bug | Location | Impact |
 |---|-----|----------|--------|
@@ -71,7 +71,7 @@
 | B5 | **`fp_reviews` not in CaseDetail type** — CaseDetailView accesses `caseData.fp_reviews?.length` which is always undefined | `frontend/src/types/case.ts:121-125` + `CaseDetailView.vue:592` | FP review count never shown |
 | B6 | **`p95_duration_ms` hardcoded to 0.0** in pipeline health response | `backend/app/services/dashboard_service.py:243` | Pipeline health shows wrong metric |
 
-### High
+### High - DONE
 
 | # | Bug | Location | Impact |
 |---|-----|----------|--------|
@@ -82,7 +82,7 @@
 
 ---
 
-## 4. SECURITY GAPS
+## 4. SECURITY GAPS - TO DO
 
 | # | Issue | Location | Severity |
 |---|-------|----------|----------|
@@ -95,7 +95,7 @@
 
 ---
 
-## 5. NON-FUNCTIONAL UI ELEMENTS
+## 5. NON-FUNCTIONAL UI ELEMENTS - DONE
 
 Buttons/features that are rendered but do nothing:
 
@@ -114,7 +114,7 @@ Buttons/features that are rendered but do nothing:
 
 ---
 
-## 6. UNUSED CODE / DEAD CODE
+## 6. UNUSED CODE / DEAD CODE - DONE
 
 ### Components created but never imported (14 total):
 - `components/shared/RiskBadge.vue`
@@ -194,7 +194,7 @@ Buttons/features that are rendered but do nothing:
 | C1 | NotificationsView uses PrimeVue (Button, Tag, ProgressSpinner) while rest of app uses custom dark-theme CSS |
 | C2 | Email scores show `toFixed(2)` in EmailExplorerView but percentage in CasesView — inconsistent format |
 | C3 | No i18n framework — all UI text hardcoded, Spanish mixed in CaseDetailView threat descriptions (lines 110-141) |
-| C4 | Lazy imports inside methods (`import torch`, `import anthropic`, `import openai`) violate project's "imports at top" rule |
+| C4 | Lazy imports inside methods (`import torch`, `import openai`) violate project's "imports at top" rule |
 | C5 | `datetime.utcnow()` deprecated usage in report_service.py (should use `datetime.now(timezone.utc)`) |
 
 ---

@@ -29,7 +29,7 @@
 - 3-layer pipeline fully operational: Heuristic (~5ms) + ML (~18ms) + LLM (~2-3s)
 - Weighted scoring with graceful degradation (auto-adjusts if layers unavailable)
 - Heuristic engine is comprehensive: auth/domain/URL/keyword sub-engines with correlation bonuses
-- LLM Explainer has Claude primary + GPT fallback
+- LLM Explainer uses OpenAI GPT
 - Fail-open design in SMTP gateway — if pipeline crashes, email forwards
 - 20-email test suite validated scoring coherence (7 allowed, 5 warned, 6 quarantined, 2 blocked)
 - **NEW:** Pipeline timeout enforced via `asyncio.wait_for()` (30s configurable)
@@ -199,7 +199,7 @@ All dead code identified in the original review has been removed:
 | C1 | NotificationsView used PrimeVue components | FIXED — replaced with custom dark-theme CSS, `material-symbols-rounded` icons |
 | C2 | Score format inconsistent (decimal vs percentage) | FIXED — unified to `(score * 100).toFixed(0) + '%'` everywhere |
 | C3 | Spanish mixed in CaseDetailView threat descriptions | FIXED — all translated to English |
-| C4 | Lazy imports inside methods violated "imports at top" rule | FIXED — `torch`/`transformers` at top with `try/except`, `anthropic`/`openai` at top |
+| C4 | Lazy imports inside methods violated "imports at top" rule | FIXED — `torch`/`transformers` at top with `try/except`, `openai` at top |
 | C5 | `datetime.utcnow()` deprecated usage | FIXED — uses `datetime.now(timezone.utc)` |
 
 **No known style inconsistencies remain.**

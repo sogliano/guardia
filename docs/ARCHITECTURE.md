@@ -54,7 +54,7 @@ graph TB
             ORCH["Pipeline Orchestrator"]
             HEUR["Heuristic Engine ~5ms"]
             ML["ML Classifier DistilBERT ~18ms"]
-            LLM["LLM Analyst Claude/GPT ~2-3s"]
+            LLM["LLM Analyst GPT ~2-3s"]
         end
 
         subgraph Backend["FastAPI Backend :8000"]
@@ -74,7 +74,6 @@ graph TB
         SLACK["Slack Webhooks"]
         GOOGLE["Google Workspace Email Relay"]
         OPENAI["OpenAI API"]
-        ANTHROPIC["Anthropic API"]
     end
 
     EMAIL -->|SMTP| SMTP
@@ -83,8 +82,7 @@ graph TB
     ORCH --> HEUR
     ORCH --> ML
     ORCH --> LLM
-    LLM -.->|Primary| ANTHROPIC
-    LLM -.->|Fallback| OPENAI
+    LLM -.-> OPENAI
     ORCH -->|Score + Verdict| DB
     ORCH -->|"forward allowed/warned"| GOOGLE
     ORCH -->|"high risk alert"| SLACK
@@ -180,8 +178,7 @@ DistilBERT fine-tuned binary classifier (66M parameters).
 
 Independent AI risk assessment providing a score and human-readable explanation.
 
-- **Primary:** Claude (Anthropic API)
-- **Fallback:** GPT-4o-mini / GPT-4.1 (OpenAI API)
+- **Provider:** OpenAI GPT
 - **Output:** JSON `{"score": 0.85, "explanation": "..."}`
 - **Scoring guidelines:**
   - 0.0-0.2: Clearly legitimate
@@ -271,7 +268,7 @@ backend/app/
     │   ├── heuristics.py     # Rule-based analysis
     │   ├── heuristic_data.py # Pattern databases
     │   ├── ml_classifier.py  # DistilBERT inference
-    │   ├── llm_explainer.py  # Claude/GPT risk assessment
+    │   ├── llm_explainer.py  # GPT risk assessment
     │   └── models.py         # Pipeline data models
     ├── email_service.py
     ├── case_service.py
@@ -627,7 +624,7 @@ sequenceDiagram
 |------------|---------|---------|----------|----------|-----|
 | **Local** | Development | localhost:8000 | localhost:3000 | Neon (shared) | gpt-4o-mini |
 | **Staging** | Team testing | Cloud Run | Vercel | Neon (shared) | gpt-4o-mini |
-| **Production** | _(future)_ | Cloud Run | Vercel | Neon (dedicated) | Claude + GPT-4.1 fallback |
+| **Production** | _(future)_ | Cloud Run | Vercel | Neon (dedicated) | OpenAI GPT |
 
 ### 9.2 Multi-Environment Configuration
 
@@ -741,8 +738,7 @@ Services:
 | **Clerk** | Authentication (JWT) | Free (10K MAU) |
 | **Vercel** | Frontend hosting (CDN) | Free (Hobby) |
 | **Google Cloud Run** | Backend hosting (container) | Free tier (2M requests/mo) |
-| **OpenAI API** | LLM Analyst (staging) | Pay-per-use |
-| **Anthropic API** | LLM Analyst (production) | Pay-per-use |
+| **OpenAI API** | LLM Analyst | Pay-per-use |
 | **Slack API** | Alert notifications | Free (webhooks) |
 | **Google Workspace** | Email relay target | Company account |
 
@@ -850,9 +846,7 @@ guardia/
 | `THRESHOLD_WARN` | `0.6` | Score below = warned |
 | `THRESHOLD_QUARANTINE` | `0.8` | Score below = quarantined, above = blocked |
 | `PIPELINE_ML_ENABLED` | `false` | Enable ML classifier stage |
-| `ANTHROPIC_API_KEY` | — | Claude API key (primary LLM) |
-| `ANTHROPIC_MODEL` | `claude-opus-4-5-20251101` | Claude model ID |
-| `OPENAI_API_KEY` | — | OpenAI API key (fallback LLM) |
+| `OPENAI_API_KEY` | — | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model ID |
 | `ML_MODEL_PATH` | `./ml_models/distilbert-guardia` | Path to DistilBERT model |
 | `ML_MAX_SEQ_LENGTH` | `256` | Max tokenizer sequence length |

@@ -76,7 +76,6 @@ graph TB
         SLACK["Slack"]
         GOOGLE["Google Workspace"]
         OPENAI["OpenAI API"]
-        ANTHROPIC["Anthropic API"]
     end
 
     EMAIL -->|SMTP| SMTP
@@ -84,8 +83,7 @@ graph TB
     ORCH --> HEUR
     ORCH --> ML
     ORCH --> LLM
-    LLM -.->|Primario| ANTHROPIC
-    LLM -.->|Fallback| OPENAI
+    LLM -.-> OPENAI
     ORCH --> DB
     ORCH -->|Reenviar| GOOGLE
     ORCH -->|Alerta| SLACK
@@ -126,7 +124,7 @@ flowchart LR
 |------|--------|------|-------------|
 | **Motor Heuristico** | ~5ms | 30% | Analisis basado en reglas: autenticacion SPF/DKIM/DMARC, typosquatting de dominios, reputacion de URLs, patrones de keywords. 4 sub-motores con bonificaciones por correlacion. |
 | **Clasificador ML** | ~18ms | 50% | Clasificador binario DistilBERT fine-tuned (66M params). Input: asunto + cuerpo. Output: probabilidad de phishing. |
-| **Analista LLM** | ~2-3s | 20% | Evaluacion de riesgo independiente via Claude (primario) o GPT-4o-mini (fallback). Retorna score + explicacion en lenguaje natural. |
+| **Analista LLM** | ~2-3s | 20% | Evaluacion de riesgo independiente via OpenAI GPT. Retorna score + explicacion en lenguaje natural. |
 
 **Score Final** = `0.30 x Heuristico + 0.50 x ML + 0.20 x LLM`
 
@@ -154,7 +152,7 @@ Cuando alguna capa no esta disponible, los pesos se redistribuyen automaticament
 | **Validacion** | Pydantic v2 |
 | **SMTP** | aiosmtpd |
 | **Logging** | structlog (JSON) |
-| **LLM** | Anthropic Claude + OpenAI GPT (httpx) |
+| **LLM** | OpenAI GPT (httpx) |
 | **Linting** | ruff, mypy |
 | **Tests** | pytest + pytest-asyncio |
 
@@ -294,7 +292,7 @@ python -m scripts.seed_test_emails
 |----------|---------|----------|---------------|-----|
 | **Local** | localhost:8000 | localhost:3000 | Neon (compartida) | gpt-4o-mini |
 | **Staging** | Cloud Run (us-east1) | Vercel | Neon (compartida) | gpt-4o-mini |
-| **Produccion** | Cloud Run | Vercel | Neon (dedicada) | Claude + GPT fallback |
+| **Produccion** | Cloud Run | Vercel | Neon (dedicada) | OpenAI GPT |
 
 ### Configuracion
 

@@ -104,3 +104,28 @@ SUSPICIOUS_EXTENSIONS: set[str] = {
 
 # Double extension patterns (e.g., "invoice.pdf.exe")
 DOUBLE_EXTENSION_PATTERN = r"\.\w{2,5}\.(exe|scr|bat|cmd|com|pif|vbs|js|ps1|msi|hta)$"
+
+# --- Header Analysis ---
+# Suspicious X-Mailer / User-Agent values (mass-mailing tools)
+SUSPICIOUS_MAILERS: set[str] = {
+    "phpmailer", "swiftmailer", "phpmail", "leaf phpmailer",
+    "mail.php", "sendmail", "postfix-mta", "mass mailer",
+    "bulk mailer", "email blaster", "turbo mailer",
+    "atomic mail sender", "group mail", "mail merge",
+    "gammadyne mailer", "mailchimp-mandrill",  # mandrill abused
+    "sendinblue", "mailgun",  # legitimate but watch context
+}
+
+# Known legitimate mail platform signatures in Message-ID
+# Format: if sender claims to be from X, Message-ID should contain one of these
+MSGID_DOMAIN_MAP: dict[str, set[str]] = {
+    "gmail.com": {"mail.gmail.com", "google.com"},
+    "outlook.com": {"outlook.com", "microsoft.com", "hotmail.com"},
+    "hotmail.com": {"outlook.com", "microsoft.com", "hotmail.com"},
+    "yahoo.com": {"yahoo.com", "mail.yahoo.com"},
+    "icloud.com": {"icloud.com", "me.com", "apple.com"},
+    "protonmail.com": {"protonmail.com", "proton.me"},
+}
+
+# Maximum expected hop count for common providers
+MAX_EXPECTED_HOPS = 5

@@ -137,8 +137,6 @@ async def seed_and_analyze():
     print("  Guard-IA Pipeline Test — 20 emails (LLM Analyst enabled)")
     print(f"  DB: {settings.database_url[:50]}...")
     print(f"  OpenAI model: {settings.openai_model}")
-    print(f"  Anthropic model: {settings.anthropic_model}")
-    print(f"  Anthropic key set: {bool(settings.anthropic_api_key)}")
     print(f"  OpenAI key set: {bool(settings.openai_api_key)}")
     print(f"{'='*70}\n")
 

@@ -5,6 +5,7 @@ import type { CaseDetail, Analysis, Evidence, CaseNote } from '@/types/case'
 import { fetchCaseDetail, addCaseNote, updateCaseNote, resolveCase, createFPReview } from '@/services/caseService'
 import { scoreColor } from '@/utils/colors'
 import { formatDate, capitalize } from '@/utils/formatters'
+import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
 const router = useRouter()
@@ -155,7 +156,7 @@ const stageIcons: Record<string, string> = {
 const stageDescs: Record<string, string> = {
   heuristic: 'Deterministic rules: SPF, DKIM, DMARC, domain reputation, URL analysis, urgency patterns',
   ml: 'DistilBERT fine-tuned classifier (66M params) — probabilistic risk scoring',
-  llm: 'Independent AI risk scoring and natural language explanation (Claude / GPT-4.1 fallback)',
+  llm: 'Independent AI risk scoring and natural language explanation (OpenAI GPT)',
 }
 
 const evidenceTypeLabels: Record<string, string> = {
@@ -222,8 +223,8 @@ function stageStatusColor(analysis: Analysis): string {
   return 'var(--text-muted)'
 }
 
-async function loadData() {
-  loading.value = true
+async function loadData(silent = false) {
+  if (!silent) loading.value = true
   error.value = ''
   try {
     caseData.value = await fetchCaseDetail(caseId)
@@ -272,7 +273,7 @@ async function handleAddNote() {
   try {
     await addCaseNote(caseId, { content: newNote.value.trim() })
     newNote.value = ''
-    await loadData()
+    await loadData(true)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to add note'
   } finally {
@@ -296,7 +297,7 @@ async function handleUpdateNote(note: CaseNote) {
     await updateCaseNote(caseData.value.id, note.id, editingNoteContent.value.trim())
     editingNoteId.value = null
     editingNoteContent.value = ''
-    await loadData()
+    await loadData(true)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to update note'
   }
@@ -444,8 +445,11 @@ onMounted(loadData)
           <h3 class="card-title">
             <span class="material-symbols-rounded">smart_toy</span>
             AI Analysis Summary
+            <span v-if="llmAnalysis.score != null" class="llm-score-badge" :style="{ color: scoreColor(llmAnalysis.score) }">
+              {{ (llmAnalysis.score * 100).toFixed(0) }}%
+            </span>
           </h3>
-          <p class="llm-explanation">{{ llmAnalysis.explanation }}</p>
+          <div class="llm-explanation" v-html="renderMarkdown(llmAnalysis.explanation)"></div>
           <div class="llm-meta">
             <span v-if="llmAnalysis.execution_time_ms">{{ formatMs(llmAnalysis.execution_time_ms) }}</span>
           </div>
@@ -934,7 +938,7 @@ onMounted(loadData)
               </div>
 
               <!-- LLM explanation -->
-              <p v-if="expandedStages.has(analysis.id) && analysis.explanation" class="stage-v2-explanation">{{ analysis.explanation }}</p>
+              <div v-if="expandedStages.has(analysis.id) && analysis.explanation" class="stage-v2-explanation" v-html="renderMarkdown(analysis.explanation)"></div>
 
               <!-- Evidences -->
               <div v-if="expandedStages.has(analysis.id) && analysis.evidences?.length" class="stage-v2-evidences">
@@ -1071,7 +1075,6 @@ onMounted(loadData)
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  max-width: 1200px;
   font-family: var(--font-mono);
 }
 
@@ -1391,12 +1394,70 @@ onMounted(loadData)
 
 /* LLM Explanation */
 .llm-explanation {
-  font-family: var(--font-family);
-  font-size: var(--font-base);
+  font-family: var(--font-mono);
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.7;
   margin: 0;
-  white-space: pre-wrap;
+}
+
+.llm-explanation :deep(*) {
+  font-family: inherit;
+}
+
+.llm-explanation :deep(h2),
+.llm-explanation :deep(h3),
+.llm-explanation :deep(h4) {
+  color: var(--text-primary);
+  font-weight: 700;
+  margin: 14px 0 6px;
+}
+
+.llm-explanation :deep(h2) { font-size: 14px; }
+.llm-explanation :deep(h3) { font-size: 13px; }
+.llm-explanation :deep(h4) { font-size: 12px; }
+
+.llm-explanation :deep(h2:first-child),
+.llm-explanation :deep(h3:first-child),
+.llm-explanation :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+.llm-explanation :deep(p) {
+  margin: 0 0 8px;
+}
+
+.llm-explanation :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.llm-explanation :deep(ul) {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.llm-explanation :deep(li) {
+  margin-bottom: 6px;
+}
+
+.llm-explanation :deep(strong) {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.llm-explanation :deep(code) {
+  background: rgba(0, 212, 255, 0.08);
+  color: #00D4FF;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.llm-score-badge {
+  margin-left: 10px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .llm-meta {
@@ -2423,12 +2484,58 @@ onMounted(loadData)
 }
 
 .stage-v2-explanation {
-  font-family: var(--font-family);
-  font-size: var(--font-base);
+  font-family: var(--font-mono);
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 12px 0 0 30px;
-  white-space: pre-wrap;
+}
+
+.stage-v2-explanation :deep(*) {
+  font-family: inherit;
+}
+
+.stage-v2-explanation :deep(h2),
+.stage-v2-explanation :deep(h3),
+.stage-v2-explanation :deep(h4) {
+  color: var(--text-primary);
+  font-weight: 700;
+  margin: 12px 0 4px;
+}
+
+.stage-v2-explanation :deep(h2) { font-size: 14px; }
+.stage-v2-explanation :deep(h3) { font-size: 13px; }
+.stage-v2-explanation :deep(h4) { font-size: 12px; }
+
+.stage-v2-explanation :deep(h2:first-child),
+.stage-v2-explanation :deep(h3:first-child),
+.stage-v2-explanation :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+.stage-v2-explanation :deep(p) {
+  margin: 0 0 6px;
+}
+
+.stage-v2-explanation :deep(ul) {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.stage-v2-explanation :deep(li) {
+  margin-bottom: 4px;
+}
+
+.stage-v2-explanation :deep(strong) {
+  color: var(--text-primary);
+}
+
+.stage-v2-explanation :deep(code) {
+  background: rgba(0, 212, 255, 0.08);
+  color: #00D4FF;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 
 .stage-v2-evidences {
@@ -2617,5 +2724,35 @@ onMounted(loadData)
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--font-base);
+}
+
+@media (max-width: 1000px) {
+  .case-detail {
+    padding: var(--space-md);
+  }
+
+  .info-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .stage-v2-explanation {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .case-detail {
+    padding: var(--space-sm);
+    gap: var(--space-sm);
+  }
+
+  .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tabs {
+    overflow-x: auto;
+  }
 }
 </style>

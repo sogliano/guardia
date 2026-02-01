@@ -333,6 +333,14 @@
   text-overflow: ellipsis;
 }
 
+.cell-category {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
 .score-val {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -344,6 +352,10 @@
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: 12px;
+}
+
+.case-row {
+  cursor: pointer;
 }
 
 /* ── Pagination ── */

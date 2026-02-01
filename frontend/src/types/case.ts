@@ -26,6 +26,9 @@ export interface Case {
   email_subject: string | null
   email_sender: string | null
   email_received_at: string | null
+  heuristic_score: number | null
+  ml_score: number | null
+  llm_score: number | null
 }
 
 export interface CaseList {

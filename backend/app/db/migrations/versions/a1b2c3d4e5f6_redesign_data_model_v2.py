@@ -469,8 +469,7 @@ def upgrade() -> None:
         (gen_random_uuid(), 'warn_threshold', '0.3', now(), now()),
         (gen_random_uuid(), 'auto_release_hours', '48', now(), now()),
         (gen_random_uuid(), 'max_pipeline_timeout_ms', '30000', now(), now()),
-        (gen_random_uuid(), 'llm_primary_provider', '"claude"', now(), now()),
-        (gen_random_uuid(), 'llm_fallback_provider', '"openai"', now(), now()),
+        (gen_random_uuid(), 'llm_primary_provider', '"openai"', now(), now()),
         (gen_random_uuid(), 'notification_retention_days', '90', now(), now())
         """
     )

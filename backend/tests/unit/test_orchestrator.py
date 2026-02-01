@@ -377,7 +377,7 @@ async def test_analyze_full_flow(
     MockMLGetter.return_value.predict = AsyncMock(return_value=ml_result)
 
     # LLM
-    llm_result = LLMResult(explanation="Looks ok", provider="claude", model_used="c", tokens_used=10)
+    llm_result = LLMResult(explanation="Looks ok", provider="openai", model_used="gpt-test", tokens_used=10)
     MockLLMExplainer.return_value.explain = AsyncMock(return_value=llm_result)
 
     orch = PipelineOrchestrator(mock_db)

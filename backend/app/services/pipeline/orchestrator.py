@@ -28,6 +28,7 @@ from app.models.case import Case
 from app.models.email import Email
 from app.models.evidence import Evidence
 from app.services.alert_service import AlertService
+from app.services.pipeline.bypass_checker import BypassChecker
 from app.services.pipeline.heuristics import HeuristicEngine
 from app.services.pipeline.llm_explainer import LLMExplainer
 from app.services.pipeline.ml_classifier import get_ml_classifier
@@ -87,6 +88,47 @@ class PipelineOrchestrator:
         await self.db.flush()
 
         logger.info("pipeline_started", email_id=str(email_id), case_id=str(case.id))
+
+        # 2b. Allowlist bypass check
+        bypass_checker = BypassChecker(self.db)
+        should_bypass, bypass_reason = await bypass_checker.should_bypass(email_data)
+        if should_bypass:
+            pipeline_duration = int((time.monotonic() - pipeline_start) * 1000)
+            await self._persist_analysis(
+                case_id=case.id,
+                stage=PipelineStage.BYPASS,
+                score=0.0,
+                confidence=1.0,
+                explanation=bypass_reason,
+                metadata={"bypass": True},
+                execution_time_ms=pipeline_duration,
+                evidences=[],
+            )
+            case.status = CaseStatus.ANALYZED
+            case.final_score = 0.0
+            case.risk_level = RiskLevel.LOW
+            case.verdict = Verdict.ALLOWED
+            case.threat_category = ThreatCategory.CLEAN
+            case.pipeline_duration_ms = pipeline_duration
+            await self.db.flush()
+
+            logger.info(
+                "pipeline_bypassed",
+                case_id=str(case.id),
+                reason=bypass_reason,
+                duration_ms=pipeline_duration,
+            )
+            return PipelineResult(
+                case_id=case.id,
+                final_score=0.0,
+                risk_level=RiskLevel.LOW,
+                verdict=Verdict.ALLOWED,
+                threat_category=ThreatCategory.CLEAN,
+                heuristic=HeuristicResult(),
+                ml=MLResult(),
+                llm=LLMResult(explanation=bypass_reason),
+                pipeline_duration_ms=pipeline_duration,
+            )
 
         # 3. Heuristic analysis
         heuristic_engine = HeuristicEngine(self.db)

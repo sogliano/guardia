@@ -3,14 +3,12 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCasesStore } from '@/stores/cases'
-import { useQuarantineStore } from '@/stores/quarantine'
 import { UserButton } from '@clerk/vue'
 import type { UserRole } from '@/types/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const casesStore = useCasesStore()
-const quarantineStore = useQuarantineStore()
 
 interface MenuItem {
   label: string
@@ -23,7 +21,6 @@ interface MenuItem {
 const allMenuItems: MenuItem[] = [
   { label: 'Dashboard', icon: 'dashboard', to: '/' },
   { label: 'Cases', icon: 'folder', to: '/cases', badgeKey: 'cases' },
-  { label: 'Quarantine', icon: 'shield', to: '/quarantine', badgeKey: 'quarantine' },
   { label: 'Emails', icon: 'mail', to: '/emails' },
   { label: 'Notifications', icon: 'notifications', to: '/notifications' },
 ]
@@ -37,7 +34,6 @@ const menuItems = computed(() => {
 function getBadge(key: string | undefined): number | null {
   if (!key) return null
   if (key === 'cases' && casesStore.total > 0) return casesStore.total
-  if (key === 'quarantine' && quarantineStore.total > 0) return quarantineStore.total
   return null
 }
 

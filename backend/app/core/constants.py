@@ -27,6 +27,7 @@ class Verdict(StrEnum):
 # --- Pipeline ---
 
 class PipelineStage(StrEnum):
+    BYPASS = "bypass"
     HEURISTIC = "heuristic"
     ML = "ml"
     LLM = "llm"
@@ -66,6 +67,11 @@ class EvidenceType(StrEnum):
     # Attachments
     ATTACHMENT_SUSPICIOUS_EXT = "attachment_suspicious_ext"
     ATTACHMENT_DOUBLE_EXT = "attachment_double_ext"
+    # Header analysis
+    HEADER_EXCESSIVE_HOPS = "header_excessive_hops"
+    HEADER_SUSPICIOUS_MAILER = "header_suspicious_mailer"
+    HEADER_MSGID_MISMATCH = "header_msgid_mismatch"
+    HEADER_MISSING_STANDARD = "header_missing_standard"
     # ML
     ML_HIGH_SCORE = "ml_high_score"
     # Identity
@@ -93,6 +99,7 @@ class QuarantineAction(StrEnum):
 class PolicyListType(StrEnum):
     WHITELIST = "whitelist"
     BLACKLIST = "blacklist"
+    ALLOWLIST = "allowlist"
 
 
 class PolicyEntryType(StrEnum):
