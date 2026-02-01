@@ -302,14 +302,27 @@ class HeuristicEngine:
                 )
             except asyncio.TimeoutError:
                 logger.warning("url_resolution_global_timeout")
+                # Cancel all pending tasks to prevent resource leaks
+                for task in resolve_tasks.values():
+                    if not task.done():
+                        task.cancel()
+                # Wait for tasks to clean up properly
+                try:
+                    await asyncio.gather(*resolve_tasks.values(), return_exceptions=True)
+                except asyncio.CancelledError:
+                    pass
 
+            # Collect results from completed tasks only
             for url, task in resolve_tasks.items():
                 if task.done() and not task.cancelled():
-                    result = task.result()
-                    if isinstance(result, tuple):
-                        resolved_map[url] = result[0]  # resolved_url or None
-                    else:
-                        resolved_map[url] = None
+                    try:
+                        result = task.result()
+                        if isinstance(result, tuple):
+                            resolved_map[url] = result[0]  # resolved_url or None
+                        else:
+                            resolved_map[url] = None
+                    except asyncio.CancelledError:
+                        pass
 
         shortener_count = 0
         ip_count = 0

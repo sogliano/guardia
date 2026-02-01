@@ -25,7 +25,7 @@ function setTab(tab: TabId) {
   router.replace({ query: tab === 'all' ? {} : { tab } })
 }
 
-const searchQuery = ref('')
+const searchQuery = ref((route.query.search as string) || '')
 const filterRisk = ref<string[]>(RISK_OPTIONS.slice())
 const filterAction = ref<string[]>(ACTION_OPTIONS.slice())
 const filterStatus = ref<string[]>(STATUS_OPTIONS.slice())
@@ -47,6 +47,10 @@ const sortCol = ref<string | null>(null)
 const sortDir = ref<SortDir>('asc')
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(() => route.query.search, (newSearch) => {
+  searchQuery.value = (newSearch as string) || ''
+})
 
 const naTotalPages = computed(() => Math.ceil(needsActionCases.value.length / naPageSize.value))
 const paginatedNeedsCases = computed(() => {

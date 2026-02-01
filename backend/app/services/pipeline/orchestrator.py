@@ -27,7 +27,6 @@ from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.email import Email
 from app.models.evidence import Evidence
-from app.services.alert_service import AlertService
 from app.services.pipeline.bypass_checker import BypassChecker
 from app.services.pipeline.heuristics import HeuristicEngine
 from app.services.pipeline.llm_explainer import LLMExplainer
@@ -221,12 +220,8 @@ class PipelineOrchestrator:
 
         await self.db.flush()
 
+        # TODO: Alert service removed - re-implement if needed
         # Evaluate alert rules and fire matching alerts (Slack, etc.)
-        try:
-            alert_svc = AlertService(self.db)
-            await alert_svc.evaluate_and_fire(case)
-        except Exception as exc:
-            logger.error("alert_evaluation_error", error=str(exc), case_id=str(case.id))
 
         logger.info(
             "pipeline_completed",
@@ -310,8 +305,8 @@ class PipelineOrchestrator:
         No ML:           60% heuristic + 40% LLM
         Only heuristic:  100% heuristic
         """
-        has_ml = ml.model_available and ml.confidence > 0
-        has_llm = llm.confidence > 0
+        has_ml = ml.model_available and ml.confidence is not None and ml.confidence > 0
+        has_llm = llm.confidence is not None and llm.confidence > 0
 
         if has_ml and has_llm:
             score = (
