@@ -8,6 +8,8 @@ import { RISK_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import MultiSelect from '@/components/common/MultiSelect.vue'
 import LoadingState from '@/components/common/LoadingState.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
+import FormInput from '@/components/common/FormInput.vue'
 import { ingestEmail } from '@/services/emailService'
 
 const store = useEmailsStore()
@@ -162,54 +164,40 @@ onMounted(() => {
           </button>
         </div>
         <form @submit.prevent="submitIngest" class="modal-body">
-          <div class="form-group">
-            <label>Message ID</label>
-            <input
-              v-model="ingestForm.message_id"
-              type="text"
-              required
-              class="form-input"
-              :class="{ 'input-error': validationErrors.message_id }"
-            />
-            <span v-if="validationErrors.message_id" class="error-text">
-              {{ validationErrors.message_id }}
-            </span>
-          </div>
-          <div class="form-group">
-            <label>Sender Email *</label>
-            <input
-              v-model="ingestForm.sender_email"
-              type="email"
-              required
-              class="form-input"
-              placeholder="attacker@example.com"
-              :class="{ 'input-error': validationErrors.sender_email }"
-            />
-            <span v-if="validationErrors.sender_email" class="error-text">
-              {{ validationErrors.sender_email }}
-            </span>
-          </div>
-          <div class="form-group">
-            <label>Sender Name</label>
-            <input v-model="ingestForm.sender_name" type="text" class="form-input" placeholder="John Doe" />
-          </div>
-          <div class="form-group">
-            <label>Recipient Email *</label>
-            <input
-              v-model="ingestForm.recipient_email"
-              type="email"
-              required
-              class="form-input"
-              :class="{ 'input-error': validationErrors.recipient_email }"
-            />
-            <span v-if="validationErrors.recipient_email" class="error-text">
-              {{ validationErrors.recipient_email }}
-            </span>
-          </div>
-          <div class="form-group">
-            <label>Subject</label>
-            <input v-model="ingestForm.subject" type="text" class="form-input" placeholder="Urgent: Password Reset Required" />
-          </div>
+          <FormInput
+            v-model="ingestForm.message_id"
+            label="Message ID"
+            type="text"
+            required
+            :error="validationErrors.message_id"
+          />
+          <FormInput
+            v-model="ingestForm.sender_email"
+            label="Sender Email"
+            type="email"
+            required
+            placeholder="attacker@example.com"
+            :error="validationErrors.sender_email"
+          />
+          <FormInput
+            v-model="ingestForm.sender_name"
+            label="Sender Name"
+            type="text"
+            placeholder="John Doe"
+          />
+          <FormInput
+            v-model="ingestForm.recipient_email"
+            label="Recipient Email"
+            type="email"
+            required
+            :error="validationErrors.recipient_email"
+          />
+          <FormInput
+            v-model="ingestForm.subject"
+            label="Subject"
+            type="text"
+            placeholder="Urgent: Password Reset Required"
+          />
           <div class="form-group">
             <label>Body Text</label>
             <textarea v-model="ingestForm.body_text" class="form-textarea" rows="6" placeholder="Email body content..."></textarea>
@@ -257,11 +245,7 @@ onMounted(() => {
     <!-- Table -->
     <div class="table-card">
       <LoadingState v-if="store.loading" message="Loading emails..." />
-      <div v-else-if="store.error" class="error-state">
-        <span class="material-symbols-rounded">error</span>
-        <p>{{ store.error }}</p>
-        <button @click="store.fetchEmails()" class="retry-btn">Retry</button>
-      </div>
+      <ErrorState v-else-if="store.error" :message="store.error" :onRetry="() => store.fetchEmails()" />
       <table v-else class="data-table">
         <thead>
           <tr>
@@ -491,54 +475,6 @@ onMounted(() => {
   justify-content: flex-end;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
-}
-
-.input-error {
-  border-color: #EF4444;
-}
-
-.error-text {
-  color: #EF4444;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-  display: block;
-}
-
-.error-state {
-  text-align: center;
-  padding: 64px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.error-state span {
-  font-size: 48px;
-  color: #EF4444;
-}
-
-.error-state p {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: #EF4444;
-  margin: 0;
-}
-
-.retry-btn {
-  background: #EF4444;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.retry-btn:hover {
-  background: #DC2626;
 }
 
 .spinning {

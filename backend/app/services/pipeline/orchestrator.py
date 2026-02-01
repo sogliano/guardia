@@ -249,9 +249,6 @@ class PipelineOrchestrator:
 
         await self.db.flush()
 
-        # TODO: Alert service removed - re-implement if needed
-        # Evaluate alert rules and fire matching alerts (Slack, etc.)
-
         logger.info(
             "pipeline_completed",
             case_id=str(case.id),

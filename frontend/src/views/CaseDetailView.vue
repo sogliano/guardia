@@ -6,6 +6,7 @@ import { fetchCaseDetail, addCaseNote, updateCaseNote, resolveCase, createFPRevi
 import { scoreColor } from '@/utils/colors'
 import { formatDate, capitalize } from '@/utils/formatters'
 import { renderMarkdown } from '@/utils/markdown'
+import ErrorState from '@/components/common/ErrorState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -315,10 +316,7 @@ onMounted(loadData)
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="error-state">
-      <p>{{ error }}</p>
-      <button class="btn-primary" @click="loadData">Retry</button>
-    </div>
+    <ErrorState v-else-if="error" :message="error" :onRetry="loadData" />
 
     <!-- Content -->
     <template v-else-if="caseData">
@@ -1066,9 +1064,7 @@ onMounted(loadData)
     </template>
 
     <!-- Not found -->
-    <div v-else class="error-state">
-      <p>Case not found</p>
-    </div>
+    <ErrorState v-else message="Case not found" />
   </div>
 </template>
 
@@ -1082,8 +1078,7 @@ onMounted(loadData)
 }
 
 /* Loading / Error */
-.loading-state,
-.error-state {
+.loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;

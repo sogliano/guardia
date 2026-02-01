@@ -30,6 +30,17 @@ from app.core.constants import (
     ATTACHMENT_SUSPICIOUS_BONUS,
     AUTH_COMPOUND_2_BONUS,
     AUTH_COMPOUND_3_BONUS,
+    HEURISTIC_AUTH_DKIM_ERROR_SCORE,
+    HEURISTIC_AUTH_DKIM_FAIL_SCORE,
+    HEURISTIC_AUTH_DMARC_ERROR_SCORE,
+    HEURISTIC_AUTH_DMARC_FAIL_SCORE,
+    HEURISTIC_AUTH_DMARC_NONE_SCORE,
+    HEURISTIC_AUTH_HEADER_MAX_BONUS,
+    HEURISTIC_AUTH_REPLY_TO_MISMATCH_SCORE,
+    HEURISTIC_AUTH_SPF_ERROR_SCORE,
+    HEURISTIC_AUTH_SPF_FAIL_SCORE,
+    HEURISTIC_AUTH_SPF_NEUTRAL_SCORE,
+    HEURISTIC_AUTH_SPF_SOFTFAIL_SCORE,
     HEURISTIC_CORRELATION_BOOST_3,
     HEURISTIC_CORRELATION_BOOST_4,
     HEURISTIC_DOMAIN_SUSPICIOUS_TLD_SCORE,
@@ -639,7 +650,7 @@ class HeuristicEngine:
         # --- SPF ---
         spf = auth.get("spf", "none").lower()
         if spf == "fail":
-            score += 0.30
+            score += HEURISTIC_AUTH_SPF_FAIL_SCORE
             spf_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_SPF_FAIL,
@@ -652,7 +663,7 @@ class HeuristicEngine:
                 raw_data={"spf": spf},
             ))
         elif spf == "softfail":
-            score += 0.15
+            score += HEURISTIC_AUTH_SPF_SOFTFAIL_SCORE
             spf_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_SPF_FAIL,
@@ -668,7 +679,7 @@ class HeuristicEngine:
                 raw_data={"spf": spf},
             ))
         elif spf == "neutral":
-            score += 0.08
+            score += HEURISTIC_AUTH_SPF_NEUTRAL_SCORE
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_SPF_NEUTRAL,
                 severity=Severity.LOW,
@@ -681,7 +692,7 @@ class HeuristicEngine:
                 raw_data={"spf": spf},
             ))
         elif spf in ("temperror", "permerror"):
-            score += 0.10
+            score += HEURISTIC_AUTH_SPF_ERROR_SCORE
             spf_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_SPF_FAIL,
@@ -700,7 +711,7 @@ class HeuristicEngine:
         # --- DKIM ---
         dkim = auth.get("dkim", "none").lower()
         if dkim == "fail":
-            score += 0.25
+            score += HEURISTIC_AUTH_DKIM_FAIL_SCORE
             dkim_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DKIM_FAIL,
@@ -713,7 +724,7 @@ class HeuristicEngine:
                 raw_data={"dkim": dkim},
             ))
         elif dkim in ("temperror", "permerror"):
-            score += 0.10
+            score += HEURISTIC_AUTH_DKIM_ERROR_SCORE
             dkim_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DKIM_FAIL,
@@ -730,7 +741,7 @@ class HeuristicEngine:
         # --- DMARC ---
         dmarc = auth.get("dmarc", "none").lower()
         if dmarc == "fail":
-            score += 0.45
+            score += HEURISTIC_AUTH_DMARC_FAIL_SCORE
             dmarc_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DMARC_FAIL,
@@ -743,7 +754,7 @@ class HeuristicEngine:
                 raw_data={"dmarc": dmarc},
             ))
         elif dmarc == "none":
-            score += 0.15
+            score += HEURISTIC_AUTH_DMARC_NONE_SCORE
             dmarc_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DMARC_MISSING,
@@ -756,7 +767,7 @@ class HeuristicEngine:
                 raw_data={"dmarc": dmarc},
             ))
         elif dmarc in ("temperror", "permerror"):
-            score += 0.15
+            score += HEURISTIC_AUTH_DMARC_ERROR_SCORE
             dmarc_failed = True
             evidences.append(EvidenceItem(
                 type=EvidenceType.AUTH_DMARC_FAIL,
@@ -810,7 +821,7 @@ class HeuristicEngine:
             sender_domain = sender.rsplit("@", 1)[-1].lower() if "@" in sender else ""
             reply_domain = reply_to.rsplit("@", 1)[-1].lower() if "@" in reply_to else ""
             if sender_domain and reply_domain and sender_domain != reply_domain:
-                score += 0.20
+                score += HEURISTIC_AUTH_REPLY_TO_MISMATCH_SCORE
                 evidences.append(EvidenceItem(
                     type=EvidenceType.AUTH_REPLY_TO_MISMATCH,
                     severity=Severity.HIGH,
@@ -1061,4 +1072,4 @@ class HeuristicEngine:
                         raw_data={"sender_domain": sender_domain},
                     ))
 
-        return min(0.25, bonus), evidences
+        return min(HEURISTIC_AUTH_HEADER_MAX_BONUS, bonus), evidences

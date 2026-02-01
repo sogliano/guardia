@@ -1,8 +1,9 @@
 """Dashboard API endpoint: aggregate statistics."""
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.rate_limit import limiter
 from app.schemas.dashboard import DashboardResponse
 from app.services.dashboard_service import DashboardService
 
@@ -10,7 +11,9 @@ router = APIRouter()
 
 
 @router.get("", response_model=DashboardResponse)
+@limiter.limit("30/minute")
 async def get_dashboard(
+    request: Request,
     db: DbSession,
     user: CurrentUser,
     date_from: str | None = Query(None),

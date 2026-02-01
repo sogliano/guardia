@@ -12,6 +12,7 @@ import VerdictTimeline from '@/components/dashboard/VerdictTimeline.vue'
 import ScoreDistribution from '@/components/dashboard/ScoreDistribution.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import LoadingState from '@/components/common/LoadingState.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
 
 const store = useDashboardStore()
 
@@ -37,11 +38,7 @@ onMounted(() => {
     <LoadingState v-if="store.loading" message="Loading dashboard..." />
 
     <!-- Error State -->
-    <div v-else-if="store.error" class="error-state">
-      <span class="material-symbols-rounded">error</span>
-      <p>{{ store.error }}</p>
-      <button @click="store.fetchDashboard()" class="retry-btn">Retry</button>
-    </div>
+    <ErrorState v-else-if="store.error" :message="store.error" :onRetry="() => store.fetchDashboard()" />
 
     <!-- Content -->
     <template v-else>
@@ -206,43 +203,6 @@ onMounted(() => {
   flex-direction: row;
   align-items: baseline;
   gap: 12px;
-}
-
-.error-state {
-  text-align: center;
-  padding: 64px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.error-state span {
-  font-size: 48px;
-  color: #EF4444;
-}
-
-.error-state p {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: #EF4444;
-  margin: 0;
-}
-
-.retry-btn {
-  background: #EF4444;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.retry-btn:hover {
-  background: #DC2626;
 }
 
 .spinning {

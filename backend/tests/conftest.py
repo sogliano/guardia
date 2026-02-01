@@ -1,6 +1,9 @@
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from testcontainers.postgres import PostgresContainer
 
 
 @pytest.fixture
@@ -67,6 +70,55 @@ def make_mock_policies(blacklist=None, whitelist=None):
         self._whitelisted_domains = whitelist
 
     return _fake_load
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create event loop for async tests."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def db_container():
+    """Start PostgreSQL container for integration tests."""
+    with PostgresContainer("postgres:16-alpine") as postgres:
+        postgres.start()
+        yield postgres
+
+
+@pytest.fixture(scope="session")
+async def test_engine(db_container):
+    """Create async engine connected to test container."""
+    from app.db.base import Base
+
+    db_url = db_container.get_connection_url().replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
+
+    engine = create_async_engine(db_url, echo=False)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield engine
+
+    await engine.dispose()
+
+
+@pytest.fixture
+async def db_session(test_engine):
+    """Create a fresh DB session for each test."""
+    async_session = async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async with async_session() as session:
+        yield session
+        await session.rollback()
 
 
 @pytest.fixture

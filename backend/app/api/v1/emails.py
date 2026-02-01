@@ -2,10 +2,11 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import NotFoundError
+from app.core.rate_limit import limiter
 from app.schemas.email import EmailIngest, EmailList, EmailResponse
 from app.services.email_service import EmailService
 
@@ -13,7 +14,8 @@ router = APIRouter()
 
 
 @router.post("/ingest", response_model=EmailResponse, status_code=201)
-async def ingest_email(body: EmailIngest, db: DbSession, user: CurrentUser):
+@limiter.limit("100/minute")
+async def ingest_email(request: Request, body: EmailIngest, db: DbSession, user: CurrentUser):
     """Ingest a new email into the system."""
     svc = EmailService(db)
     email = await svc.ingest(body)
@@ -22,7 +24,9 @@ async def ingest_email(body: EmailIngest, db: DbSession, user: CurrentUser):
 
 
 @router.get("", response_model=EmailList)
+@limiter.limit("300/minute")
 async def list_emails(
+    request: Request,
     db: DbSession,
     user: CurrentUser,
     page: int = Query(1, ge=1),
@@ -48,7 +52,8 @@ async def list_emails(
 
 
 @router.get("/{email_id}", response_model=EmailResponse)
-async def get_email(email_id: UUID, db: DbSession, user: CurrentUser):
+@limiter.limit("500/minute")
+async def get_email(request: Request, email_id: UUID, db: DbSession, user: CurrentUser):
     """Get a single email by ID."""
     svc = EmailService(db)
     email = await svc.get_email(email_id)
