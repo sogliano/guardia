@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, RequireAnalyst
 from app.core.exceptions import NotFoundError
 from app.models.case import Case
 from app.schemas.analysis import AnalysisWithEvidencesResponse
@@ -36,6 +36,7 @@ async def _resolve_case_id(case_id_str: str, db: AsyncSession) -> UUID:
 @router.get("", response_model=CaseList)
 async def list_cases(
     db: DbSession,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     status: str | None = None,
@@ -63,7 +64,7 @@ async def list_cases(
 
 
 @router.get("/{case_id}", response_model=CaseResponse)
-async def get_case(case_id: str, db: DbSession):
+async def get_case(case_id: str, db: DbSession, user: CurrentUser):
     """Get a single case."""
     resolved_id = await _resolve_case_id(case_id, db)
     svc = CaseService(db)
@@ -74,7 +75,7 @@ async def get_case(case_id: str, db: DbSession):
 
 
 @router.get("/{case_id}/detail", response_model=CaseDetailResponse)
-async def get_case_detail(case_id: str, db: DbSession):
+async def get_case_detail(case_id: str, db: DbSession, user: CurrentUser):
     """Get case with all related data (email, analyses, evidences, notes, fp reviews)."""
     resolved_id = await _resolve_case_id(case_id, db)
     svc = CaseService(db)
@@ -86,7 +87,7 @@ async def get_case_detail(case_id: str, db: DbSession):
 
 @router.post("/{case_id}/resolve", response_model=CaseResponse)
 async def resolve_case(
-    case_id: str, body: CaseResolve, db: DbSession, user: CurrentUser
+    case_id: str, body: CaseResolve, db: DbSession, user: RequireAnalyst
 ):
     """Resolve a case with a final verdict."""
     resolved_id = await _resolve_case_id(case_id, db)
@@ -133,7 +134,7 @@ async def update_note(
 
 
 @router.get("/{case_id}/analyses", response_model=list[AnalysisWithEvidencesResponse])
-async def get_analyses(case_id: str, db: DbSession):
+async def get_analyses(case_id: str, db: DbSession, user: CurrentUser):
     """Get pipeline analyses for a case with their evidences."""
     resolved_id = await _resolve_case_id(case_id, db)
     svc = CaseService(db)
@@ -145,7 +146,7 @@ async def get_analyses(case_id: str, db: DbSession):
     "/{case_id}/fp-review", response_model=FPReviewResponse, status_code=201
 )
 async def create_fp_review(
-    case_id: str, body: FPReviewCreate, db: DbSession, user: CurrentUser
+    case_id: str, body: FPReviewCreate, db: DbSession, user: RequireAnalyst
 ):
     """Submit a false positive review for a case."""
     resolved_id = await _resolve_case_id(case_id, db)

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -33,7 +33,6 @@ class CaseService:
         """List cases with filters and pagination."""
         query = select(Case).options(
             selectinload(Case.email),
-            selectinload(Case.analyses),
         )
         joined = False
 
@@ -71,14 +70,51 @@ class CaseService:
         result = await self.db.execute(query)
         cases = result.scalars().all()
 
+        # Fetch only needed analyses (latest per case/stage) in one targeted query
+        case_ids = [case.id for case in cases]
+        analyses_map: dict[UUID, dict[str, float | None]] = {}
+
+        if case_ids:
+            # Subquery: get (case_id, stage, max_created_at) for each case/stage combo
+            latest_analysis_subq = (
+                select(
+                    Analysis.case_id,
+                    Analysis.stage,
+                    func.max(Analysis.created_at).label("max_created_at"),
+                )
+                .where(Analysis.case_id.in_(case_ids))
+                .group_by(Analysis.case_id, Analysis.stage)
+                .subquery()
+            )
+
+            # Join to get only the latest analysis per case/stage
+            analyses_stmt = select(Analysis).join(
+                latest_analysis_subq,
+                and_(
+                    Analysis.case_id == latest_analysis_subq.c.case_id,
+                    Analysis.stage == latest_analysis_subq.c.stage,
+                    Analysis.created_at == latest_analysis_subq.c.max_created_at,
+                ),
+            )
+
+            analyses_result = await self.db.execute(analyses_stmt)
+            all_analyses = analyses_result.scalars().all()
+
+            # Build map: {case_id: {stage: score}}
+            for analysis in all_analyses:
+                if analysis.case_id not in analyses_map:
+                    analyses_map[analysis.case_id] = {}
+                analyses_map[analysis.case_id][analysis.stage] = analysis.score
+
         items = []
         for case in cases:
-            stage_scores: dict[str, float | None] = {
-                "heuristic": None, "ml": None, "llm": None,
+            stage_scores = analyses_map.get(case.id, {})
+            # Ensure all stages are present with None as default
+            stage_scores = {
+                "heuristic": stage_scores.get("heuristic"),
+                "ml": stage_scores.get("ml"),
+                "llm": stage_scores.get("llm"),
             }
-            for analysis in case.analyses:
-                if analysis.stage in stage_scores:
-                    stage_scores[analysis.stage] = analysis.score
 
             item = {
                 "id": case.id,
@@ -133,7 +169,9 @@ class CaseService:
         self, case_id: UUID, verdict: str, user_id: UUID
     ) -> Case | None:
         """Resolve a case with a final verdict."""
-        case = await self.get_case(case_id)
+        stmt = select(Case).where(Case.id == case_id).with_for_update()
+        result = await self.db.execute(stmt)
+        case = result.scalar_one_or_none()
         if not case:
             return None
 

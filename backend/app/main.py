@@ -1,3 +1,5 @@
+import signal
+import sys
 import uuid
 from contextlib import asynccontextmanager
 
@@ -14,13 +16,24 @@ from app.api.middleware.logging import LoggingMiddleware
 from app.api.v1.router import api_router
 from app.config import settings
 from app.core.exceptions import PipelineError
-from app.db.session import engine
+from app.db.session import async_session_factory, engine
 
 logger = structlog.get_logger()
 
 
+def _setup_signal_handlers():
+    """Setup graceful shutdown on SIGTERM/SIGINT to close DB connections."""
+    def handle_shutdown(signum, frame):
+        logger.info("shutdown_signal_received", signal=signum)
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _setup_signal_handlers()
     logger.info("startup", env=settings.app_env, debug=settings.app_debug)
     yield
     await engine.dispose()
@@ -98,8 +111,6 @@ def create_app() -> FastAPI:
     async def health():
         db_ok = False
         try:
-            from app.db.session import async_session_factory
-
             async with async_session_factory() as session:
                 await session.execute(text("SELECT 1"))
                 db_ok = True

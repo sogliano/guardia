@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.schemas.monitoring import (
     HeuristicsMonitoringResponse,
     MLMonitoringResponse,
     MonitoringResponse,
+    ScoreAnalysisResponse,
 )
 from app.services.monitoring_service import MonitoringService
 
@@ -18,6 +19,7 @@ router = APIRouter()
 @router.get("")
 async def get_monitoring(
     db: DbSession,
+    user: CurrentUser,
     tab: str = Query("llm"),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
@@ -47,3 +49,15 @@ async def get_monitoring(
             status_code=400,
             detail=f"Invalid tab parameter: {tab}. Must be 'llm', 'ml', or 'heuristics'."
         )
+
+
+@router.get("/score-analysis", response_model=ScoreAnalysisResponse)
+async def get_score_analysis(
+    limit: int = Query(50, ge=1, le=200),
+    include_metrics: bool = Query(True),
+    db: DbSession = ...,
+    user: CurrentUser = ...,
+):
+    """Get detailed score breakdown for recent cases with engine agreement metrics."""
+    svc = MonitoringService(db)
+    return await svc.get_score_analysis(limit=limit, include_metrics=include_metrics)

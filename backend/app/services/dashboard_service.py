@@ -33,14 +33,20 @@ class DashboardService:
         else:
             trend_since = now - timedelta(days=30)
 
-        # Build set of email IDs matching sender filter (if any)
-        sender_email_ids = None
+        # Build sender filter subquery (if any) for JOIN instead of IN clause
+        sender_filter_subq = None
         if sender:
             safe = sender.replace("%", "\\%").replace("_", "\\_")
-            id_q = select(Email.id).where(Email.sender_email.ilike(f"%{safe}%"))
-            result = await self.db.execute(id_q)
-            sender_email_ids = [r[0] for r in result.all()]
-            if not sender_email_ids:
+            sender_filter_subq = (
+                select(Email.id)
+                .where(Email.sender_email.ilike(f"%{safe}%"))
+                .subquery()
+            )
+            # Check if any emails match the sender filter early
+            count_check = await self.db.execute(
+                select(func.count()).select_from(sender_filter_subq)
+            )
+            if (count_check.scalar() or 0) == 0:
                 return self._empty_stats()
 
         def _apply_case_filters(q):  # type: ignore[no-untyped-def]
@@ -48,8 +54,8 @@ class DashboardService:
                 q = q.where(Case.created_at >= date_from)
             if date_to:
                 q = q.where(Case.created_at <= date_to)
-            if sender_email_ids is not None:
-                q = q.where(Case.email_id.in_(sender_email_ids))
+            if sender_filter_subq is not None:
+                q = q.join(sender_filter_subq, Case.email_id == sender_filter_subq.c.id)
             return q
 
         def _apply_email_filters(q):  # type: ignore[no-untyped-def]
@@ -57,8 +63,8 @@ class DashboardService:
                 q = q.where(Email.created_at >= date_from)
             if date_to:
                 q = q.where(Email.created_at <= date_to)
-            if sender_email_ids is not None:
-                q = q.where(Email.id.in_(sender_email_ids))
+            if sender_filter_subq is not None:
+                q = q.join(sender_filter_subq, Email.id == sender_filter_subq.c.id)
             return q
 
         # Total emails
@@ -116,7 +122,7 @@ class DashboardService:
 
         # Daily trend
         daily_trend = await self._get_daily_trend(
-            trend_since, sender_email_ids=sender_email_ids, date_to=date_to,
+            trend_since, sender_filter_subq=sender_filter_subq, date_to=date_to,
         )
 
         # Threat categories
@@ -133,15 +139,15 @@ class DashboardService:
 
         pipeline_health = await self._get_pipeline_health()
         recent_cases = await self._get_recent_critical_cases(
-            sender_email_ids=sender_email_ids, date_from=date_from, date_to=date_to,
+            sender_filter_subq=sender_filter_subq, date_from=date_from, date_to=date_to,
         )
         active_alerts = await self._get_active_alerts()
         top_senders = await self._get_top_senders(date_from=date_from, date_to=date_to)
         verdict_trend = await self._get_verdict_trend(
-            trend_since, sender_email_ids=sender_email_ids, date_to=date_to,
+            trend_since, sender_filter_subq=sender_filter_subq, date_to=date_to,
         )
         score_distribution = await self._get_score_distribution(
-            sender_email_ids=sender_email_ids, date_from=date_from, date_to=date_to,
+            sender_filter_subq=sender_filter_subq, date_from=date_from, date_to=date_to,
         )
 
         return {
@@ -185,7 +191,7 @@ class DashboardService:
     async def _get_daily_trend(
         self,
         since: datetime,
-        sender_email_ids: list | None = None,
+        sender_filter_subq=None,  # type: ignore[no-untyped-def]
         date_to: str | None = None,
     ) -> list[dict]:
         """Get daily email count."""
@@ -198,8 +204,8 @@ class DashboardService:
         )
         if date_to:
             q = q.where(Case.created_at <= date_to)
-        if sender_email_ids is not None:
-            q = q.where(Case.email_id.in_(sender_email_ids))
+        if sender_filter_subq is not None:
+            q = q.join(sender_filter_subq, Case.email_id == sender_filter_subq.c.id)
         q = q.group_by(func.date(Case.created_at)).order_by(func.date(Case.created_at))
         result = await self.db.execute(q)
         return [
@@ -261,7 +267,7 @@ class DashboardService:
     async def _get_recent_critical_cases(
         self,
         limit: int = 10,
-        sender_email_ids: list | None = None,
+        sender_filter_subq=None,  # type: ignore[no-untyped-def]
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> list[dict]:
@@ -275,8 +281,8 @@ class DashboardService:
             q = q.where(Case.created_at >= date_from)
         if date_to:
             q = q.where(Case.created_at <= date_to)
-        if sender_email_ids is not None:
-            q = q.where(Case.email_id.in_(sender_email_ids))
+        if sender_filter_subq is not None:
+            q = q.join(sender_filter_subq, Case.email_id == sender_filter_subq.c.id)
         q = q.order_by(Case.created_at.desc()).limit(limit)
         result = await self.db.execute(q)
         cases = result.scalars().all()
@@ -315,7 +321,7 @@ class DashboardService:
     async def _get_verdict_trend(
         self,
         since: datetime,
-        sender_email_ids: list | None = None,
+        sender_filter_subq=None,  # type: ignore[no-untyped-def]
         date_to: str | None = None,
     ) -> list[dict]:
         """Get daily verdict counts for stacked area chart."""
@@ -330,8 +336,8 @@ class DashboardService:
         )
         if date_to:
             q = q.where(Case.created_at <= date_to)
-        if sender_email_ids is not None:
-            q = q.where(Case.email_id.in_(sender_email_ids))
+        if sender_filter_subq is not None:
+            q = q.join(sender_filter_subq, Case.email_id == sender_filter_subq.c.id)
         q = q.group_by(func.date(Case.created_at), Case.verdict).order_by(
             func.date(Case.created_at)
         )
@@ -360,7 +366,7 @@ class DashboardService:
 
     async def _get_score_distribution(
         self,
-        sender_email_ids: list | None = None,
+        sender_filter_subq=None,  # type: ignore[no-untyped-def]
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> list[dict]:
@@ -376,8 +382,8 @@ class DashboardService:
             q = q.where(Case.created_at >= date_from)
         if date_to:
             q = q.where(Case.created_at <= date_to)
-        if sender_email_ids is not None:
-            q = q.where(Case.email_id.in_(sender_email_ids))
+        if sender_filter_subq is not None:
+            q = q.join(sender_filter_subq, Case.email_id == sender_filter_subq.c.id)
         q = q.group_by("bucket").order_by("bucket")
         result = await self.db.execute(q)
 

@@ -8,7 +8,6 @@ from app.models.custom_rule import CustomRule
 from app.models.email import Email
 from app.models.evidence import Evidence
 from app.models.fp_review import FPReview
-from app.models.notification import Notification
 from app.models.policy_entry import PolicyEntry
 from app.models.quarantine_action import QuarantineActionRecord
 from app.models.setting import Setting
@@ -28,6 +27,5 @@ __all__ = [
     "CustomRule",
     "AlertRule",
     "AlertEvent",
-    "Notification",
     "Setting",
 ]

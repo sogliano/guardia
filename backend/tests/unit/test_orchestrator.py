@@ -22,29 +22,33 @@ def test_final_score_heuristic_only_when_ml_unavailable(orchestrator):
     """No ML → 100% heuristic score."""
     h = HeuristicResult(score=0.7)
     ml = MLResult(score=0.0, confidence=0.0, model_available=False)
-    assert orchestrator._calculate_final_score(h, ml) == 0.7
+    llm = LLMResult(score=0.0, confidence=0.0)
+    assert orchestrator._calculate_final_score(h, ml, llm) == 0.7
 
 
 def test_final_score_weighted_with_ml(orchestrator):
-    """ML available → 40% heuristic + 60% ML."""
+    """ML available (no LLM) → 40% heuristic + 60% ML."""
     h = HeuristicResult(score=0.5)
     ml = MLResult(score=0.8, confidence=0.9, model_available=True)
+    llm = LLMResult(score=0.0, confidence=0.0)
     expected = 0.5 * 0.4 + 0.8 * 0.6  # 0.2 + 0.48 = 0.68
-    assert abs(orchestrator._calculate_final_score(h, ml) - expected) < 0.001
+    assert abs(orchestrator._calculate_final_score(h, ml, llm) - expected) < 0.001
 
 
 def test_final_score_clamped_to_1(orchestrator):
     """Score never exceeds 1.0."""
     h = HeuristicResult(score=1.0)
     ml = MLResult(score=1.0, confidence=1.0, model_available=True)
-    assert orchestrator._calculate_final_score(h, ml) == 1.0
+    llm = LLMResult(score=1.0, confidence=1.0)
+    assert orchestrator._calculate_final_score(h, ml, llm) == 1.0
 
 
 def test_final_score_zero_floor(orchestrator):
     """Score never goes below 0.0."""
     h = HeuristicResult(score=0.0)
     ml = MLResult(score=0.0, confidence=0.0, model_available=False)
-    assert orchestrator._calculate_final_score(h, ml) == 0.0
+    llm = LLMResult(score=0.0, confidence=0.0)
+    assert orchestrator._calculate_final_score(h, ml, llm) == 0.0
 
 
 # ---------------------------------------------------------------------------

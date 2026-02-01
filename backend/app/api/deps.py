@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
+import structlog
 from fastapi import Depends
 from jwt.exceptions import PyJWTError
 from sqlalchemy import select
@@ -13,6 +14,8 @@ from app.core.security import verify_clerk_token
 from app.db.session import get_db
 from app.models.user import User
 from app.services.user_sync_service import sync_clerk_user
+
+logger = structlog.get_logger()
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -27,7 +30,8 @@ async def get_current_user(
     """
     try:
         payload = verify_clerk_token(token)
-    except PyJWTError:
+    except PyJWTError as e:
+        logger.error("Token verification failed", error=str(e))
         raise UnauthorizedError("Invalid or expired token")
 
     clerk_id: str | None = payload.get("sub")
@@ -40,7 +44,13 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if user is None:
-        user = await sync_clerk_user(db, clerk_id)
+        logger.info("User not found locally, attempting JIT provisioning", clerk_id=clerk_id)
+        try:
+            user = await sync_clerk_user(db, clerk_id)
+            logger.info("User created successfully via JIT", clerk_id=clerk_id, email=user.email)
+        except Exception as e:
+            logger.error("JIT provisioning failed", clerk_id=clerk_id, error=str(e), error_type=type(e).__name__)
+            raise
 
     if not user.is_active:
         raise ForbiddenError("User account is deactivated")
@@ -70,9 +80,9 @@ def require_role(*allowed_roles: str):
             raise ForbiddenError(f"Role '{user.role}' not authorized. Required: {required}")
         return user
 
-    return Depends(_check)
+    return _check
 
 
-RequireAdmin = require_role("administrator")
-RequireAnalyst = require_role("administrator", "analyst")
-RequireAuditor = require_role("administrator", "analyst", "auditor")
+RequireAdmin = Annotated[User, Depends(require_role("administrator"))]
+RequireAnalyst = Annotated[User, Depends(require_role("administrator", "analyst"))]
+RequireAuditor = Annotated[User, Depends(require_role("administrator", "analyst", "auditor"))]

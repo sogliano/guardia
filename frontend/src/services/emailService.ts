@@ -29,10 +29,10 @@ export interface EmailIngestPayload {
   subject: string | null
   body_text: string | null
   body_html: string | null
-  headers: Record<string, any>
-  urls: any[]
-  attachments: any[]
-  auth_results: Record<string, any>
+  headers: Record<string, unknown>
+  urls: unknown[]
+  attachments: unknown[]
+  auth_results: Record<string, unknown>
   received_at: string | null
 }
 

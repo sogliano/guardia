@@ -12,6 +12,7 @@ import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import QuarantineQueue from '@/components/cases/QuarantineQueue.vue'
 import MultiSelect from '@/components/common/MultiSelect.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -25,7 +26,7 @@ function setTab(tab: TabId) {
   router.replace({ query: tab === 'all' ? {} : { tab } })
 }
 
-const searchQuery = ref('')
+const searchQuery = ref((route.query.search as string) || '')
 const filterRisk = ref<string[]>(RISK_OPTIONS.slice())
 const filterAction = ref<string[]>(ACTION_OPTIONS.slice())
 const filterStatus = ref<string[]>(STATUS_OPTIONS.slice())
@@ -47,6 +48,10 @@ const sortCol = ref<string | null>(null)
 const sortDir = ref<SortDir>('asc')
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(() => route.query.search, (newSearch) => {
+  searchQuery.value = (newSearch as string) || ''
+})
 
 const naTotalPages = computed(() => Math.ceil(needsActionCases.value.length / naPageSize.value))
 const paginatedNeedsCases = computed(() => {
@@ -169,13 +174,13 @@ const sortedAllCases = computed(() => sortCases(store.cases, sortCol.value, sort
 function applyFilters() {
   store.setFilters({
     search: searchQuery.value || undefined,
-    risk_level: filterRisk.value.length > 0 && filterRisk.value.length < RISK_OPTIONS.length
+    risk_level: filterRisk.value.length === 1
       ? filterRisk.value[0]?.toLowerCase()
       : undefined,
-    verdict: filterAction.value.length > 0 && filterAction.value.length < ACTION_OPTIONS.length
+    verdict: filterAction.value.length === 1
       ? filterAction.value[0]?.toLowerCase()
       : undefined,
-    status: filterStatus.value.length > 0 && filterStatus.value.length < STATUS_OPTIONS.length
+    status: filterStatus.value.length === 1
       ? filterStatus.value[0]?.toLowerCase()
       : undefined,
     date_from: filterDateRange.value.from || undefined,
@@ -535,7 +540,7 @@ onMounted(() => {
 
     <!-- Table -->
     <div class="table-card">
-      <div v-if="store.loading" class="loading-state">Loading cases...</div>
+      <LoadingState v-if="store.loading" message="Loading cases..." />
       <table v-else class="data-table">
         <thead>
           <tr>
@@ -619,7 +624,7 @@ onMounted(() => {
             v-else
             class="page-btn"
             :class="{ active: p === store.page }"
-            @click="store.setPage(p as number)"
+            @click="typeof p === 'number' && store.setPage(p)"
           >{{ p }}</button>
         </template>
         <button

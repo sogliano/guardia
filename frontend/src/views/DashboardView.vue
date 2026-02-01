@@ -11,6 +11,7 @@ import ThreatCategories from '@/components/dashboard/ThreatCategories.vue'
 import VerdictTimeline from '@/components/dashboard/VerdictTimeline.vue'
 import ScoreDistribution from '@/components/dashboard/ScoreDistribution.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 
 const store = useDashboardStore()
 
@@ -32,9 +33,21 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- KPI Row -->
-    <div class="kpi-row">
-      <StatsCard
+    <!-- Loading State -->
+    <LoadingState v-if="store.loading" message="Loading dashboard..." />
+
+    <!-- Error State -->
+    <div v-else-if="store.error" class="error-state">
+      <span class="material-symbols-rounded">error</span>
+      <p>{{ store.error }}</p>
+      <button @click="store.fetchDashboard()" class="retry-btn">Retry</button>
+    </div>
+
+    <!-- Content -->
+    <template v-else>
+      <!-- KPI Row -->
+      <div class="kpi-row">
+        <StatsCard
         icon="mail"
         icon-color="#9CA3AF"
         label="Emails Analyzed"
@@ -105,8 +118,9 @@ onMounted(() => {
       <PipelineHealth :health="store.data?.pipeline_health ?? null" />
     </div>
 
-    <!-- Active Alerts -->
-    <ActiveAlerts :alerts="store.data?.active_alerts ?? []" />
+      <!-- Active Alerts -->
+      <ActiveAlerts :alerts="store.data?.active_alerts ?? []" />
+    </template>
   </div>
 </template>
 
@@ -192,5 +206,55 @@ onMounted(() => {
   flex-direction: row;
   align-items: baseline;
   gap: 12px;
+}
+
+.error-state {
+  text-align: center;
+  padding: 64px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.error-state span {
+  font-size: 48px;
+  color: #EF4444;
+}
+
+.error-state p {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: #EF4444;
+  margin: 0;
+}
+
+.retry-btn {
+  background: #EF4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: #DC2626;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

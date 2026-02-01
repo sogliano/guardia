@@ -32,6 +32,26 @@ from app.core.constants import (
     AUTH_COMPOUND_3_BONUS,
     HEURISTIC_CORRELATION_BOOST_3,
     HEURISTIC_CORRELATION_BOOST_4,
+    HEURISTIC_DOMAIN_SUSPICIOUS_TLD_SCORE,
+    HEURISTIC_DOMAIN_TYPOSQUATTING_SCORE,
+    HEURISTIC_HEADER_EXCESSIVE_HOPS_BONUS,
+    HEURISTIC_HEADER_MISSING_GMAIL_BONUS,
+    HEURISTIC_HEADER_MSGID_MISMATCH_BONUS,
+    HEURISTIC_HEADER_SUSPICIOUS_MAILER_BONUS,
+    HEURISTIC_IMPERSONATION_BONUS,
+    HEURISTIC_KEYWORD_CAPS_ABUSE_PENALTY,
+    HEURISTIC_KEYWORD_CAPS_ABUSE_THRESHOLD,
+    HEURISTIC_KEYWORD_FINANCIAL_BASE,
+    HEURISTIC_KEYWORD_FINANCIAL_INCREMENT,
+    HEURISTIC_KEYWORD_PHISHING_BASE,
+    HEURISTIC_KEYWORD_PHISHING_INCREMENT,
+    HEURISTIC_KEYWORD_URGENCY_BASE,
+    HEURISTIC_KEYWORD_URGENCY_INCREMENT,
+    HEURISTIC_URL_IP_BASED_SCORE,
+    HEURISTIC_URL_SHORTENER_BASE,
+    HEURISTIC_URL_SHORTENER_INCREMENT,
+    HEURISTIC_URL_SUSPICIOUS_BASE,
+    HEURISTIC_URL_SUSPICIOUS_INCREMENT,
     HEURISTIC_WEIGHT_AUTH,
     HEURISTIC_WEIGHT_DOMAIN,
     HEURISTIC_WEIGHT_KEYWORD,
@@ -170,7 +190,7 @@ class HeuristicEngine:
 
         # Impersonation signals boost keyword weight (BEC indicator)
         if impersonation_ev:
-            weighted += 0.10
+            weighted += HEURISTIC_IMPERSONATION_BONUS
 
         result.score = min(1.0, max(0.0, weighted))
         result.evidences = evidences
@@ -231,7 +251,7 @@ class HeuristicEngine:
         # 2. Suspicious TLD
         for tld in SUSPICIOUS_TLDS:
             if domain.endswith(tld):
-                score = max(score, 0.5)
+                score = max(score, HEURISTIC_DOMAIN_SUSPICIOUS_TLD_SCORE)
                 evidences.append(EvidenceItem(
                     type=EvidenceType.DOMAIN_SUSPICIOUS_TLD,
                     severity=Severity.MEDIUM,
@@ -249,9 +269,21 @@ class HeuristicEngine:
         for known in KNOWN_DOMAINS:
             if domain == known:
                 break
+
+            # Early exit: if length difference > 2, impossible Levenshtein <= 2
+            len_diff = abs(len(domain) - len(known))
+            if len_diff > 2:
+                continue
+
+            # Early exit: if domains don't share first char and have len diff,
+            # very likely dist > 2 (heuristic optimization)
+            if len(domain) > 0 and len(known) > 0:
+                if domain[0] != known[0] and len_diff > 0:
+                    continue
+
             dist = _levenshtein(domain, known)
             if 1 <= dist <= 2:
-                score = max(score, 0.8)
+                score = max(score, HEURISTIC_DOMAIN_TYPOSQUATTING_SCORE)
                 evidences.append(EvidenceItem(
                     type=EvidenceType.DOMAIN_TYPOSQUATTING,
                     severity=Severity.HIGH,
@@ -302,14 +334,27 @@ class HeuristicEngine:
                 )
             except asyncio.TimeoutError:
                 logger.warning("url_resolution_global_timeout")
+                # Cancel all pending tasks to prevent resource leaks
+                for task in resolve_tasks.values():
+                    if not task.done():
+                        task.cancel()
+                # Wait for tasks to clean up properly
+                try:
+                    await asyncio.gather(*resolve_tasks.values(), return_exceptions=True)
+                except asyncio.CancelledError:
+                    pass
 
+            # Collect results from completed tasks only
             for url, task in resolve_tasks.items():
                 if task.done() and not task.cancelled():
-                    result = task.result()
-                    if isinstance(result, tuple):
-                        resolved_map[url] = result[0]  # resolved_url or None
-                    else:
-                        resolved_map[url] = None
+                    try:
+                        result = task.result()
+                        if isinstance(result, tuple):
+                            resolved_map[url] = result[0]  # resolved_url or None
+                        else:
+                            resolved_map[url] = None
+                    except asyncio.CancelledError:
+                        pass
 
         shortener_count = 0
         ip_count = 0
@@ -396,11 +441,17 @@ class HeuristicEngine:
         # Score: combine signals (elevated scores for threats behind shorteners)
         score = 0.0
         if ip_count > 0:
-            score = max(score, 0.7)
+            score = max(score, HEURISTIC_URL_IP_BASED_SCORE)
         if shortener_count > 0:
-            score = max(score, 0.4 + 0.1 * min(shortener_count, 3))
+            score = max(
+                score,
+                HEURISTIC_URL_SHORTENER_BASE + HEURISTIC_URL_SHORTENER_INCREMENT * min(shortener_count, 3)
+            )
         if suspicious_count > 0:
-            score = max(score, 0.3 + 0.1 * min(suspicious_count, 3))
+            score = max(
+                score,
+                HEURISTIC_URL_SUSPICIOUS_BASE + HEURISTIC_URL_SUSPICIOUS_INCREMENT * min(suspicious_count, 3)
+            )
 
         return min(1.0, score), evidences
 
@@ -524,7 +575,7 @@ class HeuristicEngine:
         if len(words) > 10:
             caps_words = sum(1 for w in words if w.isupper() and len(w) > 2)
             caps_ratio = caps_words / len(words)
-            if caps_ratio > 0.3:
+            if caps_ratio > HEURISTIC_KEYWORD_CAPS_ABUSE_THRESHOLD:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.KEYWORD_CAPS_ABUSE,
                     severity=Severity.LOW,
@@ -541,13 +592,13 @@ class HeuristicEngine:
         # Score: weighted combination
         score = 0.0
         if phishing_hits:
-            score += 0.3 + 0.1 * min(len(phishing_hits), 4)
+            score += HEURISTIC_KEYWORD_PHISHING_BASE + HEURISTIC_KEYWORD_PHISHING_INCREMENT * min(len(phishing_hits), 4)
         if urgency_hits:
-            score += 0.2 + 0.05 * min(len(urgency_hits), 4)
+            score += HEURISTIC_KEYWORD_URGENCY_BASE + HEURISTIC_KEYWORD_URGENCY_INCREMENT * min(len(urgency_hits), 4)
         if financial_hits:
-            score += 0.15 + 0.05 * min(len(financial_hits), 3)
-        if len(words) > 10 and caps_ratio > 0.3:  # type: ignore[possibly-undefined]
-            score += 0.1
+            score += HEURISTIC_KEYWORD_FINANCIAL_BASE + HEURISTIC_KEYWORD_FINANCIAL_INCREMENT * min(len(financial_hits), 3)
+        if len(words) > 10 and caps_ratio > HEURISTIC_KEYWORD_CAPS_ABUSE_THRESHOLD:  # type: ignore[possibly-undefined]
+            score += HEURISTIC_KEYWORD_CAPS_ABUSE_PENALTY
 
         return min(1.0, score), evidences
 
@@ -918,7 +969,7 @@ class HeuristicEngine:
         received = headers.get("received", [])
         if isinstance(received, list) and len(received) > MAX_EXPECTED_HOPS:
             hop_count = len(received)
-            bonus += 0.08
+            bonus += HEURISTIC_HEADER_EXCESSIVE_HOPS_BONUS
             evidences.append(EvidenceItem(
                 type=EvidenceType.HEADER_EXCESSIVE_HOPS,
                 severity=Severity.MEDIUM,
@@ -940,7 +991,7 @@ class HeuristicEngine:
         if mailer:
             for suspicious in SUSPICIOUS_MAILERS:
                 if suspicious in mailer:
-                    bonus += 0.10
+                    bonus += HEURISTIC_HEADER_SUSPICIOUS_MAILER_BONUS
                     evidences.append(EvidenceItem(
                         type=EvidenceType.HEADER_SUSPICIOUS_MAILER,
                         severity=Severity.HIGH,
@@ -969,7 +1020,7 @@ class HeuristicEngine:
             if msgid_domain and sender_domain in MSGID_DOMAIN_MAP:
                 expected_domains = MSGID_DOMAIN_MAP[sender_domain]
                 if not any(exp in msgid_domain for exp in expected_domains):
-                    bonus += 0.12
+                    bonus += HEURISTIC_HEADER_MSGID_MISMATCH_BONUS
                     evidences.append(EvidenceItem(
                         type=EvidenceType.HEADER_MSGID_MISMATCH,
                         severity=Severity.HIGH,

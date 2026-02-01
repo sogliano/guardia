@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,12 +18,6 @@ class EmailService:
 
     async def ingest(self, data: EmailIngest) -> Email:
         """Create a new email record. Returns existing if message_id is duplicated."""
-        stmt = select(Email).where(Email.message_id == data.message_id)
-        result = await self.db.execute(stmt)
-        existing = result.scalar_one_or_none()
-        if existing:
-            return existing
-
         email = Email(
             message_id=data.message_id,
             sender_email=data.sender_email,
@@ -40,8 +35,17 @@ class EmailService:
             received_at=data.received_at,
         )
         self.db.add(email)
-        await self.db.flush()
-        return email
+        try:
+            await self.db.flush()
+            return email
+        except IntegrityError:
+            await self.db.rollback()
+            stmt = select(Email).where(Email.message_id == data.message_id)
+            result = await self.db.execute(stmt)
+            existing = result.scalar_one_or_none()
+            if existing:
+                return existing
+            raise
 
     async def list_emails(
         self,

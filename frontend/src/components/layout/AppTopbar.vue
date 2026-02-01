@@ -1,12 +1,41 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUser } from '@clerk/vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const { user: clerkUser } = useUser()
 const route = useRoute()
+const router = useRouter()
+
+const searchQuery = ref('')
+const searchActive = ref(false)
+
+function activateSearch() {
+  searchActive.value = true
+  nextTick(() => {
+    const input = document.querySelector('.search-input') as HTMLInputElement
+    input?.focus()
+  })
+}
+
+function submitSearch() {
+  if (searchQuery.value.trim()) {
+    router.push({
+      path: '/cases',
+      query: { search: searchQuery.value.trim() }
+    })
+    searchActive.value = false
+    searchQuery.value = ''
+  }
+}
+
+function deactivateSearch() {
+  setTimeout(() => {
+    searchActive.value = false
+  }, 200)
+}
 
 const breadcrumbs = computed(() => {
   const crumbs: { label: string; path?: string }[] = []
@@ -26,12 +55,7 @@ const breadcrumbs = computed(() => {
         quarantine: 'Quarantine',
         emails: 'Emails',
         monitoring: 'Monitoring',
-        policies: 'Policies',
-        alerts: 'Alerts',
-        reports: 'Reports',
-        settings: 'Settings',
         'fp-review': 'FP Review',
-        notifications: 'Notifications',
       }
       crumbs.push({ label: pageNames[name] ?? name })
     }
@@ -51,17 +75,23 @@ const breadcrumbs = computed(() => {
     </div>
 
     <div class="topbar-center">
-      <div class="search-box">
+      <div class="search-box" @click="activateSearch">
         <span class="material-symbols-rounded search-icon">search</span>
-        <span class="search-placeholder">Search cases, emails, domains...</span>
+        <input
+          v-if="searchActive"
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Search cases, emails, domains..."
+          @keyup.enter="submitSearch"
+          @blur="deactivateSearch"
+        />
+        <span v-else class="search-placeholder">Search cases, emails, domains...</span>
       </div>
     </div>
 
     <div class="topbar-right">
-      <RouterLink to="/notifications" class="icon-btn">
-        <span class="material-symbols-rounded">notifications</span>
-      </RouterLink>
-      <RouterLink to="/settings" class="user-chip">
+      <div class="user-chip">
         <img
           v-if="clerkUser?.imageUrl"
           :src="clerkUser.imageUrl"
@@ -72,7 +102,7 @@ const breadcrumbs = computed(() => {
           {{ (authStore.user?.full_name ?? 'U')[0] }}
         </div>
         <span class="user-chip-name">{{ authStore.user?.full_name ?? 'User' }}</span>
-      </RouterLink>
+      </div>
     </div>
   </header>
 </template>
@@ -153,6 +183,22 @@ const breadcrumbs = computed(() => {
   font-size: 12px;
   color: var(--text-muted);
   letter-spacing: 0.2px;
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  flex: 1;
+  width: 100%;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .topbar-right {

@@ -232,17 +232,11 @@
   box-shadow: var(--glow-cyan);
 }
 
-.loading-state {
-  padding: 48px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
 .empty-state {
   padding: 48px;
   text-align: center;
   color: var(--text-muted);
+  font-family: var(--font-mono);
   font-size: 14px;
 }
 

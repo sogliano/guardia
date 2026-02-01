@@ -23,7 +23,6 @@ const allMenuItems: MenuItem[] = [
   { label: 'Cases', icon: 'folder', to: '/cases', badgeKey: 'cases' },
   { label: 'Emails', icon: 'mail', to: '/emails' },
   { label: 'Monitoring', icon: 'monitoring', to: '/monitoring' },
-  { label: 'Notifications', icon: 'notifications', to: '/notifications' },
 ]
 
 const menuItems = computed(() => {

@@ -28,8 +28,12 @@ def _clean_url(url: str) -> str:
 
 def _build_engine_kwargs() -> dict:
     """Build engine kwargs adapting to local or remote (Neon/serverless) database."""
+    # Only echo SQL in local dev AND if explicitly enabled via env var
+    # This prevents excessive logging in production/staging
+    echo_sql = settings.app_env == "local" and settings.app_debug
+
     kwargs: dict = {
-        "echo": settings.app_debug,
+        "echo": echo_sql,
         "pool_pre_ping": True,
         "pool_recycle": 3600,
     }
@@ -42,9 +46,10 @@ def _build_engine_kwargs() -> dict:
             "connect_args": {"ssl": ssl_ctx},
         })
     else:
+        # Reduced pool for local dev to avoid too many idle connections
         kwargs.update({
-            "pool_size": 10,
-            "max_overflow": 20,
+            "pool_size": 3,
+            "max_overflow": 5,
         })
 
     return kwargs

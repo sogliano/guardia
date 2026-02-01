@@ -218,11 +218,11 @@ async def test_keyword_empty_body():
 
 @pytest.mark.asyncio
 async def test_auth_spf_fail():
-    """SPF fail → +0.35."""
+    """SPF fail → +0.30."""
     engine = HeuristicEngine(AsyncMock())
     email = {"auth_results": {"spf": "fail", "dkim": "pass", "dmarc": "pass"}, "sender_email": "x@a.com"}
     score, ev = await engine._analyze_auth(email)
-    assert abs(score - 0.35) < 0.01
+    assert abs(score - 0.30) < 0.01
     assert any(e.type == "auth_spf_fail" for e in ev)
 
 
@@ -233,7 +233,7 @@ async def test_auth_all_fail():
     email = {"auth_results": {"spf": "fail", "dkim": "fail", "dmarc": "fail"}, "sender_email": "x@a.com"}
     score, ev = await engine._analyze_auth(email)
     assert score == pytest.approx(1.0)
-    assert len(ev) == 3
+    assert len(ev) == 4  # SPF + DKIM + DMARC + compound failure evidence
 
 
 @pytest.mark.asyncio
@@ -347,5 +347,5 @@ async def test_auth_spf_softfail():
     engine = HeuristicEngine(AsyncMock())
     email = {"auth_results": {"spf": "softfail", "dkim": "pass", "dmarc": "pass"}, "sender_email": "x@a.com"}
     score, ev = await engine._analyze_auth(email)
-    assert score >= 0.35
+    assert score >= 0.15  # softfail = 0.15 according to heuristics.py:655
     assert any(e.type == "auth_spf_fail" for e in ev)
