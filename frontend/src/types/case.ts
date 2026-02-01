@@ -125,4 +125,5 @@ export interface CaseDetail extends Case {
   email: CaseEmail | null
   analyses: Analysis[]
   notes: CaseNote[]
+  fp_reviews: FPReview[]
 }

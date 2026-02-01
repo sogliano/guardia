@@ -38,6 +38,11 @@ const router = createRouter({
           component: () => import('@/views/EmailExplorerView.vue'),
         },
 {
+          path: 'monitoring',
+          name: 'monitoring',
+          component: () => import('@/views/MonitoringView.vue'),
+        },
+        {
           path: 'notifications',
           name: 'notifications',
           component: () => import('@/views/NotificationsView.vue'),

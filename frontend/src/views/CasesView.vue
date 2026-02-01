@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useCasesStore } from '@/stores/cases'
 import { resolveCase } from '@/services/caseService'
@@ -10,6 +10,8 @@ import { computePageNumbers } from '@/utils/pagination'
 import { RISK_OPTIONS, ACTION_OPTIONS, STATUS_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import QuarantineQueue from '@/components/cases/QuarantineQueue.vue'
+import MultiSelect from '@/components/common/MultiSelect.vue'
+import DateRangePicker from '@/components/common/DateRangePicker.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,15 +26,15 @@ function setTab(tab: TabId) {
 }
 
 const searchQuery = ref('')
-const filterRisk = ref<string | undefined>()
-const filterAction = ref<string | undefined>()
-const filterStatus = ref<string | undefined>()
-const filterDateRange = ref<string | undefined>()
+const filterRisk = ref<string[]>(RISK_OPTIONS.slice())
+const filterAction = ref<string[]>(ACTION_OPTIONS.slice())
+const filterStatus = ref<string[]>(STATUS_OPTIONS.slice())
+const filterDateRange = ref<{ from: string | null; to: string | null }>({ from: null, to: null })
 
 const naSearchQuery = ref('')
-const naFilterRisk = ref<string | undefined>()
-const naFilterAction = ref<string | undefined>()
-const naFilterDateRange = ref<string | undefined>()
+const naFilterRisk = ref<string[]>(RISK_OPTIONS.slice())
+const naFilterAction = ref<string[]>(ACTION_OPTIONS.slice())
+const naFilterDateRange = ref<{ from: string | null; to: string | null }>({ from: null, to: null })
 const naPage = ref(1)
 const naPageSize = ref(10)
 const allowingCaseId = ref<string | null>(null)
@@ -59,21 +61,30 @@ const startItem = computed(() => (store.page - 1) * store.size + 1)
 const endItem = computed(() => Math.min(store.page * store.size, store.total))
 
 const hasActiveFilters = computed(() => {
-  return searchQuery.value || filterRisk.value || filterAction.value || filterStatus.value || filterDateRange.value
+  return searchQuery.value ||
+    filterRisk.value.length !== RISK_OPTIONS.length ||
+    filterAction.value.length !== ACTION_OPTIONS.length ||
+    filterStatus.value.length !== STATUS_OPTIONS.length ||
+    filterDateRange.value.from ||
+    filterDateRange.value.to
 })
 
 const pageNumbers = computed(() => computePageNumbers(store.page, totalPages.value))
 
 // Overview computeds
 const naHasActiveFilters = computed(() => {
-  return naSearchQuery.value || naFilterRisk.value || naFilterAction.value || naFilterDateRange.value
+  return naSearchQuery.value ||
+    naFilterRisk.value.length !== RISK_OPTIONS.length ||
+    naFilterAction.value.length !== ACTION_OPTIONS.length ||
+    naFilterDateRange.value.from ||
+    naFilterDateRange.value.to
 })
 
 function clearNaFilters() {
   naSearchQuery.value = ''
-  naFilterRisk.value = undefined
-  naFilterAction.value = undefined
-  naFilterDateRange.value = undefined
+  naFilterRisk.value = RISK_OPTIONS.slice()
+  naFilterAction.value = ACTION_OPTIONS.slice()
+  naFilterDateRange.value = { from: null, to: null }
 }
 
 const needsActionCases = computed(() => {
@@ -86,17 +97,20 @@ const needsActionCases = computed(() => {
       String(c.case_number ?? '').includes(q)
     )
   }
-  if (naFilterRisk.value) {
-    base = base.filter(c => c.risk_level?.toLowerCase() === naFilterRisk.value!.toLowerCase())
+  if (naFilterRisk.value.length > 0 && naFilterRisk.value.length < RISK_OPTIONS.length) {
+    base = base.filter(c => c.risk_level && naFilterRisk.value.map(r => r.toLowerCase()).includes(c.risk_level.toLowerCase()))
   }
-  if (naFilterAction.value) {
-    base = base.filter(c => c.verdict?.toLowerCase() === naFilterAction.value!.toLowerCase())
+  if (naFilterAction.value.length > 0 && naFilterAction.value.length < ACTION_OPTIONS.length) {
+    base = base.filter(c => c.verdict && naFilterAction.value.map(a => a.toLowerCase()).includes(c.verdict.toLowerCase()))
   }
-  if (naFilterDateRange.value) {
-    const params = dateRangeToParams(naFilterDateRange.value)
-    if (params.date_from) {
-      base = base.filter(c => (c.email_received_at ?? c.created_at) >= params.date_from!)
-    }
+  if (naFilterDateRange.value.from || naFilterDateRange.value.to) {
+    base = base.filter(c => {
+      const receivedDate = c.email_received_at ?? c.created_at
+      if (!receivedDate) return false
+      if (naFilterDateRange.value.from && receivedDate < naFilterDateRange.value.from) return false
+      if (naFilterDateRange.value.to && receivedDate > naFilterDateRange.value.to + 'T23:59:59') return false
+      return true
+    })
   }
   return base
 })
@@ -153,24 +167,35 @@ const sortedNeedsAction = computed(() => sortCases(needsActionCases.value, naSor
 const sortedAllCases = computed(() => sortCases(store.cases, sortCol.value, sortDir.value))
 
 function applyFilters() {
-  const dateParams = filterDateRange.value ? dateRangeToParams(filterDateRange.value) : {}
   store.setFilters({
     search: searchQuery.value || undefined,
-    risk_level: filterRisk.value?.toLowerCase(),
-    verdict: filterAction.value?.toLowerCase(),
-    status: filterStatus.value?.toLowerCase(),
-    ...dateParams,
+    risk_level: filterRisk.value.length > 0 && filterRisk.value.length < RISK_OPTIONS.length
+      ? filterRisk.value[0]?.toLowerCase()
+      : undefined,
+    verdict: filterAction.value.length > 0 && filterAction.value.length < ACTION_OPTIONS.length
+      ? filterAction.value[0]?.toLowerCase()
+      : undefined,
+    status: filterStatus.value.length > 0 && filterStatus.value.length < STATUS_OPTIONS.length
+      ? filterStatus.value[0]?.toLowerCase()
+      : undefined,
+    date_from: filterDateRange.value.from || undefined,
+    date_to: filterDateRange.value.to || undefined,
   })
 }
 
 function clearFilters() {
   searchQuery.value = ''
-  filterRisk.value = undefined
-  filterAction.value = undefined
-  filterStatus.value = undefined
-  filterDateRange.value = undefined
+  filterRisk.value = RISK_OPTIONS.slice()
+  filterAction.value = ACTION_OPTIONS.slice()
+  filterStatus.value = STATUS_OPTIONS.slice()
+  filterDateRange.value = { from: null, to: null }
   store.setFilters({})
 }
+
+// Watch for filter changes and apply automatically
+watch([filterRisk, filterAction, filterStatus, filterDateRange], () => {
+  applyFilters()
+}, { deep: true })
 
 function onSearchInput() {
   if (searchTimer) clearTimeout(searchTimer)
@@ -193,6 +218,9 @@ async function quickAllow(caseId: string) {
     if (paginatedNeedsCases.value.length === 0 && naPage.value > 1) {
       naPage.value--
     }
+  } catch (err) {
+    console.error('Error allowing case:', err)
+    alert(`Failed to allow case: ${err instanceof Error ? err.message : 'Unknown error'}`)
   } finally {
     allowingCaseId.value = null
   }
@@ -206,6 +234,9 @@ async function quickBlock(caseId: string) {
     if (paginatedNeedsCases.value.length === 0 && naPage.value > 1) {
       naPage.value--
     }
+  } catch (err) {
+    console.error('Error blocking case:', err)
+    alert(`Failed to block case: ${err instanceof Error ? err.message : 'Unknown error'}`)
   } finally {
     blockingCaseId.value = null
   }
@@ -251,6 +282,7 @@ onMounted(() => {
       <div class="header-left">
         <h1>Cases</h1>
         <span class="count-badge">{{ store.total.toLocaleString() }}</span>
+        <p class="subtitle">Manage and review analyzed email cases</p>
       </div>
       <div class="header-right">
         <button class="btn-outline" @click="exportCSV">
@@ -356,18 +388,17 @@ onMounted(() => {
               placeholder="Search subjects, senders, IDs..."
             />
           </div>
-          <select v-model="naFilterRisk" class="filter-select">
-            <option :value="undefined">Risk Level</option>
-            <option v-for="opt in RISK_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-          <select v-model="naFilterAction" class="filter-select">
-            <option :value="undefined">Action</option>
-            <option v-for="opt in ACTION_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-          <select v-model="naFilterDateRange" class="filter-select">
-            <option :value="undefined">Date Range</option>
-            <option v-for="opt in DATE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
+          <MultiSelect
+            v-model="naFilterRisk"
+            :options="RISK_OPTIONS.map(v => ({ value: v, label: v }))"
+            placeholder="Risk Level"
+          />
+          <MultiSelect
+            v-model="naFilterAction"
+            :options="ACTION_OPTIONS.map(v => ({ value: v, label: v }))"
+            placeholder="Action"
+          />
+          <DateRangePicker v-model="naFilterDateRange" />
           <a v-if="naHasActiveFilters" href="#" class="clear-link" @click.prevent="clearNaFilters">Clear Filters</a>
           <span class="results-count">{{ needsActionCases.length }} cases</span>
         </div>
@@ -375,12 +406,12 @@ onMounted(() => {
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 65px" class="sortable-th" @click="toggleSort('na', 'case_number')">CASE ID <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'case_number') }}</span></th>
+                <th style="width: 50px" class="sortable-th" @click="toggleSort('na', 'case_number')">ID <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'case_number') }}</span></th>
                 <th>SUBJECT</th>
-                <th style="width: 160px">SENDER</th>
-                <th style="width: 55px" class="sortable-th" @click="toggleSort('na', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'score') }}</span></th>
-                <th style="width: 70px" class="sortable-th" @click="toggleSort('na', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'risk') }}</span></th>
-                <th style="width: 85px" class="sortable-th" @click="toggleSort('na', 'action')">VERDICT <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'action') }}</span></th>
+                <th style="width: 180px">SENDER</th>
+                <th style="width: 70px" class="sortable-th" @click="toggleSort('na', 'score')">SCORE <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'score') }}</span></th>
+                <th style="width: 75px" class="sortable-th" @click="toggleSort('na', 'risk')">RISK <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'risk') }}</span></th>
+                <th style="width: 90px" class="sortable-th" @click="toggleSort('na', 'action')">ACTION <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'action') }}</span></th>
                 <th style="width: 120px">CATEGORY</th>
                 <th style="width: 80px" class="sortable-th" @click="toggleSort('na', 'status')">STATUS <span class="material-symbols-rounded sort-icon">{{ sortIcon('na', 'status') }}</span></th>
                 <th style="width: 90px">ACTIONS</th>
@@ -397,35 +428,9 @@ onMounted(() => {
                 <td class="cell-subject">{{ c.email_subject ?? '(No Subject)' }}</td>
                 <td class="cell-sender">{{ c.email_sender ?? '—' }}</td>
                 <td>
-                  <div class="score-cell">
-                    <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
-                      {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
-                    </span>
-                    <span
-                      v-if="c.final_score !== null"
-                      class="material-symbols-rounded score-detail-icon"
-                    >info</span>
-                    <div v-if="c.final_score !== null" class="score-tooltip">
-                      <div class="score-tooltip-row">
-                        <span class="score-tooltip-label">Heuristic</span>
-                        <span class="score-tooltip-val" :style="{ color: c.heuristic_score != null ? scoreColor(c.heuristic_score) : 'var(--text-muted)' }">
-                          {{ c.heuristic_score != null ? (c.heuristic_score * 100).toFixed(0) + '%' : '—' }}
-                        </span>
-                      </div>
-                      <div class="score-tooltip-row">
-                        <span class="score-tooltip-label">ML</span>
-                        <span class="score-tooltip-val" :style="{ color: c.ml_score != null ? scoreColor(c.ml_score) : 'var(--text-muted)' }">
-                          {{ c.ml_score != null ? (c.ml_score * 100).toFixed(0) + '%' : '—' }}
-                        </span>
-                      </div>
-                      <div class="score-tooltip-row">
-                        <span class="score-tooltip-label">LLM</span>
-                        <span class="score-tooltip-val" :style="{ color: c.llm_score != null ? scoreColor(c.llm_score) : 'var(--text-muted)' }">
-                          {{ c.llm_score != null ? (c.llm_score * 100).toFixed(0) + '%' : '—' }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
+                    {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
+                  </span>
                 </td>
                 <td>
                   <span
@@ -508,22 +513,22 @@ onMounted(() => {
           @input="onSearchInput"
         />
       </div>
-      <select v-model="filterRisk" class="filter-select" @change="applyFilters">
-        <option :value="undefined">Risk Level</option>
-        <option v-for="opt in RISK_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
-      <select v-model="filterAction" class="filter-select" @change="applyFilters">
-        <option :value="undefined">Action</option>
-        <option v-for="opt in ACTION_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
-      <select v-model="filterStatus" class="filter-select" @change="applyFilters">
-        <option :value="undefined">Status</option>
-        <option v-for="opt in STATUS_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
-      <select v-model="filterDateRange" class="filter-select" @change="applyFilters">
-        <option :value="undefined">Date Range</option>
-        <option v-for="opt in DATE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-      </select>
+      <MultiSelect
+        v-model="filterRisk"
+        :options="RISK_OPTIONS.map(v => ({ value: v, label: v }))"
+        placeholder="Risk Level"
+      />
+      <MultiSelect
+        v-model="filterAction"
+        :options="ACTION_OPTIONS.map(v => ({ value: v, label: v }))"
+        placeholder="Action"
+      />
+      <MultiSelect
+        v-model="filterStatus"
+        :options="STATUS_OPTIONS.map(v => ({ value: v, label: v }))"
+        placeholder="Status"
+      />
+      <DateRangePicker v-model="filterDateRange" />
       <a v-if="hasActiveFilters" href="#" class="clear-link" @click.prevent="clearFilters">Clear Filters</a>
       <span class="results-count">Showing {{ startItem }}-{{ endItem }} of {{ store.total.toLocaleString() }}</span>
     </div>
@@ -558,35 +563,9 @@ onMounted(() => {
             <td class="cell-subject">{{ c.email_subject ?? '(No Subject)' }}</td>
             <td class="cell-sender">{{ c.email_sender ?? '—' }}</td>
             <td>
-              <div class="score-cell">
-                <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
-                  {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
-                </span>
-                <span
-                  v-if="c.final_score !== null"
-                  class="material-symbols-rounded score-detail-icon"
-                >info</span>
-                <div v-if="c.final_score !== null" class="score-tooltip">
-                  <div class="score-tooltip-row">
-                    <span class="score-tooltip-label">Heuristic</span>
-                    <span class="score-tooltip-val" :style="{ color: c.heuristic_score != null ? scoreColor(c.heuristic_score) : 'var(--text-muted)' }">
-                      {{ c.heuristic_score != null ? (c.heuristic_score * 100).toFixed(0) + '%' : '—' }}
-                    </span>
-                  </div>
-                  <div class="score-tooltip-row">
-                    <span class="score-tooltip-label">ML</span>
-                    <span class="score-tooltip-val" :style="{ color: c.ml_score != null ? scoreColor(c.ml_score) : 'var(--text-muted)' }">
-                      {{ c.ml_score != null ? (c.ml_score * 100).toFixed(0) + '%' : '—' }}
-                    </span>
-                  </div>
-                  <div class="score-tooltip-row">
-                    <span class="score-tooltip-label">LLM</span>
-                    <span class="score-tooltip-val" :style="{ color: c.llm_score != null ? scoreColor(c.llm_score) : 'var(--text-muted)' }">
-                      {{ c.llm_score != null ? (c.llm_score * 100).toFixed(0) + '%' : '—' }}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <span class="score-val" :style="{ color: scoreColor(c.final_score) }">
+                {{ c.final_score !== null ? (c.final_score * 100).toFixed(0) + '%' : '—' }}
+              </span>
             </td>
             <td>
               <span
@@ -661,6 +640,20 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  font-weight: 400;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 12px;
 }
 
 /* ── KPI Cards ── */
@@ -869,64 +862,4 @@ onMounted(() => {
   }
 }
 
-/* ── Score cell with tooltip ── */
-.score-cell {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.score-detail-icon {
-  font-size: 14px;
-  color: var(--text-muted);
-  opacity: 0.4;
-  cursor: help;
-  transition: opacity 0.15s;
-}
-
-.score-cell:hover .score-detail-icon {
-  opacity: 0.8;
-}
-
-.score-tooltip {
-  display: none;
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 6px;
-  background: var(--bg-elevated, #1a1d23);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 8px 12px;
-  z-index: 100;
-  min-width: 140px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.score-cell:hover .score-tooltip {
-  display: block;
-}
-
-.score-tooltip-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 3px 0;
-}
-
-.score-tooltip-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.score-tooltip-val {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-}
 </style>

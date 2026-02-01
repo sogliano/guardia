@@ -15,19 +15,26 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: 'Dashboard' })
   } else {
     crumbs.push({ label: 'Dashboard', path: '/' })
-    const pageNames: Record<string, string> = {
-      cases: 'Cases',
-      'case-detail': 'Case Detail',
-      quarantine: 'Quarantine',
-      emails: 'Email Explorer',
-      policies: 'Policies',
-      alerts: 'Alerts',
-      reports: 'Reports',
-      settings: 'Settings',
-      'fp-review': 'FP Review',
-      notifications: 'Notifications',
+
+    // Special case: Case Detail should show Dashboard / Cases / Case Detail
+    if (name === 'case-detail') {
+      crumbs.push({ label: 'Cases', path: '/cases' })
+      crumbs.push({ label: 'Case Detail' })
+    } else {
+      const pageNames: Record<string, string> = {
+        cases: 'Cases',
+        quarantine: 'Quarantine',
+        emails: 'Emails',
+        monitoring: 'Monitoring',
+        policies: 'Policies',
+        alerts: 'Alerts',
+        reports: 'Reports',
+        settings: 'Settings',
+        'fp-review': 'FP Review',
+        notifications: 'Notifications',
+      }
+      crumbs.push({ label: pageNames[name] ?? name })
     }
-    crumbs.push({ label: pageNames[name] ?? name })
   }
   return crumbs
 })

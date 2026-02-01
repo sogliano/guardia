@@ -29,7 +29,7 @@ const actionFPNotes = ref('')
 const actionSubmitting = ref(false)
 
 // Email content section toggles
-const showHeaders = ref(false)
+const showHeaders = ref(true)
 const showBody = ref(true)
 const showUrls = ref(true)
 const showAttachments = ref(true)
@@ -729,8 +729,11 @@ onMounted(loadData)
           </div>
           <div v-if="showHeaders && caseData.email?.headers" class="headers-list">
             <div v-for="(value, key) in caseData.email.headers" :key="String(key)" class="header-item">
-              <span class="header-key">{{ key }}</span>
-              <span class="header-value">{{ value }}</span>
+              <span class="material-symbols-rounded header-icon">mail</span>
+              <div class="header-content">
+                <span class="header-key">{{ key }}</span>
+                <span class="header-value">{{ value }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -2050,23 +2053,40 @@ onMounted(loadData)
   margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   max-height: 400px;
   overflow-y: auto;
 }
 
 .header-item {
   display: flex;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border-radius: 6px;
   font-family: var(--font-mono);
   font-size: var(--font-sm);
+}
+
+.header-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.header-content {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
 }
 
 .header-key {
   color: var(--accent-cyan);
   font-weight: 600;
+  font-size: 12px;
   min-width: 140px;
   flex-shrink: 0;
 }
@@ -2074,6 +2094,7 @@ onMounted(loadData)
 .header-value {
   color: var(--text-secondary);
   word-break: break-all;
+  flex: 1;
 }
 
 .email-body-html {
