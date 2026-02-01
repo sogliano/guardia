@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from httpx import AsyncClient
 
 
 @pytest.fixture
@@ -66,3 +67,11 @@ def make_mock_policies(blacklist=None, whitelist=None):
         self._whitelisted_domains = whitelist
 
     return _fake_load
+
+
+@pytest.fixture
+async def client():
+    """HTTP test client for FastAPI app."""
+    from app.main import app
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac

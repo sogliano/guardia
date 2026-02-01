@@ -42,7 +42,7 @@ function applyFilters() {
   const dateParams = filterDate.value ? dateRangeToParams(filterDate.value) : {}
   store.setFilters({
     search: searchQuery.value || undefined,
-    risk_level: filterRisk.value.length > 0 && filterRisk.value.length < RISK_OPTIONS.length
+    risk_level: filterRisk.value.length === 1
       ? filterRisk.value[0]?.toLowerCase()
       : undefined,
     ...dateParams,
@@ -264,7 +264,7 @@ onMounted(() => {
             v-else
             class="page-btn"
             :class="{ active: p === store.page }"
-            @click="store.setPage(p as number)"
+            @click="typeof p === 'number' && store.setPage(p)"
           >{{ p }}</button>
         </template>
         <button

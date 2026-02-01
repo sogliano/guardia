@@ -169,13 +169,13 @@ const sortedAllCases = computed(() => sortCases(store.cases, sortCol.value, sort
 function applyFilters() {
   store.setFilters({
     search: searchQuery.value || undefined,
-    risk_level: filterRisk.value.length > 0 && filterRisk.value.length < RISK_OPTIONS.length
+    risk_level: filterRisk.value.length === 1
       ? filterRisk.value[0]?.toLowerCase()
       : undefined,
-    verdict: filterAction.value.length > 0 && filterAction.value.length < ACTION_OPTIONS.length
+    verdict: filterAction.value.length === 1
       ? filterAction.value[0]?.toLowerCase()
       : undefined,
-    status: filterStatus.value.length > 0 && filterStatus.value.length < STATUS_OPTIONS.length
+    status: filterStatus.value.length === 1
       ? filterStatus.value[0]?.toLowerCase()
       : undefined,
     date_from: filterDateRange.value.from || undefined,
@@ -619,7 +619,7 @@ onMounted(() => {
             v-else
             class="page-btn"
             :class="{ active: p === store.page }"
-            @click="store.setPage(p as number)"
+            @click="typeof p === 'number' && store.setPage(p)"
           >{{ p }}</button>
         </template>
         <button
