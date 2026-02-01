@@ -30,6 +30,7 @@ const heuristicsData = computed(() => store.data as HeuristicsMonitoringData | n
 const showIngestModal = ref(false)
 const ingesting = ref(false)
 const ingestError = ref('')
+const validationErrors = ref<Record<string, string>>({})
 
 const ingestForm = ref({
   message_id: '',
@@ -43,6 +44,7 @@ const ingestForm = ref({
 function openIngestModal() {
   showIngestModal.value = true
   ingestError.value = ''
+  validationErrors.value = {}
   ingestForm.value = {
     message_id: `test-${Date.now()}@guardia.local`,
     sender_email: '',
@@ -57,7 +59,31 @@ function closeIngestModal() {
   showIngestModal.value = false
 }
 
+function validateIngestForm(): boolean {
+  validationErrors.value = {}
+
+  if (!ingestForm.value.sender_email) {
+    validationErrors.value.sender_email = 'Sender email is required'
+  } else if (!ingestForm.value.sender_email.includes('@')) {
+    validationErrors.value.sender_email = 'Invalid email format'
+  }
+
+  if (!ingestForm.value.recipient_email) {
+    validationErrors.value.recipient_email = 'Recipient email is required'
+  } else if (!ingestForm.value.recipient_email.includes('@')) {
+    validationErrors.value.recipient_email = 'Invalid email format'
+  }
+
+  if (!ingestForm.value.message_id) {
+    validationErrors.value.message_id = 'Message ID is required'
+  }
+
+  return Object.keys(validationErrors.value).length === 0
+}
+
 async function submitIngest() {
+  if (!validateIngestForm()) return
+
   ingesting.value = true
   ingestError.value = ''
   try {
@@ -143,11 +169,30 @@ const tabs = [
         <form @submit.prevent="submitIngest" class="modal-body">
           <div class="form-group">
             <label>Message ID</label>
-            <input v-model="ingestForm.message_id" type="text" required class="form-input" />
+            <input
+              v-model="ingestForm.message_id"
+              type="text"
+              required
+              class="form-input"
+              :class="{ 'input-error': validationErrors.message_id }"
+            />
+            <span v-if="validationErrors.message_id" class="error-text">
+              {{ validationErrors.message_id }}
+            </span>
           </div>
           <div class="form-group">
             <label>Sender Email *</label>
-            <input v-model="ingestForm.sender_email" type="email" required class="form-input" placeholder="attacker@example.com" />
+            <input
+              v-model="ingestForm.sender_email"
+              type="email"
+              required
+              class="form-input"
+              placeholder="attacker@example.com"
+              :class="{ 'input-error': validationErrors.sender_email }"
+            />
+            <span v-if="validationErrors.sender_email" class="error-text">
+              {{ validationErrors.sender_email }}
+            </span>
           </div>
           <div class="form-group">
             <label>Sender Name</label>
@@ -155,7 +200,16 @@ const tabs = [
           </div>
           <div class="form-group">
             <label>Recipient Email *</label>
-            <input v-model="ingestForm.recipient_email" type="email" required class="form-input" />
+            <input
+              v-model="ingestForm.recipient_email"
+              type="email"
+              required
+              class="form-input"
+              :class="{ 'input-error': validationErrors.recipient_email }"
+            />
+            <span v-if="validationErrors.recipient_email" class="error-text">
+              {{ validationErrors.recipient_email }}
+            </span>
           </div>
           <div class="form-group">
             <label>Subject</label>
@@ -530,6 +584,17 @@ const tabs = [
 
 .error-state {
   color: #EF4444;
+}
+
+.input-error {
+  border-color: #EF4444;
+}
+
+.error-text {
+  color: #EF4444;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
 }
 
 @media (max-width: 1200px) {

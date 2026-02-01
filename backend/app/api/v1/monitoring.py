@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.schemas.monitoring import (
     HeuristicsMonitoringResponse,
     MLMonitoringResponse,
@@ -18,6 +18,7 @@ router = APIRouter()
 @router.get("")
 async def get_monitoring(
     db: DbSession,
+    user: CurrentUser,
     tab: str = Query("llm"),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),

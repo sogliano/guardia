@@ -280,7 +280,11 @@ class LLMExplainer:
         ml_confidence: float,
         ml_available: bool,
     ) -> LLMResult:
-        """Generate risk assessment using OpenAI."""
+        """Generate risk assessment using OpenAI.
+
+        SECURITY NOTE: Logs only primitive values (timestamps, token counts, scores).
+        Full API responses are never logged to prevent potential key exposure.
+        """
         user_prompt = _build_user_prompt(
             email_data, heuristic_evidences, heuristic_score,
             ml_score, ml_confidence, ml_available,

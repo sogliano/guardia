@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, RequireAnalyst
 from app.core.exceptions import NotFoundError
 from app.schemas.case import CaseList, CaseResponse
 from app.schemas.quarantine import QuarantineEmailDetailResponse
@@ -16,6 +16,7 @@ router = APIRouter()
 @router.get("", response_model=CaseList)
 async def list_quarantined(
     db: DbSession,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     date_from: str | None = Query(None),
@@ -33,7 +34,7 @@ async def list_quarantined(
 @router.get(
     "/{case_id}/email", response_model=QuarantineEmailDetailResponse
 )
-async def get_quarantine_email_detail(case_id: UUID, db: DbSession):
+async def get_quarantine_email_detail(case_id: UUID, db: DbSession, user: CurrentUser):
     """Get full email detail for a quarantined case."""
     svc = QuarantineService(db)
     detail = await svc.get_email_detail(case_id)
@@ -46,7 +47,7 @@ async def get_quarantine_email_detail(case_id: UUID, db: DbSession):
 async def release_quarantined(
     case_id: UUID,
     db: DbSession,
-    user: CurrentUser,
+    user: RequireAnalyst,
     reason: str | None = None,
 ):
     """Release a quarantined email (forward to destination)."""
@@ -62,7 +63,7 @@ async def release_quarantined(
 async def keep_quarantined(
     case_id: UUID,
     db: DbSession,
-    user: CurrentUser,
+    user: RequireAnalyst,
     reason: str | None = None,
 ):
     """Keep email quarantined (confirm block)."""
@@ -78,7 +79,7 @@ async def keep_quarantined(
 async def delete_quarantined(
     case_id: UUID,
     db: DbSession,
-    user: CurrentUser,
+    user: RequireAnalyst,
     reason: str | None = None,
 ):
     """Delete quarantined email permanently."""

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.schemas.dashboard import DashboardResponse
 from app.services.dashboard_service import DashboardService
 
@@ -12,6 +12,7 @@ router = APIRouter()
 @router.get("", response_model=DashboardResponse)
 async def get_dashboard(
     db: DbSession,
+    user: CurrentUser,
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
     sender: str | None = Query(None),

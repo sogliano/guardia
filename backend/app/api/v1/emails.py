@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import NotFoundError
 from app.schemas.email import EmailIngest, EmailList, EmailResponse
 from app.services.email_service import EmailService
@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/ingest", response_model=EmailResponse, status_code=201)
-async def ingest_email(body: EmailIngest, db: DbSession):
+async def ingest_email(body: EmailIngest, db: DbSession, user: CurrentUser):
     """Ingest a new email into the system."""
     svc = EmailService(db)
     email = await svc.ingest(body)
@@ -24,6 +24,7 @@ async def ingest_email(body: EmailIngest, db: DbSession):
 @router.get("", response_model=EmailList)
 async def list_emails(
     db: DbSession,
+    user: CurrentUser,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
     sender: str | None = None,
@@ -47,7 +48,7 @@ async def list_emails(
 
 
 @router.get("/{email_id}", response_model=EmailResponse)
-async def get_email(email_id: UUID, db: DbSession):
+async def get_email(email_id: UUID, db: DbSession, user: CurrentUser):
     """Get a single email by ID."""
     svc = EmailService(db)
     email = await svc.get_email(email_id)
