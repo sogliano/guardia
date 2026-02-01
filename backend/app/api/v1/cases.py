@@ -2,12 +2,13 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession, RequireAnalyst
 from app.core.exceptions import NotFoundError
+from app.core.rate_limit import limiter
 from app.models.case import Case
 from app.schemas.analysis import AnalysisWithEvidencesResponse
 from app.schemas.case import CaseDetailResponse, CaseList, CaseResolve, CaseResponse
@@ -34,7 +35,9 @@ async def _resolve_case_id(case_id_str: str, db: AsyncSession) -> UUID:
 
 
 @router.get("", response_model=CaseList)
+@limiter.limit("60/minute")
 async def list_cases(
+    request: Request,
     db: DbSession,
     user: CurrentUser,
     page: int = Query(1, ge=1),
@@ -64,7 +67,8 @@ async def list_cases(
 
 
 @router.get("/{case_id}", response_model=CaseResponse)
-async def get_case(case_id: str, db: DbSession, user: CurrentUser):
+@limiter.limit("100/minute")
+async def get_case(request: Request, case_id: str, db: DbSession, user: CurrentUser):
     """Get a single case."""
     resolved_id = await _resolve_case_id(case_id, db)
     svc = CaseService(db)
@@ -75,7 +79,8 @@ async def get_case(case_id: str, db: DbSession, user: CurrentUser):
 
 
 @router.get("/{case_id}/detail", response_model=CaseDetailResponse)
-async def get_case_detail(case_id: str, db: DbSession, user: CurrentUser):
+@limiter.limit("100/minute")
+async def get_case_detail(request: Request, case_id: str, db: DbSession, user: CurrentUser):
     """Get case with all related data (email, analyses, evidences, notes, fp reviews)."""
     resolved_id = await _resolve_case_id(case_id, db)
     svc = CaseService(db)
@@ -86,8 +91,9 @@ async def get_case_detail(case_id: str, db: DbSession, user: CurrentUser):
 
 
 @router.post("/{case_id}/resolve", response_model=CaseResponse)
+@limiter.limit("10/minute")
 async def resolve_case(
-    case_id: str, body: CaseResolve, db: DbSession, user: RequireAnalyst
+    request: Request, case_id: str, body: CaseResolve, db: DbSession, user: RequireAnalyst
 ):
     """Resolve a case with a final verdict."""
     resolved_id = await _resolve_case_id(case_id, db)
@@ -100,8 +106,9 @@ async def resolve_case(
 
 
 @router.post("/{case_id}/notes", response_model=CaseNoteResponse, status_code=201)
+@limiter.limit("30/minute")
 async def add_note(
-    case_id: str, body: CaseNoteCreate, db: DbSession, user: CurrentUser
+    request: Request, case_id: str, body: CaseNoteCreate, db: DbSession, user: CurrentUser
 ):
     """Add an investigation note to a case."""
     resolved_id = await _resolve_case_id(case_id, db)
@@ -116,7 +123,9 @@ async def add_note(
 
 
 @router.patch("/{case_id}/notes/{note_id}", response_model=CaseNoteResponse)
+@limiter.limit("20/minute")
 async def update_note(
+    request: Request,
     case_id: str,
     note_id: UUID,
     body: CaseNoteUpdate,
@@ -134,7 +143,8 @@ async def update_note(
 
 
 @router.get("/{case_id}/analyses", response_model=list[AnalysisWithEvidencesResponse])
-async def get_analyses(case_id: str, db: DbSession, user: CurrentUser):
+@limiter.limit("100/minute")
+async def get_analyses(request: Request, case_id: str, db: DbSession, user: CurrentUser):
     """Get pipeline analyses for a case with their evidences."""
     resolved_id = await _resolve_case_id(case_id, db)
     svc = CaseService(db)
@@ -145,8 +155,9 @@ async def get_analyses(case_id: str, db: DbSession, user: CurrentUser):
 @router.post(
     "/{case_id}/fp-review", response_model=FPReviewResponse, status_code=201
 )
+@limiter.limit("5/minute")
 async def create_fp_review(
-    case_id: str, body: FPReviewCreate, db: DbSession, user: RequireAnalyst
+    request: Request, case_id: str, body: FPReviewCreate, db: DbSession, user: RequireAnalyst
 ):
     """Submit a false positive review for a case."""
     resolved_id = await _resolve_case_id(case_id, db)

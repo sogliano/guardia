@@ -2,10 +2,11 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from app.api.deps import CurrentUser, DbSession, RequireAnalyst
 from app.core.exceptions import NotFoundError
+from app.core.rate_limit import limiter
 from app.schemas.case import CaseList, CaseResponse
 from app.schemas.quarantine import QuarantineEmailDetailResponse
 from app.services.quarantine_service import QuarantineService
@@ -14,7 +15,9 @@ router = APIRouter()
 
 
 @router.get("", response_model=CaseList)
+@limiter.limit("60/minute")
 async def list_quarantined(
+    request: Request,
     db: DbSession,
     user: CurrentUser,
     page: int = Query(1, ge=1),
@@ -34,7 +37,8 @@ async def list_quarantined(
 @router.get(
     "/{case_id}/email", response_model=QuarantineEmailDetailResponse
 )
-async def get_quarantine_email_detail(case_id: UUID, db: DbSession, user: CurrentUser):
+@limiter.limit("100/minute")
+async def get_quarantine_email_detail(request: Request, case_id: UUID, db: DbSession, user: CurrentUser):
     """Get full email detail for a quarantined case."""
     svc = QuarantineService(db)
     detail = await svc.get_email_detail(case_id)
@@ -44,7 +48,9 @@ async def get_quarantine_email_detail(case_id: UUID, db: DbSession, user: Curren
 
 
 @router.post("/{case_id}/release", response_model=CaseResponse)
+@limiter.limit("5/minute")
 async def release_quarantined(
+    request: Request,
     case_id: UUID,
     db: DbSession,
     user: RequireAnalyst,
@@ -60,7 +66,9 @@ async def release_quarantined(
 
 
 @router.post("/{case_id}/keep", response_model=CaseResponse)
+@limiter.limit("5/minute")
 async def keep_quarantined(
+    request: Request,
     case_id: UUID,
     db: DbSession,
     user: RequireAnalyst,
@@ -76,7 +84,9 @@ async def keep_quarantined(
 
 
 @router.post("/{case_id}/delete", response_model=CaseResponse)
+@limiter.limit("3/minute")
 async def delete_quarantined(
+    request: Request,
     case_id: UUID,
     db: DbSession,
     user: RequireAnalyst,

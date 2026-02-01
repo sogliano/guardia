@@ -1,5 +1,6 @@
 import os
 
+from pydantic import ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
 
 _env = os.getenv("APP_ENV", "local")
@@ -71,6 +72,29 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, v: str, info: ValidationInfo) -> str:
+        """Validar que CORS origins no sea wildcard en producción."""
+        if "*" in v:
+            raise ValueError("CORS wildcard (*) no permitido")
+
+        origins = [o.strip() for o in v.split(",") if o.strip()]
+        for origin in origins:
+            if not origin.startswith(("http://", "https://")):
+                raise ValueError(f"CORS origin inválido: {origin}")
+
+            # En producción, solo HTTPS
+            env = info.data.get("app_env", "local")
+            if env == "production" and origin.startswith("http://"):
+                raise ValueError(f"CORS origin en producción debe usar HTTPS: {origin}")
+
+        return v
+
+    # Rate Limiting
+    rate_limit_per_minute: int = 100
+    rate_limit_storage_uri: str = "memory://"
 
     # Slack Alerts
     slack_webhook_url: str = ""

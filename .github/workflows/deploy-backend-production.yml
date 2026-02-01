@@ -10,6 +10,29 @@ env:
   IMAGE_TAG: prod-${{ github.sha }}
 
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -e ".[dev]"
+
+      - name: Run tests with coverage
+        run: |
+          cd backend
+          pytest --cov=app --cov-report=term-missing --cov-fail-under=60
+
   validate:
     name: Validate branch
     runs-on: ubuntu-latest
@@ -22,7 +45,7 @@ jobs:
 
   deploy:
     name: Backend → Cloud Run (production)
-    needs: validate
+    needs: [test, validate]
     runs-on: ubuntu-latest
     environment: production
 

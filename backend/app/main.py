@@ -8,6 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
@@ -16,6 +18,7 @@ from app.api.middleware.logging import LoggingMiddleware
 from app.api.v1.router import api_router
 from app.config import settings
 from app.core.exceptions import PipelineError
+from app.core.rate_limit import limiter
 from app.db.session import async_session_factory, engine
 
 logger = structlog.get_logger()
@@ -69,6 +72,9 @@ def create_app() -> FastAPI:
         redirect_slashes=False,
     )
 
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     # Exception handlers
     @app.exception_handler(PipelineError)
     async def pipeline_error_handler(request: Request, exc: PipelineError) -> JSONResponse:
@@ -101,8 +107,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Origin",
+            "X-Request-ID",
+        ],
     )
 
     app.include_router(api_router, prefix="/api/v1")

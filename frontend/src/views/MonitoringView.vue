@@ -13,6 +13,8 @@ import MLLatencyTrend from '@/components/monitoring/MLLatencyTrend.vue'
 import MLRecentAnalyses from '@/components/monitoring/MLRecentAnalyses.vue'
 import HeuristicsScoreDistribution from '@/components/monitoring/HeuristicsScoreDistribution.vue'
 import HeuristicsRecentAnalyses from '@/components/monitoring/HeuristicsRecentAnalyses.vue'
+import ErrorState from '@/components/common/ErrorState.vue'
+import FormInput from '@/components/common/FormInput.vue'
 import ScoreAnalysisTab from '@/components/monitoring/ScoreAnalysisTab.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import LoadingState from '@/components/common/LoadingState.vue'
@@ -171,54 +173,40 @@ const tabs = [
           </button>
         </div>
         <form @submit.prevent="submitIngest" class="modal-body">
-          <div class="form-group">
-            <label>Message ID</label>
-            <input
-              v-model="ingestForm.message_id"
-              type="text"
-              required
-              class="form-input"
-              :class="{ 'input-error': validationErrors.message_id }"
-            />
-            <span v-if="validationErrors.message_id" class="error-text">
-              {{ validationErrors.message_id }}
-            </span>
-          </div>
-          <div class="form-group">
-            <label>Sender Email *</label>
-            <input
-              v-model="ingestForm.sender_email"
-              type="email"
-              required
-              class="form-input"
-              placeholder="attacker@example.com"
-              :class="{ 'input-error': validationErrors.sender_email }"
-            />
-            <span v-if="validationErrors.sender_email" class="error-text">
-              {{ validationErrors.sender_email }}
-            </span>
-          </div>
-          <div class="form-group">
-            <label>Sender Name</label>
-            <input v-model="ingestForm.sender_name" type="text" class="form-input" placeholder="John Doe" />
-          </div>
-          <div class="form-group">
-            <label>Recipient Email *</label>
-            <input
-              v-model="ingestForm.recipient_email"
-              type="email"
-              required
-              class="form-input"
-              :class="{ 'input-error': validationErrors.recipient_email }"
-            />
-            <span v-if="validationErrors.recipient_email" class="error-text">
-              {{ validationErrors.recipient_email }}
-            </span>
-          </div>
-          <div class="form-group">
-            <label>Subject</label>
-            <input v-model="ingestForm.subject" type="text" class="form-input" placeholder="Urgent: Password Reset Required" />
-          </div>
+          <FormInput
+            v-model="ingestForm.message_id"
+            label="Message ID"
+            type="text"
+            :error="validationErrors.message_id"
+            required
+          />
+          <FormInput
+            v-model="ingestForm.sender_email"
+            label="Sender Email"
+            type="email"
+            placeholder="attacker@example.com"
+            :error="validationErrors.sender_email"
+            required
+          />
+          <FormInput
+            v-model="ingestForm.sender_name"
+            label="Sender Name"
+            type="text"
+            placeholder="John Doe"
+          />
+          <FormInput
+            v-model="ingestForm.recipient_email"
+            label="Recipient Email"
+            type="email"
+            :error="validationErrors.recipient_email"
+            required
+          />
+          <FormInput
+            v-model="ingestForm.subject"
+            label="Subject"
+            type="text"
+            placeholder="Urgent: Password Reset Required"
+          />
           <div class="form-group">
             <label>Body Text</label>
             <textarea v-model="ingestForm.body_text" class="form-textarea" rows="6" placeholder="Email body content..."></textarea>
@@ -252,7 +240,7 @@ const tabs = [
     <LoadingState v-if="store.loading" message="Loading monitoring data..." />
 
     <!-- Error -->
-    <div v-else-if="store.error" class="error-state">{{ store.error }}</div>
+    <ErrorState v-else-if="store.error" :message="store.error" :onRetry="() => store.fetchMonitoring()" />
 
     <!-- Heuristics Tab Content -->
     <template v-else-if="store.activeTab === 'heuristics'">
@@ -581,25 +569,6 @@ const tabs = [
 
 .dual-row > * {
   min-width: 0;
-}
-
-.error-state {
-  text-align: center;
-  padding: 48px 0;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: #EF4444;
-}
-
-.input-error {
-  border-color: #EF4444;
-}
-
-.error-text {
-  color: #EF4444;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-  display: block;
 }
 
 @media (max-width: 1200px) {

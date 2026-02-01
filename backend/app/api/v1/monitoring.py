@@ -2,9 +2,10 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.rate_limit import limiter
 from app.schemas.monitoring import (
     HeuristicsMonitoringResponse,
     MLMonitoringResponse,
@@ -17,7 +18,9 @@ router = APIRouter()
 
 
 @router.get("")
+@limiter.limit("30/minute")
 async def get_monitoring(
+    request: Request,
     db: DbSession,
     user: CurrentUser,
     tab: str = Query("llm"),
@@ -52,7 +55,9 @@ async def get_monitoring(
 
 
 @router.get("/score-analysis", response_model=ScoreAnalysisResponse)
+@limiter.limit("40/minute")
 async def get_score_analysis(
+    request: Request,
     limit: int = Query(50, ge=1, le=200),
     include_metrics: bool = Query(True),
     db: DbSession = ...,
