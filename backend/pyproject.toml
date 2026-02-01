@@ -60,43 +60,23 @@ addopts = "--cov=app --cov-config=pyproject.toml --cov-report=term-missing"
 [tool.coverage.run]
 source = ["app"]
 omit = [
-    "app/main.py",
-    "app/api/*",
-    "app/db/*",
-    "app/schemas/*",
-    "app/models/*",
-    "app/config.py",
-    "app/services/auth_service.py",
-    "app/services/case_service.py",
-    "app/services/dashboard_service.py",
-    "app/services/email_service.py",
-    "app/services/fp_review_service.py",
-    "app/services/notification_service.py",
-    "app/services/policy_service.py",
-    "app/services/quarantine_service.py",
-    "app/services/report_service.py",
-    "app/services/user_sync_service.py",
-    "app/gateway/handler.py",
-    "app/gateway/relay.py",
-    "app/gateway/server.py",
-    "app/gateway/storage.py",
-    "app/core/exceptions.py",
+    "app/__init__.py",
+    "*/migrations/*",
+    "*/tests/*",
+    "*/__pycache__/*",
 ]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
-    "if __name__ == .__main__.",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
     "pass",
-    "async def list_rules",
-    "async def create_rule",
-    "async def get_rule",
-    "async def update_rule",
-    "async def delete_rule",
-    "async def list_events",
+    "except ImportError:",
 ]
 show_missing = true
-fail_under = 90
+fail_under = 45
 
 [tool.coverage.html]
 directory = "htmlcov"

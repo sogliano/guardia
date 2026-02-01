@@ -8,6 +8,18 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./src', import.meta.url)),
         },
     },
+    build: {
+        chunkSizeWarningLimit: 1000,
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'vue-vendor': ['vue', 'vue-router', 'pinia'],
+                    'chart-vendor': ['chart.js', 'vue-chartjs'],
+                    'clerk-vendor': ['@clerk/vue'],
+                },
+            },
+        },
+    },
     server: {
         port: 3000,
         proxy: {

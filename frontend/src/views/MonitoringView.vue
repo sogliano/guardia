@@ -13,7 +13,9 @@ import MLLatencyTrend from '@/components/monitoring/MLLatencyTrend.vue'
 import MLRecentAnalyses from '@/components/monitoring/MLRecentAnalyses.vue'
 import HeuristicsScoreDistribution from '@/components/monitoring/HeuristicsScoreDistribution.vue'
 import HeuristicsRecentAnalyses from '@/components/monitoring/HeuristicsRecentAnalyses.vue'
+import ScoreAnalysisTab from '@/components/monitoring/ScoreAnalysisTab.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 import { ingestEmail } from '@/services/emailService'
 import type {
   HeuristicsMonitoringData,
@@ -105,8 +107,9 @@ async function submitIngest() {
     })
     closeIngestModal()
     await store.fetchMonitoring()
-  } catch (err: any) {
-    ingestError.value = err.response?.data?.detail || 'Failed to ingest email'
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { detail?: string } } }
+    ingestError.value = error.response?.data?.detail || 'Failed to ingest email'
   } finally {
     ingesting.value = false
   }
@@ -137,6 +140,7 @@ const tabs = [
   { key: 'heuristics', label: 'Heuristics' },
   { key: 'ml', label: 'ML Classifier' },
   { key: 'llm', label: 'LLM Explainer' },
+  { key: 'score-analysis', label: 'Score Analysis' },
 ] as const
 </script>
 
@@ -245,7 +249,7 @@ const tabs = [
     </div>
 
     <!-- Loading -->
-    <div v-if="store.loading" class="loading-state">Loading monitoring data...</div>
+    <LoadingState v-if="store.loading" message="Loading monitoring data..." />
 
     <!-- Error -->
     <div v-else-if="store.error" class="error-state">{{ store.error }}</div>
@@ -480,6 +484,11 @@ const tabs = [
       <!-- Recent Analyses Table -->
       <RecentAnalyses :data="llmData?.recent_analyses ?? []" :total-calls="llmData?.kpi?.total_calls" />
     </template>
+
+    <!-- Score Analysis Tab Content -->
+    <template v-else-if="store.activeTab === 'score-analysis'">
+      <ScoreAnalysisTab />
+    </template>
   </div>
 </template>
 
@@ -574,15 +583,11 @@ const tabs = [
   min-width: 0;
 }
 
-.loading-state,
 .error-state {
   text-align: center;
   padding: 48px 0;
+  font-family: var(--font-mono);
   font-size: 14px;
-  color: var(--text-muted);
-}
-
-.error-state {
   color: #EF4444;
 }
 
@@ -731,16 +736,4 @@ const tabs = [
   border-top: 1px solid var(--border-color);
 }
 
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 </style>

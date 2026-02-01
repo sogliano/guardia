@@ -9,6 +9,7 @@ from app.schemas.monitoring import (
     HeuristicsMonitoringResponse,
     MLMonitoringResponse,
     MonitoringResponse,
+    ScoreAnalysisResponse,
 )
 from app.services.monitoring_service import MonitoringService
 
@@ -48,3 +49,15 @@ async def get_monitoring(
             status_code=400,
             detail=f"Invalid tab parameter: {tab}. Must be 'llm', 'ml', or 'heuristics'."
         )
+
+
+@router.get("/score-analysis", response_model=ScoreAnalysisResponse)
+async def get_score_analysis(
+    limit: int = Query(50, ge=1, le=200),
+    include_metrics: bool = Query(True),
+    db: DbSession = ...,
+    user: CurrentUser = ...,
+):
+    """Get detailed score breakdown for recent cases with engine agreement metrics."""
+    svc = MonitoringService(db)
+    return await svc.get_score_analysis(limit=limit, include_metrics=include_metrics)

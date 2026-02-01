@@ -15,8 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.constants import (
     SCORE_WEIGHT_HEURISTIC,
+    SCORE_WEIGHT_HEURISTIC_NO_LLM,
+    SCORE_WEIGHT_HEURISTIC_NO_ML,
     SCORE_WEIGHT_LLM,
+    SCORE_WEIGHT_LLM_NO_ML,
     SCORE_WEIGHT_ML,
+    SCORE_WEIGHT_ML_NO_LLM,
     CaseStatus,
     PipelineStage,
     RiskLevel,
@@ -49,7 +53,32 @@ class PipelineOrchestrator:
         self.db = db
 
     async def analyze(self, email_id: UUID) -> PipelineResult:
-        """Run the pipeline with a configurable timeout."""
+        """Run the pipeline with a configurable timeout.
+
+        Timeout Hierarchy (default: 30s total):
+        - Global pipeline timeout: 30s (settings.pipeline_timeout_seconds)
+          ├─ Bypass check: <1ms
+          ├─ Heuristic engine: ~5ms (budget)
+          │  └─ URL resolution: 5s max (nested timeout in heuristics.py:299)
+          ├─ ML classifier: ~18ms (budget)
+          ├─ LLM explainer: 2-3s typical, no explicit timeout (OpenAI client default)
+          └─ Database persist: <10ms
+
+        IMPORTANT: Nested timeouts count toward the 30s total.
+        If URL resolution maxes out at 5s, only 25s remain for other stages.
+
+        Configuration:
+        - Pipeline timeout: PIPELINE_TIMEOUT_SECONDS env var (default: 30)
+        - URL timeout: hardcoded 5s in heuristics.py:299
+        - LLM timeout: uses OpenAI client default (no explicit override)
+
+        Performance Budget Breakdown:
+        - Heuristics (target): 5ms
+        - ML (target): 18ms
+        - LLM (target): 2-3s
+        - URL resolution (max): 5s
+        - Total expected: <6s under normal conditions
+        """
         try:
             return await asyncio.wait_for(
                 self._run_pipeline(email_id),
@@ -315,9 +344,9 @@ class PipelineOrchestrator:
                 + llm.score * SCORE_WEIGHT_LLM
             )
         elif has_ml:
-            score = heuristic.score * 0.40 + ml.score * 0.60
+            score = heuristic.score * SCORE_WEIGHT_HEURISTIC_NO_LLM + ml.score * SCORE_WEIGHT_ML_NO_LLM
         elif has_llm:
-            score = heuristic.score * 0.60 + llm.score * 0.40
+            score = heuristic.score * SCORE_WEIGHT_HEURISTIC_NO_ML + llm.score * SCORE_WEIGHT_LLM_NO_ML
         else:
             score = heuristic.score
 

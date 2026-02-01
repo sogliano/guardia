@@ -22,9 +22,19 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
+  let initialized = false
+
   watch(() => globalFilters.filterParams, () => {
-    fetchDashboard()
+    if (initialized) {
+      fetchDashboard()
+    }
   }, { deep: true })
+
+  const originalFetch = fetchDashboard
+  fetchDashboard = async function() {
+    initialized = true
+    return originalFetch()
+  }
 
   return { data, loading, error, fetchDashboard }
 })

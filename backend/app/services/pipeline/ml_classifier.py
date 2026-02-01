@@ -9,6 +9,7 @@ and the pipeline continues with heuristics only.
 """
 
 import asyncio
+import json
 import time
 import threading
 from pathlib import Path
@@ -23,7 +24,12 @@ except ImportError:
     _TORCH_AVAILABLE = False
 
 from app.config import settings
-from app.core.constants import EvidenceType, Severity
+from app.core.constants import (
+    ML_CLASSIFIER_THRESHOLD_CRITICAL,
+    ML_CLASSIFIER_THRESHOLD_HIGH,
+    EvidenceType,
+    Severity,
+)
 from app.services.pipeline.models import EvidenceItem, MLResult
 
 logger = structlog.get_logger()
@@ -84,7 +90,6 @@ class MLClassifier:
             # Read model version from config if available
             config_path = model_path / "config.json"
             if config_path.exists():
-                import json
                 with open(config_path) as f:
                     config = json.load(f)
                 self._model_version = config.get("_guard_ia_version", "unknown")
@@ -143,10 +148,10 @@ class MLClassifier:
             confidence = max(probs[0][0].item(), probs[0][1].item())
 
             evidences: list[EvidenceItem] = []
-            if phishing_score > 0.5:
+            if phishing_score > ML_CLASSIFIER_THRESHOLD_HIGH:
                 evidences.append(EvidenceItem(
                     type=EvidenceType.ML_HIGH_SCORE,
-                    severity=Severity.HIGH if phishing_score > 0.8 else Severity.MEDIUM,
+                    severity=Severity.HIGH if phishing_score > ML_CLASSIFIER_THRESHOLD_CRITICAL else Severity.MEDIUM,
                     description=(
                         f"ML classifier scored {phishing_score:.4f} "
                         f"(confidence: {confidence:.4f})"

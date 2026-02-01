@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 import structlog
 from sqlalchemy import Integer, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -649,3 +650,158 @@ class MonitoringService:
                 "latency_ms": a.execution_time_ms,
             })
         return result
+
+    async def get_score_analysis(
+        self,
+        limit: int = 50,
+        include_metrics: bool = True,
+    ) -> dict:
+        """Get detailed score breakdown for recent cases."""
+        cases = await self._get_cases_with_scores(limit)
+
+        metrics = None
+        if include_metrics and cases:
+            metrics = self._calculate_aggregate_metrics(cases)
+
+        breakdown = []
+        for case_data in cases:
+            scores = [
+                case_data["heuristic_score"],
+                case_data["ml_score"],
+                case_data["llm_score"],
+            ]
+            scores_valid = [s for s in scores if s is not None]
+
+            std_dev = float(np.std(scores_valid)) if len(scores_valid) >= 2 else 0.0
+            agreement_level = self._get_agreement_level(std_dev)
+
+            breakdown.append({
+                "case_number": case_data["case_number"],
+                "email_sender": case_data["email_sender"],
+                "email_received_at": case_data["email_received_at"],
+                "heuristic_score": case_data["heuristic_score"],
+                "ml_score": case_data["ml_score"],
+                "llm_score": case_data["llm_score"],
+                "final_score": case_data["final_score"],
+                "std_dev": round(std_dev, 3),
+                "agreement_level": agreement_level,
+            })
+
+        return {
+            "metrics": metrics,
+            "cases": breakdown,
+        }
+
+    async def _get_cases_with_scores(self, limit: int) -> list[dict]:
+        """Query recent cases with all three engine scores."""
+        q = (
+            select(Case)
+            .options(selectinload(Case.email))
+            .where(Case.final_score.is_not(None))
+            .order_by(Case.created_at.desc())
+            .limit(limit)
+        )
+        cases = (await self.db.execute(q)).scalars().all()
+
+        result = []
+        for case in cases:
+            heur_analysis = await self._get_analysis_score(case.id, PipelineStage.HEURISTIC)
+            ml_analysis = await self._get_analysis_score(case.id, PipelineStage.ML)
+            llm_analysis = await self._get_analysis_score(case.id, PipelineStage.LLM)
+
+            result.append({
+                "case_number": case.case_number,
+                "email_sender": case.email.sender_email if case.email else "unknown",
+                "email_received_at": case.email.received_at if case.email else case.created_at,
+                "heuristic_score": heur_analysis,
+                "ml_score": ml_analysis,
+                "llm_score": llm_analysis,
+                "final_score": case.final_score,
+            })
+
+        return result
+
+    async def _get_analysis_score(self, case_id: int, stage: PipelineStage) -> float | None:
+        """Get score for a specific analysis stage."""
+        q = (
+            select(Analysis.score)
+            .where(Analysis.case_id == case_id)
+            .where(Analysis.stage == stage)
+        )
+        score = (await self.db.execute(q)).scalar_one_or_none()
+        return score
+
+    def _calculate_aggregate_metrics(self, cases: list[dict]) -> dict:
+        """Calculate correlation, agreement rate, avg std dev."""
+        complete_cases = [
+            c for c in cases
+            if c["heuristic_score"] is not None
+            and c["ml_score"] is not None
+            and c["llm_score"] is not None
+        ]
+
+        if not complete_cases:
+            return {
+                "agreement_rate": 0.0,
+                "avg_std_dev": 0.0,
+                "correlation_heur_ml": 0.0,
+                "correlation_heur_llm": 0.0,
+                "correlation_ml_llm": 0.0,
+                "total_cases_analyzed": 0,
+            }
+
+        heur_scores = [c["heuristic_score"] for c in complete_cases]
+        ml_scores = [c["ml_score"] for c in complete_cases]
+        llm_scores = [c["llm_score"] for c in complete_cases]
+
+        corr_heur_ml = float(np.corrcoef(heur_scores, ml_scores)[0, 1])
+        corr_heur_llm = float(np.corrcoef(heur_scores, llm_scores)[0, 1])
+        corr_ml_llm = float(np.corrcoef(ml_scores, llm_scores)[0, 1])
+
+        def get_risk_category(score: float) -> str:
+            if score < 0.3:
+                return "low"
+            if score < 0.6:
+                return "medium"
+            if score < 0.8:
+                return "high"
+            return "critical"
+
+        agreements = 0
+        std_devs = []
+
+        for case in complete_cases:
+            cat_heur = get_risk_category(case["heuristic_score"])
+            cat_ml = get_risk_category(case["ml_score"])
+            cat_llm = get_risk_category(case["llm_score"])
+
+            if cat_heur == cat_ml == cat_llm:
+                agreements += 1
+
+            std_dev = np.std([
+                case["heuristic_score"],
+                case["ml_score"],
+                case["llm_score"],
+            ])
+            std_devs.append(std_dev)
+
+        agreement_rate = (agreements / len(complete_cases)) * 100
+        avg_std_dev = float(np.mean(std_devs))
+
+        return {
+            "agreement_rate": round(agreement_rate, 2),
+            "avg_std_dev": round(avg_std_dev, 3),
+            "correlation_heur_ml": round(corr_heur_ml, 3),
+            "correlation_heur_llm": round(corr_heur_llm, 3),
+            "correlation_ml_llm": round(corr_ml_llm, 3),
+            "total_cases_analyzed": len(complete_cases),
+        }
+
+    def _get_agreement_level(self, std_dev: float) -> str:
+        """Map std dev to agreement level."""
+        if std_dev < 0.1:
+            return "high"
+        elif std_dev < 0.2:
+            return "moderate"
+        else:
+            return "low"

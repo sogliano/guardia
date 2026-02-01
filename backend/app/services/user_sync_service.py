@@ -1,7 +1,5 @@
-import asyncio
-
+import httpx
 import structlog
-from clerk_backend_api import Clerk
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -16,35 +14,44 @@ async def sync_clerk_user(db: AsyncSession, clerk_id: str) -> User:
     Fetch user info from Clerk Backend API and create a local User record.
     Called during JIT provisioning when a Clerk user first accesses the API.
     """
-    def _fetch_clerk_user(cid: str):
-        with Clerk(bearer_auth=settings.clerk_secret_key) as clerk:
-            return clerk.users.get(user_id=cid)
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"https://api.clerk.com/v1/users/{clerk_id}",
+                headers={
+                    "Authorization": f"Bearer {settings.clerk_secret_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            clerk_user = response.json()
+        except Exception as exc:
+            logger.error("Failed to fetch Clerk user", clerk_id=clerk_id, error=str(exc))
+            raise UnauthorizedError("Unable to verify user identity")
 
-    try:
-        clerk_user = await asyncio.to_thread(_fetch_clerk_user, clerk_id)
-    except Exception as exc:
-        logger.error("Failed to fetch Clerk user", clerk_id=clerk_id, error=str(exc))
-        raise UnauthorizedError("Unable to verify user identity")
-
-    if clerk_user is None:
+    if not clerk_user:
         raise UnauthorizedError("User not found in Clerk")
 
     # Extract primary email
     email = None
-    if clerk_user.email_addresses:
+    email_addresses = clerk_user.get("email_addresses", [])
+    primary_email_id = clerk_user.get("primary_email_address_id")
+
+    if email_addresses:
         primary = next(
-            (e for e in clerk_user.email_addresses if e.id == clerk_user.primary_email_address_id),
-            clerk_user.email_addresses[0],
+            (e for e in email_addresses if e.get("id") == primary_email_id),
+            email_addresses[0],
         )
-        email = primary.email_address
+        email = primary.get("email_address")
 
     if not email:
         raise UnauthorizedError("Clerk user has no email address")
 
     # Build full name
-    full_name = " ".join(
-        part for part in [clerk_user.first_name, clerk_user.last_name] if part
-    ) or email.split("@")[0]
+    first_name = clerk_user.get("first_name", "")
+    last_name = clerk_user.get("last_name", "")
+    full_name = " ".join(part for part in [first_name, last_name] if part) or email.split("@")[0]
 
     # Create local user record
     user = User(
@@ -55,8 +62,19 @@ async def sync_clerk_user(db: AsyncSession, clerk_id: str) -> User:
         is_active=True,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
 
-    logger.info("Created local user from Clerk", clerk_id=clerk_id, email=email)
-    return user
+    try:
+        await db.commit()
+        await db.refresh(user)
+        logger.info("Created local user from Clerk", clerk_id=clerk_id, email=email)
+        return user
+    except Exception as e:
+        # Race condition: another request created the user already
+        await db.rollback()
+        from sqlalchemy import select
+        result = await db.execute(select(User).where(User.clerk_id == clerk_id))
+        existing_user = result.scalar_one_or_none()
+        if existing_user:
+            logger.info("User already created by concurrent request", clerk_id=clerk_id)
+            return existing_user
+        raise

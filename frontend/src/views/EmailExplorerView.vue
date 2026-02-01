@@ -7,6 +7,7 @@ import { computePageNumbers } from '@/utils/pagination'
 import { RISK_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import MultiSelect from '@/components/common/MultiSelect.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 import { ingestEmail } from '@/services/emailService'
 
 const store = useEmailsStore()
@@ -124,9 +125,10 @@ async function submitIngest() {
     })
     closeIngestModal()
     await store.fetchEmails()
-  } catch (err: any) {
-    ingestError.value = err.response?.data?.detail || 'Failed to ingest email'
-  } finally {
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { detail?: string } } }
+    ingestError.value = error.response?.data?.detail || 'Failed to ingest email'
+  } finally{
     ingesting.value = false
   }
 }
@@ -254,10 +256,7 @@ onMounted(() => {
 
     <!-- Table -->
     <div class="table-card">
-      <div v-if="store.loading" class="loading-state">
-        <span class="material-symbols-rounded spinning">progress_activity</span>
-        <p>Loading emails...</p>
-      </div>
+      <LoadingState v-if="store.loading" message="Loading emails..." />
       <div v-else-if="store.error" class="error-state">
         <span class="material-symbols-rounded">error</span>
         <p>{{ store.error }}</p>
@@ -494,19 +493,6 @@ onMounted(() => {
   border-top: 1px solid var(--border-color);
 }
 
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .input-error {
   border-color: #EF4444;
 }
@@ -518,7 +504,6 @@ onMounted(() => {
   display: block;
 }
 
-.loading-state,
 .error-state {
   text-align: center;
   padding: 64px 24px;
@@ -528,25 +513,16 @@ onMounted(() => {
   gap: 16px;
 }
 
-.loading-state span,
 .error-state span {
   font-size: 48px;
-  color: #9CA3AF;
-}
-
-.error-state span {
   color: #EF4444;
 }
 
-.loading-state p,
 .error-state p {
+  font-family: var(--font-mono);
   font-size: 14px;
-  color: #6B7280;
-  margin: 0;
-}
-
-.error-state p {
   color: #EF4444;
+  margin: 0;
 }
 
 .retry-btn {
@@ -566,10 +542,10 @@ onMounted(() => {
 }
 
 .spinning {
-  animation: spin-animation 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
-@keyframes spin-animation {
+@keyframes spin {
   from {
     transform: rotate(0deg);
   }

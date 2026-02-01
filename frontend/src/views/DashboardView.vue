@@ -11,6 +11,7 @@ import ThreatCategories from '@/components/dashboard/ThreatCategories.vue'
 import VerdictTimeline from '@/components/dashboard/VerdictTimeline.vue'
 import ScoreDistribution from '@/components/dashboard/ScoreDistribution.vue'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 
 const store = useDashboardStore()
 
@@ -33,10 +34,7 @@ onMounted(() => {
     </div>
 
     <!-- Loading State -->
-    <div v-if="store.loading" class="loading-state">
-      <span class="material-symbols-rounded spinning">progress_activity</span>
-      <p>Loading dashboard...</p>
-    </div>
+    <LoadingState v-if="store.loading" message="Loading dashboard..." />
 
     <!-- Error State -->
     <div v-else-if="store.error" class="error-state">
@@ -210,7 +208,6 @@ onMounted(() => {
   gap: 12px;
 }
 
-.loading-state,
 .error-state {
   text-align: center;
   padding: 64px 24px;
@@ -220,25 +217,16 @@ onMounted(() => {
   gap: 16px;
 }
 
-.loading-state span,
 .error-state span {
   font-size: 48px;
-  color: #9CA3AF;
-}
-
-.error-state span {
   color: #EF4444;
 }
 
-.loading-state p,
 .error-state p {
+  font-family: var(--font-mono);
   font-size: 14px;
-  color: #6B7280;
-  margin: 0;
-}
-
-.error-state p {
   color: #EF4444;
+  margin: 0;
 }
 
 .retry-btn {

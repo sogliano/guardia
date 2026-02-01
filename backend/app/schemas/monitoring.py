@@ -146,3 +146,32 @@ class HeuristicsMonitoringResponse(BaseModel):
     score_distribution: list[ScoreDistributionBucket] = []
     score_agreement: ScoreAgreement
     recent_analyses: list[RecentHeuristicsAnalysis] = []
+
+
+# Score Analysis Schemas
+class ScoreMetrics(BaseModel):
+    agreement_rate: float
+    avg_std_dev: float
+    correlation_heur_ml: float
+    correlation_heur_llm: float
+    correlation_ml_llm: float
+    total_cases_analyzed: int
+
+
+class CaseScoreBreakdown(BaseModel):
+    case_number: int
+    email_sender: str
+    email_received_at: datetime
+    heuristic_score: float | None
+    ml_score: float | None
+    llm_score: float | None
+    final_score: float
+    std_dev: float
+    agreement_level: str
+
+    model_config = {"from_attributes": True}
+
+
+class ScoreAnalysisResponse(BaseModel):
+    metrics: ScoreMetrics | None
+    cases: list[CaseScoreBreakdown]

@@ -12,6 +12,7 @@ import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import QuarantineQueue from '@/components/cases/QuarantineQueue.vue'
 import MultiSelect from '@/components/common/MultiSelect.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
+import LoadingState from '@/components/common/LoadingState.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -539,7 +540,7 @@ onMounted(() => {
 
     <!-- Table -->
     <div class="table-card">
-      <div v-if="store.loading" class="loading-state">Loading cases...</div>
+      <LoadingState v-if="store.loading" message="Loading cases..." />
       <table v-else class="data-table">
         <thead>
           <tr>

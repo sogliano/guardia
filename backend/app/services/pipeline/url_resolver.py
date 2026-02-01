@@ -99,15 +99,10 @@ class URLResolver:
                 return None, f"Blocked: {reason}"
 
             try:
-                async with httpx.AsyncClient(
-                    follow_redirects=False,
-                    timeout=TIMEOUT_SECONDS,
-                    verify=False,
-                ) as client:
-                    response = await client.head(current_url)
+                response_data = await self._safe_http_request(current_url)
 
-                if response.status_code in (301, 302, 303, 307, 308):
-                    location = response.headers.get("location")
+                if response_data["status"] in (301, 302, 303, 307, 308):
+                    location = response_data["location"]
                     if not location:
                         return current_url, None
 
@@ -136,3 +131,20 @@ class URLResolver:
             "url_resolve_max_redirects", url=url, final=current_url, hops=MAX_REDIRECTS
         )
         return None, f"Exceeded {MAX_REDIRECTS} redirects"
+
+    async def _safe_http_request(self, url: str) -> dict:
+        """Safe HTTP request that respects cancellation.
+
+        Returns dict with status and location headers to avoid
+        keeping connection open after task cancellation.
+        """
+        async with httpx.AsyncClient(
+            follow_redirects=False,
+            timeout=TIMEOUT_SECONDS,
+            verify=False,
+        ) as client:
+            response = await client.head(url)
+            return {
+                "status": response.status_code,
+                "location": response.headers.get("location"),
+            }

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,7 +12,6 @@ from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.case_note import CaseNote
 from app.models.email import Email
-from app.models.user import User
 
 
 class CaseService:
@@ -76,11 +75,28 @@ class CaseService:
         analyses_map: dict[UUID, dict[str, float | None]] = {}
 
         if case_ids:
-            analyses_stmt = (
-                select(Analysis)
+            # Subquery: get (case_id, stage, max_created_at) for each case/stage combo
+            latest_analysis_subq = (
+                select(
+                    Analysis.case_id,
+                    Analysis.stage,
+                    func.max(Analysis.created_at).label("max_created_at"),
+                )
                 .where(Analysis.case_id.in_(case_ids))
-                .order_by(Analysis.created_at.desc())
+                .group_by(Analysis.case_id, Analysis.stage)
+                .subquery()
             )
+
+            # Join to get only the latest analysis per case/stage
+            analyses_stmt = select(Analysis).join(
+                latest_analysis_subq,
+                and_(
+                    Analysis.case_id == latest_analysis_subq.c.case_id,
+                    Analysis.stage == latest_analysis_subq.c.stage,
+                    Analysis.created_at == latest_analysis_subq.c.max_created_at,
+                ),
+            )
+
             analyses_result = await self.db.execute(analyses_stmt)
             all_analyses = analyses_result.scalars().all()
 
@@ -88,9 +104,7 @@ class CaseService:
             for analysis in all_analyses:
                 if analysis.case_id not in analyses_map:
                     analyses_map[analysis.case_id] = {}
-                if analysis.stage not in analyses_map[analysis.case_id]:
-                    # Only store first (latest) analysis per stage
-                    analyses_map[analysis.case_id][analysis.stage] = analysis.score
+                analyses_map[analysis.case_id][analysis.stage] = analysis.score
 
         items = []
         for case in cases:

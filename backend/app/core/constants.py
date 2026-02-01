@@ -121,22 +121,6 @@ class AlertDeliveryStatus(StrEnum):
     FAILED = "failed"
 
 
-# --- Notifications ---
-
-class NotificationType(StrEnum):
-    CRITICAL_THREAT = "critical_threat"
-    QUARANTINE_PENDING = "quarantine_pending"
-    FALSE_POSITIVE = "false_positive"
-    PIPELINE_HEALTH = "pipeline_health"
-    SYSTEM = "system"
-
-
-class NotificationSeverity(StrEnum):
-    INFO = "info"
-    WARNING = "warning"
-    CRITICAL = "critical"
-
-
 # --- Users ---
 
 class UserRole(StrEnum):
@@ -185,6 +169,50 @@ ATTACHMENT_DOUBLE_EXT_BONUS = 0.15   # double extension (e.g. invoice.pdf.exe)
 SCORE_WEIGHT_HEURISTIC = 0.30
 SCORE_WEIGHT_ML = 0.50
 SCORE_WEIGHT_LLM = 0.20
+
+# Fallback weights when ML or LLM unavailable
+SCORE_WEIGHT_HEURISTIC_NO_LLM = 0.40  # Heuristic + ML only
+SCORE_WEIGHT_ML_NO_LLM = 0.60
+SCORE_WEIGHT_HEURISTIC_NO_ML = 0.60   # Heuristic + LLM only
+SCORE_WEIGHT_LLM_NO_ML = 0.40
+
+# =============================================================================
+# HEURISTIC SCORING THRESHOLDS (Sub-components)
+# =============================================================================
+
+# Domain analysis
+HEURISTIC_DOMAIN_SUSPICIOUS_TLD_SCORE = 0.5
+HEURISTIC_DOMAIN_TYPOSQUATTING_SCORE = 0.8
+
+# URL analysis
+HEURISTIC_URL_IP_BASED_SCORE = 0.7
+HEURISTIC_URL_SHORTENER_BASE = 0.4
+HEURISTIC_URL_SHORTENER_INCREMENT = 0.1
+HEURISTIC_URL_SUSPICIOUS_BASE = 0.3
+HEURISTIC_URL_SUSPICIOUS_INCREMENT = 0.1
+
+# Keyword analysis
+HEURISTIC_KEYWORD_PHISHING_BASE = 0.3
+HEURISTIC_KEYWORD_PHISHING_INCREMENT = 0.1
+HEURISTIC_KEYWORD_URGENCY_BASE = 0.2
+HEURISTIC_KEYWORD_URGENCY_INCREMENT = 0.05
+HEURISTIC_KEYWORD_FINANCIAL_BASE = 0.15
+HEURISTIC_KEYWORD_FINANCIAL_INCREMENT = 0.05
+HEURISTIC_KEYWORD_CAPS_ABUSE_THRESHOLD = 0.3
+HEURISTIC_KEYWORD_CAPS_ABUSE_PENALTY = 0.1
+
+# Header analysis
+HEURISTIC_HEADER_EXCESSIVE_HOPS_BONUS = 0.08
+HEURISTIC_HEADER_SUSPICIOUS_MAILER_BONUS = 0.10
+HEURISTIC_HEADER_MSGID_MISMATCH_BONUS = 0.12
+HEURISTIC_HEADER_MISSING_GMAIL_BONUS = 0.10
+
+# Impersonation
+HEURISTIC_IMPERSONATION_BONUS = 0.10
+
+# ML classifier
+ML_CLASSIFIER_THRESHOLD_HIGH = 0.5
+ML_CLASSIFIER_THRESHOLD_CRITICAL = 0.8
 
 # --- SMTP Gateway ---
 
