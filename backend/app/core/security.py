@@ -38,6 +38,7 @@ def verify_clerk_token(token: str) -> dict:
                 "verify_exp": True,
                 "verify_nbf": True,
                 "verify_aud": True,  # Enabled for production
+                "verify_iss": False,  # Disable issuer verification
             },
         )
 
