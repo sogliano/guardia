@@ -169,4 +169,5 @@ class TestCasesAPI:
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "resolved"
-            assert data["resolution"] == "approve"
+            assert data["verdict"] == "ALLOWED"
+            assert data["resolved_by"] == str(user_id)
