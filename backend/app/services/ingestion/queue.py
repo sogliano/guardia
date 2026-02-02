@@ -120,7 +120,7 @@ class IngestionQueue:
         Args:
             entry: EmailDatasetEntry with template_name, recipient, etc.
         """
-        from backend.scripts.email_templates import TEMPLATES
+        from scripts.email_templates import TEMPLATES
         from app.gateway.parser import EmailParser
 
         # 1. Build email using template

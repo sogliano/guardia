@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app.core.rate_limit import limiter
 from app.api.deps import CurrentUser, RequireAdmin
 from app.services.ingestion.queue import get_queue
-from backend.scripts.datasets.email_dataset_50 import (
+from scripts.datasets.email_dataset_50 import (
     get_dataset,
     get_by_category,
     get_dataset_stats,
