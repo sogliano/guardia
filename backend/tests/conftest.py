@@ -91,7 +91,7 @@ def db_container():
 @pytest.fixture(scope="session")
 async def test_engine(db_container):
     """Create async engine connected to test container."""
-    from app.db.base import Base
+    from app.models.base import Base
 
     db_url = db_container.get_connection_url().replace(
         "postgresql://", "postgresql+asyncpg://"
@@ -124,6 +124,7 @@ async def db_session(test_engine):
 @pytest.fixture
 async def client():
     """HTTP test client for FastAPI app."""
+    from httpx import ASGITransport
     from app.main import app
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

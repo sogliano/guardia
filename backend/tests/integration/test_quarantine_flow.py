@@ -21,8 +21,8 @@ class TestQuarantineFlow:
             id=email_id,
             message_id="quarantine@test.sh",
             sender_email="suspicious@example.com",
+            recipient_email="analyst@strike.sh",
             subject="Test Quarantine",
-            verdict="QUARANTINE",
         )
 
         mock_case = Case(
@@ -89,7 +89,7 @@ class TestQuarantineFlow:
 
         # Execute reject/delete
         service = QuarantineService(mock_db)
-        deleted_case = await service.delete(
+        deleted_case = await service.delete_quarantined(
             case_id=case_id,
             user_id=user_id,
             reason="Confirmed phishing - permanent deletion",
@@ -142,38 +142,70 @@ class TestQuarantineFlow:
     async def test_quarantine_action_record_created(self, mock_db):
         """Integration test: Verify QuarantineActionRecord is created on actions."""
         from app.models.case import Case
+        from app.models.email import Email
         from app.models.quarantine_action import QuarantineActionRecord
         from app.services.quarantine_service import QuarantineService
 
         case_id = uuid4()
+        email_id = uuid4()
         user_id = uuid4()
 
         mock_case = Case(
             id=case_id,
-            email_id=uuid4(),
+            email_id=email_id,
             verdict="QUARANTINE",
             final_score=0.90,
             status="pending",
             case_number=5,
         )
 
-        # Mock DB query
+        mock_email = Email(
+            id=email_id,
+            message_id="test@example.com",
+            sender_email="sender@example.com",
+            recipient_email="recipient@strike.sh",
+            subject="Test",
+        )
+
+        # Mock DB query to return both case and email
         def execute_side_effect(*args, **kwargs):
             mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = mock_case
+            # Return case first, then email
+            if not hasattr(execute_side_effect, 'call_count'):
+                execute_side_effect.call_count = 0
+            execute_side_effect.call_count += 1
+
+            if execute_side_effect.call_count == 1:
+                mock_result.scalar_one_or_none.return_value = mock_case
+            else:
+                mock_result.scalar_one_or_none.return_value = mock_email
             return mock_result
 
         mock_db.execute.side_effect = execute_side_effect
 
-        # Execute release
-        service = QuarantineService(mock_db)
-        await service.release(
-            case_id=case_id,
-            user_id=user_id,
-            reason="Releasing for investigation",
-        )
+        # Mock storage and relay
+        with (
+            patch("app.services.quarantine_service.EmailStorage") as MockStorage,
+            patch("app.services.quarantine_service.RelayClient") as MockRelay,
+        ):
+            mock_storage = AsyncMock()
+            mock_storage.retrieve.return_value = b"raw email data"
+            mock_storage.delete.return_value = None
+            MockStorage.return_value = mock_storage
 
-        # Verify add was called (should include QuarantineActionRecord)
-        assert mock_db.add.called
-        # In real implementation, we'd verify the QuarantineActionRecord object
-        # For now, we just verify the DB operation occurred
+            mock_relay = AsyncMock()
+            mock_relay.deferred_forward.return_value = True
+            MockRelay.return_value = mock_relay
+
+            # Execute release
+            service = QuarantineService(mock_db)
+            await service.release(
+                case_id=case_id,
+                user_id=user_id,
+                reason="Releasing for investigation",
+            )
+
+            # Verify add was called (should include QuarantineActionRecord)
+            assert mock_db.add.called
+            # In real implementation, we'd verify the QuarantineActionRecord object
+            # For now, we just verify the DB operation occurred

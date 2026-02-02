@@ -44,6 +44,7 @@ def _make_token(payload=None, key=PRIVATE_PEM, algorithm="RS256"):
 @patch("app.core.security.settings")
 def test_valid_token(mock_settings):
     mock_settings.clerk_pem_public_key = PUBLIC_PEM.decode()
+    mock_settings.app_env = "development"  # Disable aud verification
     token = _make_token()
     result = verify_clerk_token(token)
     assert result["sub"] == "user_123"

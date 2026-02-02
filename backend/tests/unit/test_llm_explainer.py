@@ -161,12 +161,22 @@ async def test_call_openai_real_mock(mock_settings):
     mock_response.usage.prompt_tokens = 80
     mock_response.usage.completion_tokens = 40
 
+    # Create a proper mock structure for openai module
     mock_openai = MagicMock()
     mock_client = AsyncMock()
     mock_openai.AsyncOpenAI.return_value = mock_client
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-    with patch.dict(sys.modules, {"openai": mock_openai}):
+    # Mock the entire openai module structure
+    mock_openai_resources = MagicMock()
+    mock_openai.resources = mock_openai_resources
+
+    with patch.dict(sys.modules, {
+        "openai": mock_openai,
+        "openai.resources": mock_openai_resources,
+        "openai.resources.chat": MagicMock(),
+        "openai.resources.chat.completions": MagicMock(),
+    }):
         explainer = LLMExplainer()
         result = await explainer._call_openai("test prompt")
 

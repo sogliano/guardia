@@ -24,7 +24,7 @@ class TestPipelineFlow:
             patch(
                 "app.services.pipeline.orchestrator.HeuristicEngine"
             ) as MockHeuristic,
-            patch("app.services.pipeline.orchestrator.MLClassifier") as MockML,
+            patch("app.services.pipeline.orchestrator.get_ml_classifier") as MockML,
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
             # Heuristic: High risk due to failed auth
@@ -40,7 +40,7 @@ class TestPipelineFlow:
             # ML: High confidence phishing
             mock_ml = AsyncMock()
             mock_ml.predict.return_value = (0.92, True)
-            MockML.return_value = mock_ml
+            MockML.return_value = mock_ml  # get_ml_classifier() returns classifier instance
 
             # LLM: Detailed explanation
             mock_llm = AsyncMock()
@@ -87,7 +87,7 @@ class TestPipelineFlow:
             patch(
                 "app.services.pipeline.orchestrator.HeuristicEngine"
             ) as MockHeuristic,
-            patch("app.services.pipeline.orchestrator.MLClassifier") as MockML,
+            patch("app.services.pipeline.orchestrator.get_ml_classifier") as MockML,
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
             # Heuristic: Low risk (legitimate)
@@ -136,7 +136,7 @@ class TestPipelineFlow:
             patch(
                 "app.services.pipeline.orchestrator.HeuristicEngine"
             ) as MockHeuristic,
-            patch("app.services.pipeline.orchestrator.MLClassifier") as MockML,
+            patch("app.services.pipeline.orchestrator.get_ml_classifier") as MockML,
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
             # Heuristic: Fast
