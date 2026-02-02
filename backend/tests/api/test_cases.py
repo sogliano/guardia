@@ -19,6 +19,8 @@ class TestCasesAPI:
                     "risk_level": "low",
                     "threat_category": "clean",
                     "pipeline_duration_ms": 100,
+                    "resolved_by": None,
+                    "resolved_at": None,
                     "sender_email": "alice@example.com",
                     "subject": "Test Case 1",
                     "created_at": "2026-02-02T00:00:00Z",
@@ -34,6 +36,8 @@ class TestCasesAPI:
                     "risk_level": "medium",
                     "threat_category": "suspicious",
                     "pipeline_duration_ms": 150,
+                    "resolved_by": None,
+                    "resolved_at": None,
                     "sender_email": "bob@example.com",
                     "subject": "Test Case 2",
                     "created_at": "2026-02-02T00:00:00Z",
@@ -112,8 +116,7 @@ class TestCasesAPI:
         case_id = uuid4()
         user_id = uuid4()
         payload = {
-            "action": "approve",
-            "reason": "False positive - legitimate business email",
+            "verdict": "allowed",
         }
 
         mock_case = {

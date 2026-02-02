@@ -53,7 +53,6 @@ class TestQuarantineFlow:
         mock_db.execute = AsyncMock(side_effect=execute_side_effect)
 
         # Mock storage and relay
-        from unittest.mock import patch, AsyncMock
         with (
             patch("app.services.quarantine_service.EmailStorage") as MockStorage,
             patch("app.services.quarantine_service.RelayClient") as MockRelay,
