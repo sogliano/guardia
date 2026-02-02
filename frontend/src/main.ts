@@ -20,7 +20,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(clerkPlugin, {
   publishableKey: PUBLISHABLE_KEY,
-  signInForceRedirectUrl: '/',
+  signInForceRedirectUrl: '/dashboard',
 })
 app.use(router)
 app.use(PrimeVue, {

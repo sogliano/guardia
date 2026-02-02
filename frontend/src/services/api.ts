@@ -46,9 +46,19 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   if (clerkGetToken) {
-    const token = await clerkGetToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    try {
+      const token = await clerkGetToken()
+
+      if (!token) {
+        console.warn('No authentication token available')
+        // Token is null - request will proceed without auth header
+        // Backend will handle 401 and response interceptor will redirect to login
+      } else {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    } catch (error) {
+      console.error('Error getting authentication token:', error)
+      // Error getting token - request will proceed without auth header
     }
   }
   return config
