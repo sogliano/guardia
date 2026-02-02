@@ -147,10 +147,9 @@ def test_build_user_prompt_no_optional_fields():
 
 @pytest.mark.asyncio
 @patch("app.services.pipeline.llm_explainer.settings")
-async def test_call_openai_real_mock(mock_settings):
+@patch("app.services.pipeline.llm_explainer.openai")
+async def test_call_openai_real_mock(mock_openai, mock_settings):
     """Mock the OpenAI client to verify _call_openai flow."""
-    import sys
-
     mock_settings.openai_api_key = "sk-openai"
     mock_settings.openai_model = "gpt-test"
 
@@ -160,9 +159,6 @@ async def test_call_openai_real_mock(mock_settings):
     mock_response.choices = [mock_choice]
     mock_response.usage.prompt_tokens = 80
     mock_response.usage.completion_tokens = 40
-
-    # Create a proper mock structure for openai module
-    mock_openai = MagicMock()
 
     # Make the create method properly awaitable
     async def mock_create(*args, **kwargs):
@@ -180,18 +176,8 @@ async def test_call_openai_real_mock(mock_settings):
 
     mock_openai.AsyncOpenAI.return_value = mock_client
 
-    # Mock the entire openai module structure
-    mock_openai_resources = MagicMock()
-    mock_openai.resources = mock_openai_resources
-
-    with patch.dict(sys.modules, {
-        "openai": mock_openai,
-        "openai.resources": mock_openai_resources,
-        "openai.resources.chat": MagicMock(),
-        "openai.resources.chat.completions": MagicMock(),
-    }):
-        explainer = LLMExplainer()
-        result = await explainer._call_openai("test prompt")
+    explainer = LLMExplainer()
+    result = await explainer._call_openai("test prompt")
 
     assert result.explanation == "OpenAI analysis of threats..."
     assert result.provider == "openai"

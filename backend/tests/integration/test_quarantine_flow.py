@@ -36,13 +36,21 @@ class TestQuarantineFlow:
         # Add email relationship
         mock_case.email = mock_email
 
-        # Mock DB queries
+        # Mock DB queries - first call returns case, second call returns email
+        call_count = 0
         def execute_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
             mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = mock_case
+            if call_count == 1:
+                # First call: _get_quarantined_case
+                mock_result.scalar_one_or_none.return_value = mock_case
+            else:
+                # Second call: _load_email
+                mock_result.scalar_one_or_none.return_value = mock_email
             return mock_result
 
-        mock_db.execute.side_effect = execute_side_effect
+        mock_db.execute = AsyncMock(side_effect=execute_side_effect)
 
         # Mock storage and relay
         from unittest.mock import patch, AsyncMock
