@@ -11,272 +11,75 @@
 
 <p align="center">
   <a href="README.es.md">Español</a> &middot;
+  <a href="#quick-start">Quick Start</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
-  <a href="#detection-pipeline">Pipeline</a> &middot;
-  <a href="#tech-stack">Tech Stack</a> &middot;
-  <a href="#getting-started">Getting Started</a> &middot;
-  <a href="#deployment">Deployment</a> &middot;
-  <a href="docs/ARCHITECTURE.md">Full Documentation</a>
+  <a href="#development">Development</a> &middot;
+  <a href="#deployment">Deployment</a>
 </p>
 
 ---
 
 ## Overview
 
-Guard-IA is a **pre-delivery email security system** that intercepts inbound emails via an SMTP gateway before they reach Google Workspace inboxes. Every email is analyzed through a **3-layer AI pipeline** that combines deterministic heuristics, a fine-tuned ML model, and an LLM-based risk analyst to produce a unified threat score and actionable verdict.
+Guard-IA is a **pre-delivery email security system** that intercepts inbound emails before they reach Google Workspace inboxes. Every email is analyzed through a **3-layer AI pipeline** (heuristics + ML + LLM) producing a unified threat score and actionable verdict in under 5 seconds.
 
-Built as a university thesis project (ORT Uruguay) for [Strike Security](https://strike.sh).
+**Built as a university thesis (ORT Uruguay) for [Strike Security](https://strike.sh).**
 
 ### Key Features
 
-- **Pre-delivery interception** -- analyzes emails before inbox delivery, not after
-- **3-layer defense-in-depth** -- heuristics, ML and LLM working together
-- **Sub-5-second pipeline** -- real-time analysis without delivery delays
-- **Fail-open design** -- pipeline failures forward email to avoid blocking legitimate mail
-- **Analyst dashboard** -- real-time case management, quarantine review and threat analytics
-- **Slack alerts** -- instant notifications for high-risk detections
-- **Graceful degradation** -- pipeline adjusts weights automatically when layers are unavailable
+- ⚡ **Sub-5-second pipeline** -- real-time analysis without delivery delays
+- 🛡️ **3-layer defense** -- heuristics (5ms) → ML (18ms) → LLM (2-3s)
+- 🎯 **Pre-delivery interception** -- analyzes before inbox, not after
+- 📊 **Analyst dashboard** -- case management, quarantine review, threat analytics
+- 🔄 **Graceful degradation** -- auto-adjusts when layers unavailable
+- 🚨 **Slack alerts** -- instant notifications for high-risk detections
 
 ---
 
-## Architecture
-
-```mermaid
-graph TB
-    subgraph Internet
-        EMAIL["Inbound Email"]
-        ANALYST["Security Analyst"]
-    end
-
-    subgraph GUARDIA["Guard-IA System"]
-        subgraph Gateway["SMTP Gateway :2525"]
-            SMTP["aiosmtpd"]
-            PARSER["Email Parser"]
-        end
-
-        subgraph Pipeline["Detection Pipeline"]
-            ORCH["Orchestrator"]
-            HEUR["Heuristic Engine ~5ms"]
-            ML["ML Classifier ~18ms"]
-            LLM["LLM Analyst ~2-3s"]
-        end
-
-        subgraph Backend["FastAPI :8000"]
-            API["REST API"]
-        end
-
-        subgraph Frontend["Vue 3 :3000"]
-            SPA["Dashboard SPA"]
-        end
-
-        DB[("PostgreSQL 16")]
-    end
-
-    subgraph External["External Services"]
-        CLERK["Clerk Auth"]
-        SLACK["Slack"]
-        GOOGLE["Google Workspace"]
-        OPENAI["OpenAI API"]
-    end
-
-    EMAIL -->|SMTP| SMTP
-    SMTP --> PARSER --> ORCH
-    ORCH --> HEUR
-    ORCH --> ML
-    ORCH --> LLM
-    LLM -.-> OPENAI
-    ORCH --> DB
-    ORCH -->|Forward| GOOGLE
-    ORCH -->|Alert| SLACK
-    ANALYST --> SPA
-    SPA -->|HTTP| API --> DB
-    SPA -.-> CLERK
-    API -.-> CLERK
-```
-
-> For full architecture documentation with ER diagrams, auth flows and deployment topology, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
----
-
-## Detection Pipeline
-
-Every inbound email passes through three sequential analysis layers:
-
-```mermaid
-flowchart LR
-    E["Email"] --> H["Heuristic Engine"]
-    H --> M["ML Classifier"]
-    M --> L["LLM Analyst"]
-    L --> S["Final Score"]
-    S --> V{"Verdict"}
-
-    V -->|"< 0.3"| ALLOW["ALLOWED"]
-    V -->|"0.3 - 0.6"| WARN["WARNED"]
-    V -->|"0.6 - 0.8"| QUAR["QUARANTINED"]
-    V -->|">= 0.8"| BLOCK["BLOCKED"]
-
-    style ALLOW fill:#22c55e,color:#fff
-    style WARN fill:#f59e0b,color:#fff
-    style QUAR fill:#f97316,color:#fff
-    style BLOCK fill:#ef4444,color:#fff
-```
-
-| Layer | Time | Weight | Description |
-|-------|------|--------|-------------|
-| **Heuristic Engine** | ~5ms | 30% | Rule-based analysis: SPF/DKIM/DMARC authentication, domain typosquatting, URL reputation, keyword patterns. 4 sub-engines with correlation bonuses. |
-| **ML Classifier** | ~18ms | 50% | DistilBERT fine-tuned (66M params) binary classifier. Input: subject + body. Output: phishing probability. |
-| **LLM Analyst** | ~2-3s | 20% | Independent AI risk assessment via OpenAI GPT. Returns score + human-readable explanation. |
-
-**Final Score** = `0.30 x Heuristic + 0.50 x ML + 0.20 x LLM`
-
-When layers are unavailable, weights redistribute automatically (e.g., Heuristic + ML only = 40% + 60%).
-
-| Verdict | Score | Action |
-|---------|-------|--------|
-| **Allowed** | < 0.3 | Forward to Gmail |
-| **Warned** | 0.3 - 0.6 | Deliver + alert analyst |
-| **Quarantined** | 0.6 - 0.8 | Hold for manual review |
-| **Blocked** | >= 0.8 | Reject at SMTP level (550) |
-
----
-
-## Tech Stack
-
-### Backend
-
-| | Technology |
-|---|---|
-| **Language** | Python 3.11 |
-| **Framework** | FastAPI (async) |
-| **ORM** | SQLAlchemy 2.0 async + asyncpg |
-| **Database** | PostgreSQL 16 (Neon serverless) |
-| **Validation** | Pydantic v2 |
-| **SMTP** | aiosmtpd |
-| **Logging** | structlog (JSON) |
-| **LLM** | OpenAI GPT (httpx) |
-| **Linting** | ruff, mypy |
-| **Tests** | pytest + pytest-asyncio |
-
-### Frontend
-
-| | Technology |
-|---|---|
-| **Framework** | Vue 3 (Composition API, `<script setup>`) |
-| **Language** | TypeScript |
-| **Build** | Vite |
-| **State** | Pinia |
-| **HTTP** | Axios |
-| **Charts** | Chart.js via vue-chartjs |
-| **Auth** | Clerk Vue SDK |
-| **Icons** | Material Symbols Rounded |
-
-### ML
-
-| | Technology |
-|---|---|
-| **Model** | DistilBERT (distilbert-base-uncased) fine-tuned |
-| **Parameters** | 66M |
-| **Inference** | ~18ms |
-| **Tracking** | MLflow |
-
-### Infrastructure
-
-| Service | Purpose |
-|---------|---------|
-| **Google Cloud Run** | Backend container hosting |
-| **Vercel** | Frontend CDN + SPA hosting |
-| **Neon** | Serverless PostgreSQL |
-| **Clerk** | Authentication (RS256 JWT, invitation-only) |
-| **Slack API** | Alert webhooks |
-| **Google Workspace** | Email relay target |
-
----
-
-## Project Structure
-
-```
-guardia/
-├── backend/                 # Python 3.11 / FastAPI
-│   ├── app/
-│   │   ├── api/v1/          # REST endpoints (12 modules)
-│   │   ├── core/            # Constants, security, exceptions
-│   │   ├── db/              # SQLAlchemy session + Alembic migrations
-│   │   ├── gateway/         # SMTP server, email parser, relay
-│   │   ├── models/          # ORM models (16 tables)
-│   │   ├── schemas/         # Pydantic v2 request/response
-│   │   └── services/        # Business logic + detection pipeline
-│   ├── scripts/             # Email simulation & DB seeding
-│   └── Dockerfile
-├── frontend/                # Vue 3 / TypeScript / Vite
-│   ├── src/
-│   │   ├── views/           # 7 page components
-│   │   ├── components/      # Reusable UI (6 categories)
-│   │   ├── stores/          # 7 Pinia stores
-│   │   ├── services/        # API clients (Axios)
-│   │   └── types/           # TypeScript interfaces
-│   └── Dockerfile
-├── ml/                      # DistilBERT fine-tuning & inference
-│   ├── src/                 # Training pipeline
-│   ├── data/                # Datasets (raw/processed/splits)
-│   ├── models/              # Saved model weights
-│   └── notebooks/           # Jupyter experiments
-├── docs/
-│   └── ARCHITECTURE.md      # Full architecture documentation
-├── docker-compose.yml
-├── Makefile
-└── .env.example
-```
-
----
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
 - Node.js 18+
-- PostgreSQL 16 (or Neon account)
+- PostgreSQL 16 (local or [Neon](https://neon.tech))
 - Docker & Docker Compose (optional)
 
-### 1. Clone & configure
+### Local Development (5 minutes)
 
 ```bash
+# 1. Clone repository
 git clone https://github.com/your-org/guardia.git
 cd guardia
+
+# 2. Configure environment
 cp .env.example .env.local
-# Edit .env.local with your database URL, API keys, etc.
-```
+# Edit .env.local with your credentials (DB, Clerk, OpenAI, Slack)
 
-### 2. Backend setup
+# 3. Start all services (recommended)
+make dev
 
-```bash
+# OR manually:
+# Backend
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
 alembic upgrade head
-uvicorn app.main:app --reload --port 8000
-```
+PYTHONPATH=$PWD uvicorn app.main:app --reload --port 8000
 
-### 3. Frontend setup
-
-```bash
+# Frontend (new terminal)
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. Using Make (recommended)
+**Access:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000/api/v1
+- API Docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
 
-```bash
-make dev              # Start all services (db, mlflow, backend, frontend)
-make test             # Run all tests
-make lint             # ruff + mypy + eslint
-make migrate          # Run Alembic migrations
-make migration msg="" # Create new migration
-```
-
-### 5. Seed test data
+### Seed Test Data
 
 ```bash
 cd backend
@@ -285,151 +88,597 @@ python -m scripts.seed_test_emails
 
 ---
 
-## Deployment
-
-### Environments
-
-| Environment | Backend | Frontend | Database | LLM |
-|------------|---------|----------|----------|-----|
-| **Local** | localhost:8000 | localhost:3000 | Neon (shared) | gpt-4o-mini |
-| **Staging** | Cloud Run (us-east1) | Vercel | Neon (shared) | gpt-4o-mini |
-| **Production** | Cloud Run | Vercel | Neon (dedicated) | OpenAI GPT |
-
-### Configuration
-
-Environment files are loaded based on `APP_ENV`:
+## Architecture
 
 ```
-.env.local       → development
-.env.staging     → cloud testing
-.env.production  → production
+┌─────────────┐
+│ Inbound     │
+│ Email       │
+└──────┬──────┘
+       │
+       v
+┌─────────────────────────────────────────┐
+│ SMTP Gateway (aiosmtpd :2525)          │
+└──────┬──────────────────────────────────┘
+       │
+       v
+┌─────────────────────────────────────────┐
+│ Detection Pipeline                       │
+│ ┌─────────────────────────────────────┐ │
+│ │ 1. Heuristics (~5ms)        [30%]  │ │
+│ │    SPF/DKIM/DMARC, typosquat, URLs │ │
+│ └─────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────┐ │
+│ │ 2. ML Classifier (~18ms)    [50%]  │ │
+│ │    DistilBERT fine-tuned (66M)     │ │
+│ └─────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────┐ │
+│ │ 3. LLM Analyst (~2-3s)      [20%]  │ │
+│ │    OpenAI GPT risk assessment      │ │
+│ └─────────────────────────────────────┘ │
+│                                          │
+│ Final Score = Σ(layer_score × weight)   │
+└──────┬───────────────────────────────────┘
+       │
+       v
+┌──────────────────┬─────────────────────┐
+│ Verdict Decision │ Threshold           │
+├──────────────────┼─────────────────────┤
+│ ALLOWED          │ < 0.3               │
+│ WARNED           │ 0.3 - 0.6           │
+│ QUARANTINED      │ 0.6 - 0.8           │
+│ BLOCKED          │ ≥ 0.8               │
+└──────────────────┴─────────────────────┘
 ```
 
-### Staging
+### Tech Stack
 
-```mermaid
-graph LR
-    V["Vercel CDN"] -->|"/api/v1"| CR["Cloud Run"]
-    CR --> N["Neon PostgreSQL"]
-    CR -.-> OAI["OpenAI gpt-4o-mini"]
-    CR -.-> SL["Slack Webhooks"]
-    V -.-> CL["Clerk Auth"]
-    CR -.-> CL
+| Component | Technology |
+|-----------|-----------|
+| **Backend** | Python 3.11, FastAPI, SQLAlchemy async, PostgreSQL 16 |
+| **Frontend** | Vue 3 (Composition API), TypeScript, Pinia, Vite |
+| **ML** | DistilBERT (66M params), MLflow tracking |
+| **Auth** | Clerk (RS256 JWT, invitation-only) |
+| **Hosting** | Google Cloud Run (backend), Vercel (frontend), Neon (DB) |
+| **LLM** | OpenAI GPT-4o-mini (staging), GPT-4 (production) |
 
-    style V fill:#000,color:#fff
-    style CR fill:#4285f4,color:#fff
-    style N fill:#00e599,color:#000
-    style CL fill:#6c47ff,color:#fff
-    style OAI fill:#10a37f,color:#fff
-    style SL fill:#4a154b,color:#fff
+### Project Structure
+
 ```
-
----
-
-## API Overview
-
-Base URL: `/api/v1`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/emails/ingest` | Ingest new email |
-| `GET` | `/cases` | List cases (paginated, filtered) |
-| `GET` | `/cases/:id` | Case detail with full analysis |
-| `POST` | `/cases/:id/resolve` | Resolve case (allow/block) |
-| `GET` | `/dashboard/stats` | Dashboard analytics |
-| `GET` | `/quarantine` | List quarantined emails |
-| `POST` | `/quarantine/:id/release` | Release from quarantine |
-| `GET` | `/health` | Health check |
-
-All endpoints (except `/health`) require a Clerk JWT Bearer token.
-
----
-
-## Database
-
-16 PostgreSQL tables managed via SQLAlchemy 2.0 + Alembic migrations.
-
-```mermaid
-erDiagram
-    emails ||--|| cases : "1:1"
-    cases ||--o{ analyses : "has"
-    analyses ||--o{ evidences : "has"
-    cases ||--o{ quarantine_actions : "has"
-    cases ||--o{ case_notes : "has"
-    cases ||--o{ fp_reviews : "has"
-    cases ||--o{ alert_events : "has"
-    alert_rules ||--o{ alert_events : "triggers"
-    users ||--o{ case_notes : "writes"
-    users ||--o{ notifications : "receives"
-```
-
-Core tables: `emails`, `cases`, `analyses`, `evidences`, `users`, `quarantine_actions`, `fp_reviews`, `case_notes`, `alert_rules`, `alert_events`, `notifications`, `policy_entries`, `custom_rules`, `settings`.
-
----
-
-## Authentication
-
-- **Provider:** [Clerk](https://clerk.com) (managed authentication)
-- **Method:** RS256 JWT (asymmetric)
-- **Access:** Invitation-only (no public signup)
-- **Roles:** `administrator`, `analyst`, `auditor`
-- **Sync:** Hybrid -- Clerk manages auth, backend maintains local user records
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant F as Frontend
-    participant C as Clerk
-    participant B as Backend
-
-    U->>C: Login
-    C-->>F: RS256 JWT
-    F->>B: API + Bearer JWT
-    B->>B: Verify with PEM key
-    B-->>F: Response
+guardia/
+├── backend/              # Python 3.11 / FastAPI
+│   ├── app/
+│   │   ├── api/v1/       # REST endpoints (cases, emails, dashboard, etc.)
+│   │   ├── services/     # Business logic + detection pipeline
+│   │   ├── models/       # SQLAlchemy ORM (16 tables)
+│   │   ├── gateway/      # SMTP server + email parser
+│   │   └── db/           # Alembic migrations
+│   ├── tests/            # pytest + pytest-asyncio
+│   └── pyproject.toml
+├── frontend/             # Vue 3 / TypeScript / Vite
+│   ├── src/
+│   │   ├── views/        # Page components (7)
+│   │   ├── components/   # Reusable UI
+│   │   ├── stores/       # Pinia state (7 stores)
+│   │   └── services/     # Axios API clients
+│   ├── tests/            # Vitest + Playwright
+│   └── package.json
+├── ml/                   # DistilBERT fine-tuning
+│   ├── src/              # Training pipeline
+│   ├── data/             # Datasets (raw/processed/splits)
+│   └── models/           # Saved model weights
+├── infra/                # Docker, Nginx configs
+├── docs/                 # Architecture docs, status reviews
+├── docker-compose.yml
+└── Makefile
 ```
 
 ---
 
 ## Development
 
-### Local ports
+### Local Ports
 
-| Service | Port |
-|---------|------|
-| Frontend (Vite) | 3000 |
-| Backend (FastAPI) | 8000 |
-| SMTP Gateway | 2525 |
-| PostgreSQL | 5432 |
-| MLflow | 5000 |
+| Service | Port | URL |
+|---------|------|-----|
+| Frontend (Vite) | 3000 | http://localhost:3000 |
+| Backend (FastAPI) | 8000 | http://localhost:8000 |
+| SMTP Gateway | 2525 | localhost:2525 |
+| PostgreSQL | 5432 | localhost:5432 |
+| MLflow | 5000 | http://localhost:5000 |
 
-### Commands
+### Make Commands
 
 ```bash
-make dev              # Start all services
-make test             # Run test suite
-make lint             # Lint (ruff + mypy + eslint)
-make migrate          # Apply migrations
-make migration msg="" # Generate new migration
+make dev              # Start all services (db, mlflow, backend, frontend)
+make test             # Run all tests (backend + frontend)
+make lint             # ruff + mypy + eslint
+make migrate          # Apply Alembic migrations
+make migration msg="" # Create new migration
+make clean            # Stop all services
 ```
 
-### Code style
+### Manual Commands
 
-- **Python:** 4-space indent, 100 char lines, ruff + mypy
-- **TypeScript/Vue:** 2-space indent, `<script setup lang="ts">`
-- **General:** LF endings, UTF-8, trailing newline, imports at top
+**Backend:**
+```bash
+cd backend
+source .venv/bin/activate
+
+# Run server
+PYTHONPATH=$PWD uvicorn app.main:app --reload --port 8000
+
+# Run tests
+pytest --cov=app --cov-report=term-missing
+
+# Lint
+ruff check app
+mypy app
+
+# Migrations
+alembic upgrade head
+alembic revision --autogenerate -m "description"
+```
+
+**Frontend:**
+```bash
+cd frontend
+
+# Dev server
+npm run dev
+
+# Tests
+npm run test          # Vitest unit tests
+npm run test:e2e      # Playwright E2E tests
+
+# Lint
+npm run lint
+npm run type-check
+
+# Build
+npm run build
+npm run preview       # Preview production build
+```
+
+### Environment Variables
+
+Create `.env.local` from `.env.example`:
+
+```bash
+# Database
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/guardia
+
+# Clerk Auth (https://clerk.com)
+CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+CLERK_PEM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----..."
+
+# OpenAI (https://platform.openai.com)
+OPENAI_API_KEY=sk-proj-...
+
+# Slack (optional, for alerts)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+
+# App Config
+APP_ENV=development
+APP_DEBUG=true
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+RATE_LIMIT_PER_MINUTE=1000
+```
+
+### Code Style
+
+**Python (backend):**
+- 4-space indent, 100 char line length
+- Linters: `ruff check` (E, F, I, N, W), `mypy`
+- All async (SQLAlchemy async, asyncpg, httpx)
+- Tests: `pytest` + `pytest-asyncio` (asyncio_mode=auto)
+
+**TypeScript/Vue (frontend):**
+- 2-space indent
+- `<script setup lang="ts">` composition API
+- Path alias: `@/` → `src/`
+
+**General:**
+- LF line endings, UTF-8, trim trailing whitespace, final newline
+- Imports always at top (never mid-code)
+- Commits: brief, one line, Spanish or English
 
 ---
 
-## Academic Context
+## Deployment
 
-This project is a university thesis (ORT Uruguay) developed for Strike Security. Technical decisions balance production viability with academic rigor, including documented architectural trade-offs and measurable detection performance metrics.
+### Environments
+
+| Environment | Backend | Frontend | Database | Branch |
+|-------------|---------|----------|----------|--------|
+| **Local** | localhost:8000 | localhost:3000 | Local/Neon | any |
+| **Staging** | Cloud Run (us-east1) | Vercel (preview) | Neon (shared) | `staging` |
+| **Production** | Cloud Run | Vercel (production) | Neon (dedicated) | `main` |
+
+### Staging Deployment
+
+**Automatic (via GitHub Actions):**
+```bash
+git checkout staging
+git merge feat/your-branch
+git push origin staging
+# Triggers deploy-backend-staging.yml + deploy-frontend-staging.yml
+```
+
+**Backend:**
+- Runs tests (`pytest --cov`)
+- Builds Docker image
+- Deploys to Cloud Run (us-east1)
+- Uses `.env.staging` secrets from GCP Secret Manager
+
+**Frontend:**
+- Runs tests (`vitest` + `playwright`)
+- Builds production bundle
+- Deploys to Vercel preview
+
+**URLs:**
+- Backend: https://guardia-backend-staging-xxxxx.run.app
+- Frontend: https://guardia-staging.vercel.app
+
+### Production Deployment
+
+**Automatic (via GitHub Actions):**
+```bash
+git checkout main
+git merge staging
+git push origin main
+# Triggers deploy-backend-production.yml + deploy-frontend-production.yml
+```
+
+**Safety checks:**
+- Only `main` branch can deploy to production
+- All tests must pass (coverage ≥60% backend)
+- Manual approval for production frontend deploy
+
+**URLs:**
+- Backend: https://guardia-backend-xxxxx.run.app
+- Frontend: https://guardia.strike.sh
+
+### Environment Files
+
+**DO NOT commit `.env.*` files with real secrets!**
+
+Configuration files are loaded based on `APP_ENV`:
+
+```
+.env.local       → development (local)
+.env.staging     → staging (Cloud Run)
+.env.production  → production (Cloud Run)
+.env.example     → template (safe to commit)
+```
+
+**Use GCP Secret Manager for staging/production:**
+```bash
+# Set secret
+gcloud secrets create CLERK_SECRET_KEY --data-file=-
+
+# Access in Cloud Run
+# Set environment variable: CLERK_SECRET_KEY=projects/PROJECT_ID/secrets/CLERK_SECRET_KEY/versions/latest
+```
+
+### Manual Deployment
+
+**Backend (Cloud Run):**
+```bash
+cd backend
+gcloud builds submit --tag gcr.io/PROJECT_ID/guardia-backend
+gcloud run deploy guardia-backend \
+  --image gcr.io/PROJECT_ID/guardia-backend \
+  --region us-east1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --set-env-vars APP_ENV=production
+```
+
+**Frontend (Vercel):**
+```bash
+cd frontend
+vercel --prod
+```
+
+---
+
+## API Reference
+
+**Base URL:** `https://guardia-backend-xxxxx.run.app/api/v1` (production)
+**Auth:** Bearer token (Clerk RS256 JWT)
+
+### Core Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/health` | Health check | ❌ |
+| `GET` | `/auth/me` | Current user profile | ✅ |
+| `POST` | `/emails/ingest` | Ingest new email | ✅ |
+| `GET` | `/emails` | List emails (paginated) | ✅ |
+| `GET` | `/emails/:id` | Email detail | ✅ |
+| `GET` | `/cases` | List cases (filtered) | ✅ |
+| `GET` | `/cases/:id` | Case detail | ✅ |
+| `POST` | `/cases/:id/resolve` | Resolve case (final verdict) | ✅ Analyst |
+| `POST` | `/cases/:id/notes` | Add investigation note | ✅ |
+| `GET` | `/dashboard` | Dashboard statistics | ✅ |
+| `GET` | `/quarantine` | List quarantined emails | ✅ |
+| `POST` | `/quarantine/:id/release` | Release from quarantine | ✅ Analyst |
+| `POST` | `/quarantine/:id/delete` | Delete quarantined email | ✅ Analyst |
+| `GET` | `/monitoring` | Pipeline monitoring (LLM/ML/Heuristics) | ✅ |
+
+**Full API docs:** https://guardia-backend-xxxxx.run.app/docs (Swagger UI)
+
+### Rate Limits
+
+| Endpoint | Limit | Reason |
+|----------|-------|--------|
+| Critical actions (delete, release, fp-review) | 3-5/min | Irreversible operations |
+| Modifications (resolve, notes) | 10-30/min | Important changes |
+| Complex reads (dashboard, monitoring) | 30-60/min | Heavy SQL queries |
+| Simple reads (get case, email) | 100/min | Lightweight |
+| Auth endpoint | 300/min | Frequent polling |
+
+---
+
+## Database
+
+**16 PostgreSQL tables** managed via SQLAlchemy 2.0 + Alembic migrations.
+
+**Core tables:**
+- `emails` - Raw email data (headers, body, attachments metadata)
+- `cases` - Detection cases (1:1 with emails)
+- `analyses` - Pipeline analysis results (heuristics, ML, LLM)
+- `evidences` - Supporting evidence for analyses
+- `users` - Local user records (synced from Clerk)
+- `quarantine_actions` - Quarantine operations history
+- `case_notes` - Analyst investigation notes
+- `fp_reviews` - False positive reviews
+- `alert_events` - Triggered alerts
+- `alert_rules` - Alert configuration
+
+**Migrations:**
+```bash
+# Apply all migrations
+alembic upgrade head
+
+# Create new migration
+alembic revision --autogenerate -m "add new column"
+
+# Rollback one migration
+alembic downgrade -1
+
+# View migration history
+alembic history
+```
+
+---
+
+## ML Model
+
+**Model:** DistilBERT (distilbert-base-uncased) fine-tuned for binary classification
+**Parameters:** 66M
+**Inference time:** ~18ms
+**Input:** Email subject + body (max 512 tokens)
+**Output:** Phishing probability [0.0, 1.0]
+
+### Training (for ML engineer)
+
+```bash
+cd ml
+
+# 1. Prepare dataset
+# Place data in ml/data/raw/ (CSV: text, label)
+
+# 2. Process data
+python src/preprocess.py
+
+# 3. Train model
+python src/train.py
+
+# 4. Evaluate
+python src/evaluate.py
+
+# 5. Copy model to backend
+cp -r models/distilbert-guardia ../backend/ml_models/
+```
+
+**Expected dataset:**
+- ~5k-10k labeled emails (phishing/legitimate)
+- 70/15/15 train/val/test split
+- Balanced classes
+
+**Model location:**
+- Training: `ml/models/distilbert-guardia/`
+- Inference: `backend/ml_models/distilbert-guardia/`
+
+**Note:** Pipeline works without ML model (graceful degradation: Heuristics 60% + LLM 40%)
+
+---
+
+## Authentication
+
+**Provider:** [Clerk](https://clerk.com)
+**Method:** RS256 JWT (asymmetric)
+**Access:** Invitation-only (no public signup)
+
+**Roles:**
+- `administrator` - Full access (user management, settings)
+- `analyst` - Case resolution, quarantine actions
+- `auditor` - Read-only access
+
+**Flow:**
+1. User logs in via Clerk (frontend)
+2. Clerk returns RS256 JWT
+3. Frontend sends JWT in `Authorization: Bearer <token>` header
+4. Backend verifies JWT with Clerk public PEM key
+5. Backend loads local user record (hybrid sync)
+
+**Local user sync:**
+- Clerk webhook → `POST /api/v1/auth/sync-user`
+- Backend maintains local `users` table for case ownership
+- User creation/update synced automatically
+
+---
+
+## Monitoring
+
+### Health Check
+
+```bash
+curl https://guardia-backend-xxxxx.run.app/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "database": true
+}
+```
+
+### Pipeline Metrics
+
+**Dashboard:** http://localhost:3000/monitoring
+
+**Metrics tracked:**
+- LLM: token usage, cost ($), latency (p50/p95/p99), error rate
+- ML: inference time, confidence distribution, accuracy
+- Heuristics: execution time, triggered rules, score distribution
+
+**Alerts:**
+- High-risk detections → Slack webhook
+- Pipeline failures → Error logs (structlog JSON)
+- Rate limit exceeded → HTTP 429
+
+---
+
+## Testing
+
+### Backend Tests
+
+```bash
+cd backend
+pytest --cov=app --cov-report=term-missing --cov-fail-under=60
+
+# Run specific test
+pytest tests/unit/test_heuristics.py -v
+
+# Run integration tests
+pytest tests/integration/ -v
+```
+
+**Coverage:** 45% unit, ~20% integration (using mocks)
+**Target:** 60%+ for production
+
+### Frontend Tests
+
+```bash
+cd frontend
+
+# Unit tests (Vitest)
+npm run test -- --run
+npm run test -- --coverage
+
+# E2E tests (Playwright)
+npm run test:e2e
+
+# Specific test
+npm run test -- src/stores/cases.spec.ts
+```
+
+**Coverage:** 30%+ target (stores + critical components)
+
+---
+
+## Troubleshooting
+
+### Backend won't start
+
+```bash
+# Check Python version
+python --version  # Must be 3.11+
+
+# Reinstall dependencies
+cd backend
+rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# Check database connection
+psql $DATABASE_URL -c "SELECT 1"
+
+# Run migrations
+alembic upgrade head
+```
+
+### Frontend build fails
+
+```bash
+# Clear cache
+cd frontend
+rm -rf node_modules dist .vite
+npm install
+
+# Check Node version
+node --version  # Must be 18+
+```
+
+### Database migration conflicts
+
+```bash
+# View current version
+alembic current
+
+# Rollback to specific version
+alembic downgrade <revision>
+
+# Force to latest
+alembic upgrade head
+```
+
+### Rate limit errors (HTTP 429)
+
+- Check `RATE_LIMIT_PER_MINUTE` in `.env`
+- Default: 1000/min (development), 100/min (production)
+- Specific endpoints have lower limits (see Rate Limits section)
+
+---
+
+## Contributing
+
+1. Create feature branch from `main`
+2. Follow code style guidelines
+3. Write tests for new features
+4. Ensure `make lint` passes
+5. Ensure `make test` passes
+6. Create PR to `staging` first
+7. After staging approval, merge to `main`
+
+**Commit messages:**
+- Brief, one line
+- Spanish or English
+- No AI/Claude references
+- Examples: "add rate limiting", "fix email parser", "mejora dashboard"
 
 ---
 
 ## License
 
 All rights reserved. Strike Security.
+
+---
+
+## Academic Context
+
+This project is a university thesis (ORT Uruguay) developed for Strike Security. Technical decisions balance production viability with academic rigor.
+
+**Thesis supervisor:** [Name]
+**Student:** [Name]
+**Year:** 2024-2025
 
 ---
 
