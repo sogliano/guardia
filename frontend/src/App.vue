@@ -12,10 +12,7 @@ const router = useRouter()
 // Bridge Clerk's getToken to our axios interceptor
 setClerkGetToken(async () => {
   if (!getToken.value) return null
-  // @ts-expect-error - Clerk types don't include audience but it's supported in runtime
-  return await getToken.value({
-    audience: import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-  })
+  return await getToken.value({ template: 'guardia-backend' })
 })
 
 // Guard all navigation: wait for Clerk to load, then enforce auth
