@@ -20,6 +20,15 @@ class Settings(BaseSettings):
     clerk_publishable_key: str = ""
     clerk_pem_public_key: str = ""
 
+    @field_validator("clerk_pem_public_key")
+    @classmethod
+    def validate_clerk_pem_public_key(cls, v: str) -> str:
+        """Convert literal \\n in PEM key to actual newlines."""
+        if not v:
+            return v
+        # Replace literal \n with actual newlines
+        return v.replace("\\n", "\n")
+
     # SMTP Gateway
     smtp_host: str = "0.0.0.0"
     smtp_port: int = 2525

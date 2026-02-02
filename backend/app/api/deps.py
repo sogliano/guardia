@@ -49,14 +49,23 @@ async def get_current_user(
             user = await sync_clerk_user(db, clerk_id)
             logger.info("User created successfully via JIT", clerk_id=clerk_id, email=user.email)
         except Exception as e:
-            logger.error("JIT provisioning failed", clerk_id=clerk_id, error=str(e), error_type=type(e).__name__)
+            logger.error(
+                "JIT provisioning failed",
+                clerk_id=clerk_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             raise
 
     if not user.is_active:
         raise ForbiddenError("User account is deactivated")
 
-    user.last_login_at = datetime.now(timezone.utc)
-    await db.commit()
+    # Update last_login_at only if > 1 hour since last update
+    # to avoid unnecessary DB writes on every request
+    now = datetime.now(timezone.utc)
+    if user.last_login_at is None or (now - user.last_login_at).total_seconds() > 3600:
+        user.last_login_at = now
+        await db.commit()
 
     return user
 

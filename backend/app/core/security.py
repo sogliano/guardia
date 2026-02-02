@@ -28,16 +28,17 @@ def verify_clerk_token(token: str) -> dict:
             },
         )
     else:
-        # Production/Staging: verify audience
+        # Production/Staging: skip audience verification
+        # Clerk tokens don't include 'aud' claim by default
         payload = jwt.decode(
             token,
             key=settings.clerk_pem_public_key,
             algorithms=["RS256"],
-            audience=settings.clerk_publishable_key,
             options={
                 "verify_exp": True,
                 "verify_nbf": True,
-                "verify_aud": True,  # Enabled for production
+                "verify_aud": False,  # Clerk doesn't send aud claim
+                "verify_iss": False,  # Disable issuer verification
             },
         )
 

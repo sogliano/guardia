@@ -11,8 +11,23 @@ const router = useRouter()
 
 // Bridge Clerk's getToken to our axios interceptor
 setClerkGetToken(async () => {
-  if (!getToken.value) return null
-  return await getToken.value()
+  if (!getToken.value) {
+    console.warn('Clerk not initialized - getToken.value is null')
+    return null
+  }
+
+  try {
+    const token = await getToken.value()
+
+    if (!token) {
+      console.error('Failed to get authentication token from Clerk')
+    }
+
+    return token
+  } catch (error) {
+    console.error('Error getting token from Clerk:', error)
+    return null
+  }
 })
 
 // Guard all navigation: wait for Clerk to load, then enforce auth
