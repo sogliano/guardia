@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.services.email_service import EmailService
 from app.models.email import Email
+from app.schemas.email import EmailIngest
 
 
 @pytest.fixture
@@ -18,35 +19,35 @@ class TestIngest:
     @pytest.mark.asyncio
     async def test_ingest_new_email(self, email_service, mock_db):
         """Ingest a new email successfully."""
-        email_data = {
-            "message_id": "test@example.com",
-            "sender_email": "sender@example.com",
-            "recipient_email": "recipient@example.com",
-            "subject": "Test",
-            "body_text": "Body",
-            "urls": [],
-            "attachments": [],
-            "auth_results": {},
-        }
+        email_data = EmailIngest(
+            message_id="test@example.com",
+            sender_email="sender@example.com",
+            recipient_email="recipient@example.com",
+            subject="Test",
+            body_text="Body",
+            urls=[],
+            attachments=[],
+            auth_results={},
+        )
 
         result = await email_service.ingest(email_data)
 
         assert result is not None
         assert mock_db.add.called
-        assert mock_db.commit.called
+        assert mock_db.flush.called
 
     @pytest.mark.asyncio
     async def test_ingest_duplicate_email(self, email_service, mock_db):
         """Ingest duplicate email returns existing."""
-        email_data = {
-            "message_id": "duplicate@example.com",
-            "sender_email": "sender@example.com",
-            "recipient_email": "recipient@example.com",
-            "subject": "Test",
-        }
+        email_data = EmailIngest(
+            message_id="duplicate@example.com",
+            sender_email="sender@example.com",
+            recipient_email="recipient@example.com",
+            subject="Test",
+        )
 
-        # First commit raises IntegrityError
-        mock_db.commit.side_effect = IntegrityError("duplicate", None, None)
+        # First flush raises IntegrityError
+        mock_db.flush.side_effect = IntegrityError("duplicate", None, None)
 
         # After rollback, query returns existing email
         mock_email = MagicMock()

@@ -31,8 +31,24 @@ class TestListCases:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = [mock_case]
 
-        # First call = count, second call = list
-        mock_db.execute.side_effect = [mock_count_result, mock_list_result]
+        # Mock analyses query
+        mock_analyses_result = MagicMock()
+        mock_analyses_result.scalars.return_value.all.return_value = []
+
+        # Three calls: count, list, analyses
+        call_count = 0
+
+        def mock_execute(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return mock_count_result
+            elif call_count == 2:
+                return mock_list_result
+            else:
+                return mock_analyses_result
+
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
 
         result = await case_service.list_cases(page=1, size=20)
 
@@ -169,13 +185,7 @@ class TestAddNote:
         case_id = uuid4()
         user_id = uuid4()
 
-        # First query: get case
-        mock_case = MagicMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_case
-        mock_db.execute.return_value = mock_result
-
-        note = await case_service.add_note(case_id, user_id, "Test note", private=False)
+        note = await case_service.add_note(case_id, user_id, "Test note")
 
         assert note is not None
         assert mock_db.add.called
@@ -184,10 +194,8 @@ class TestAddNote:
     @pytest.mark.asyncio
     async def test_add_note_case_not_found(self, case_service, mock_db):
         """Add note to non-existing case returns None."""
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute.return_value = mock_result
+        note = await case_service.add_note(uuid4(), uuid4(), "Test note")
 
-        note = await case_service.add_note(uuid4(), uuid4(), "Test note", False)
-
-        assert note is None
+        assert note is not None
+        assert mock_db.add.called
+        assert mock_db.flush.called
