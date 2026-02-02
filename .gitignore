@@ -43,6 +43,9 @@ pnpm-debug.log*
 frontend/dist/
 *.local
 
+# TypeScript build info
+*.tsbuildinfo
+
 # Environment
 .env
 .env.local

@@ -14,8 +14,11 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 COPY backend/pyproject.toml .
 RUN pip install --no-cache-dir .
 
-# ── Stage 2: Final slim image ──
+# ── Stage 2: Final slim image with security improvements ──
 FROM python:3.11-slim
+
+# Create non-root user for security
+RUN groupadd -r guardia && useradd -r -g guardia -s /sbin/nologin guardia
 
 WORKDIR /app
 
@@ -26,6 +29,18 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 # Copy application code
 COPY backend/ .
 
+# Create directories and set permissions
+RUN mkdir -p /app/quarantine_store /app/ml_models && \
+    chown -R guardia:guardia /app
+
+# Switch to non-root user
+USER guardia
+
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Add healthcheck for container orchestration
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+
+# Use multiple workers for production
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
