@@ -134,8 +134,11 @@ async def client():
     mock_user.id = uuid4()
     mock_user.clerk_id = "test_clerk_123"
     mock_user.email = "test@strike.sh"
+    mock_user.full_name = "Test User"
     mock_user.role = "administrator"
     mock_user.is_active = True
+    mock_user.created_at = "2026-02-02T00:00:00Z"
+    mock_user.last_login_at = "2026-02-02T00:00:00Z"
 
     async def override_get_current_user():
         return mock_user

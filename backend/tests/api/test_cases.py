@@ -73,25 +73,45 @@ class TestCasesAPI:
             "id": str(case_id),
             "case_number": 1,
             "email_id": str(email_id),
+            "status": "pending",
             "verdict": "QUARANTINE",
             "final_score": 0.85,
-            "status": "pending",
+            "risk_level": "high",
+            "threat_category": "credential_phishing",
+            "pipeline_duration_ms": 250,
+            "resolved_by": None,
+            "resolved_at": None,
+            "created_at": "2026-02-02T00:00:00Z",
+            "updated_at": "2026-02-02T00:00:00Z",
             "email": {
-                "id": str(email_id),
-                "message_id": "test@strike.sh",
                 "sender_email": "phishing@evil.com",
+                "sender_name": "Phisher",
+                "recipient_email": "victim@strike.sh",
+                "recipients_cc": [],
                 "subject": "Urgent: Verify Your Account",
+                "body_text": "Click here to verify",
+                "body_html": None,
+                "headers": {},
+                "urls": ["https://evil.com"],
+                "attachments": [],
+                "auth_results": {"spf": "fail"},
+                "received_at": "2026-02-02T00:00:00Z",
             },
             "analyses": [
                 {
                     "id": str(uuid4()),
+                    "case_id": str(case_id),
                     "stage": "heuristic",
                     "score": 0.75,
+                    "confidence": None,
+                    "explanation": None,
+                    "metadata_": {},
+                    "execution_time_ms": 5,
                     "evidences": [],
+                    "created_at": "2026-02-02T00:00:00Z",
                 }
             ],
             "notes": [],
-            "fp_reviews": [],
         }
 
         with patch("app.api.v1.cases.CaseService") as MockService:
@@ -122,9 +142,17 @@ class TestCasesAPI:
         mock_case = {
             "id": str(case_id),
             "case_number": 1,
+            "email_id": str(uuid4()),
             "status": "resolved",
             "verdict": "ALLOWED",
-            "resolution": "approve",
+            "final_score": 0.15,
+            "risk_level": "low",
+            "threat_category": "clean",
+            "pipeline_duration_ms": 100,
+            "resolved_by": str(user_id),
+            "resolved_at": "2026-02-02T01:00:00Z",
+            "created_at": "2026-02-02T00:00:00Z",
+            "updated_at": "2026-02-02T01:00:00Z",
         }
 
         with (
