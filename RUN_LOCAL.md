@@ -8,16 +8,117 @@ Instrucciones para correr el proyecto completo en desarrollo local con logs en t
 
 Antes de empezar, asegúrate de tener:
 
+- **Python 3.11+** (ver instalación abajo)
+- **Node.js 18+** (recomendado: usar nvm)
 - **PostgreSQL** corriendo (puerto 5432)
-- **Base de datos** `guardia` creada con owner `guardia`
-- **Python 3.11+** con virtualenv en `backend/.venv`
-- **Node.js 18+** con dependencias instaladas en `frontend/`
+- **Git**
+
+---
+
+## 🔧 Instalación de Python 3.11
+
+### macOS (Homebrew - Recomendado)
+
+```bash
+# Instalar Python 3.11
+brew install python@3.11
+
+# Verificar instalación
+python3.11 --version
+# Debe mostrar: Python 3.11.x
+
+# Si el comando no se encuentra, agregar al PATH
+echo 'export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Para Intel Mac (no M1/M2), usar:
+# echo 'export PATH="/usr/local/opt/python@3.11/bin:$PATH"' >> ~/.zshrc
+```
+
+### Linux (Ubuntu/Debian)
+
+```bash
+sudo apt update
+sudo apt install python3.11 python3.11-venv
+```
+
+### Windows
+
+Descargar desde https://www.python.org/downloads/ (Python 3.11+)
+
+---
+
+## 🔧 Instalación de Node.js 18+
+
+### Usando nvm (Recomendado)
+
+```bash
+# Instalar nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.zshrc
+
+# Instalar Node 18
+nvm install 18
+nvm use 18
+
+# Verificar
+node --version  # v18.x.x
+```
+
+### macOS (Homebrew alternativo)
+
+```bash
+brew install node@18
+```
 
 ---
 
 ## 📋 Setup Inicial (Una sola vez)
 
-### 1. Crear Base de Datos (si no existe)
+### 1. Crear Entorno Virtual con Python 3.11
+
+```bash
+cd backend
+
+# Crear venv con Python 3.11
+python3.11 -m venv .venv
+
+# Activar venv
+source .venv/bin/activate
+
+# Verificar Python
+python --version  # Debe mostrar Python 3.11.x
+
+# Instalar dependencias
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Si no existe requirements.txt, instalar manualmente las principales:
+# pip install fastapi uvicorn[standard] sqlalchemy[asyncio] asyncpg alembic pydantic pydantic-settings structlog python-jose[cryptography] python-multipart httpx slowapi openai
+```
+
+### 2. Instalar Dependencias del Frontend
+
+```bash
+cd ../frontend
+
+# Instalar dependencias
+npm install
+```
+
+### 3. Crear Base de Datos (si no existe)
+
+**Opción A: Docker (Recomendado)**
+
+```bash
+# Desde raíz del proyecto
+docker-compose up -d db
+
+# Verificar que está corriendo
+docker ps | grep postgres
+```
+
+**Opción B: PostgreSQL Local**
 
 ```bash
 # Crear BD y usuario
@@ -29,24 +130,48 @@ GRANT ALL PRIVILEGES ON DATABASE guardia TO guardia;
 EOF
 ```
 
-### 2. Correr Migraciones
+**Opción C: Neon (Cloud)**
+
+Si usas Neon, copiar connection string en `backend/.env` como `DATABASE_URL`.
+
+### 4. Configurar Variables de Entorno
+
+**Backend:**
 
 ```bash
 cd backend
-PYTHONPATH=$PWD .venv/bin/alembic upgrade head
+cp .env.example .env
+nano .env  # Editar con tus credenciales
 ```
 
-### 3. Verificar Configuración de Clerk
+Variables requeridas:
+- `DATABASE_URL` - PostgreSQL connection string
+- `CLERK_PEM_PUBLIC_KEY` - Clerk JWT Public Key (formato PEM)
+- `OPENAI_API_KEY` - OpenAI API key
+- `SLACK_WEBHOOK_URL` - (opcional en dev)
 
-Asegúrate de que `backend/.env` tenga configuradas las credenciales de Clerk:
+**Frontend:**
 
 ```bash
-# backend/.env
-CLERK_SECRET_KEY=sk_test_...
-CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_PEM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
-...
------END PUBLIC KEY-----"
+cd frontend
+cp .env.example .env.local
+nano .env.local  # Editar con tus credenciales
+```
+
+Variables requeridas:
+- `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+- `VITE_CLERK_PUBLISHABLE_KEY` - Clerk Publishable Key
+
+### 5. Correr Migraciones
+
+```bash
+cd backend
+
+# Activar venv si no está activado
+source .venv/bin/activate
+
+# Correr migraciones
+PYTHONPATH=$PWD alembic upgrade head
 ```
 
 ---
@@ -57,7 +182,12 @@ CLERK_PEM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
 
 ```bash
 cd backend
-PYTHONPATH=$PWD .venv/bin/uvicorn app.main:app --reload --port 8000
+
+# Activar venv
+source .venv/bin/activate
+
+# Levantar backend
+PYTHONPATH=$PWD uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Logs en tiempo real:**
