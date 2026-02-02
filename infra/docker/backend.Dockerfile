@@ -12,7 +12,26 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 # Copy only dependency spec — this layer is cached until pyproject.toml changes
 COPY backend/pyproject.toml .
-RUN pip install --no-cache-dir .
+
+# Install dependencies only (not the package itself, since app/ doesn't exist yet)
+RUN pip install --no-cache-dir \
+    "fastapi>=0.115.0" \
+    "uvicorn[standard]>=0.32.0" \
+    "sqlalchemy[asyncio]>=2.0.0" \
+    "asyncpg>=0.30.0" \
+    "alembic>=1.14.0" \
+    "pydantic>=2.0.0" \
+    "pydantic-settings>=2.0.0" \
+    "PyJWT[crypto]>=2.8.0" \
+    "clerk-backend-api>=1.0.0" \
+    "httpx>=0.27.0" \
+    "transformers>=4.46.0" \
+    "openai>=1.55.0" \
+    "python-multipart>=0.0.12" \
+    "structlog>=24.4.0" \
+    "aiosmtpd>=1.4.6" \
+    "aiosmtplib>=3.0.0" \
+    "slowapi>=0.1.9"
 
 # ── Stage 2: Final slim image with security improvements ──
 FROM python:3.11-slim
