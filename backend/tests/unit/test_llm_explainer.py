@@ -163,9 +163,14 @@ async def test_call_openai_real_mock(mock_settings):
 
     # Create a proper mock structure for openai module
     mock_openai = MagicMock()
-    mock_client = AsyncMock()
+    mock_client = MagicMock()
     mock_openai.AsyncOpenAI.return_value = mock_client
-    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    # Make the create method properly awaitable
+    async def mock_create(*args, **kwargs):
+        return mock_response
+
+    mock_client.chat.completions.create = mock_create
 
     # Mock the entire openai module structure
     mock_openai_resources = MagicMock()

@@ -341,12 +341,12 @@ async def test_analyze_full_flow(
     MockHeuristic, MockMLGetter, MockLLMExplainer, mock_settings, mock_db
 ):
     """Full analyze() with mocked stages runs without error."""
-    from unittest.mock import PropertyMock
-    # Configure settings with actual numeric values
-    type(mock_settings).pipeline_ml_enabled = PropertyMock(return_value=True)
-    type(mock_settings).threshold_allow = PropertyMock(return_value=0.3)
-    type(mock_settings).threshold_warn = PropertyMock(return_value=0.6)
-    type(mock_settings).threshold_quarantine = PropertyMock(return_value=0.8)
+    # Configure settings with actual numeric values (direct assignment)
+    mock_settings.pipeline_ml_enabled = True
+    mock_settings.pipeline_timeout_seconds = 30
+    mock_settings.threshold_allow = 0.3
+    mock_settings.threshold_warn = 0.6
+    mock_settings.threshold_quarantine = 0.8
 
     email_id = uuid4()
     fake_email = MagicMock()
@@ -403,11 +403,12 @@ async def test_analyze_llm_failure_continues(
     MockHeuristic, MockLLMExplainer, mock_settings, mock_db
 ):
     """LLM explainer failing doesn't break the pipeline."""
-    from unittest.mock import PropertyMock
-    type(mock_settings).pipeline_ml_enabled = PropertyMock(return_value=False)
-    type(mock_settings).threshold_allow = PropertyMock(return_value=0.3)
-    type(mock_settings).threshold_warn = PropertyMock(return_value=0.6)
-    type(mock_settings).threshold_quarantine = PropertyMock(return_value=0.8)
+    # Configure settings with actual numeric values (direct assignment)
+    mock_settings.pipeline_ml_enabled = False
+    mock_settings.pipeline_timeout_seconds = 30
+    mock_settings.threshold_allow = 0.3
+    mock_settings.threshold_warn = 0.6
+    mock_settings.threshold_quarantine = 0.8
 
     email_id = uuid4()
     fake_email = MagicMock()
@@ -455,11 +456,12 @@ async def test_analyze_auto_quarantine(
     MockHeuristic, MockLLMExplainer, mock_settings, mock_db
 ):
     """High score → quarantined verdict → case status set to QUARANTINED."""
-    from unittest.mock import PropertyMock
-    type(mock_settings).pipeline_ml_enabled = PropertyMock(return_value=False)
-    type(mock_settings).threshold_allow = PropertyMock(return_value=0.3)
-    type(mock_settings).threshold_warn = PropertyMock(return_value=0.6)
-    type(mock_settings).threshold_quarantine = PropertyMock(return_value=0.8)
+    # Configure settings with actual numeric values (direct assignment)
+    mock_settings.pipeline_ml_enabled = False
+    mock_settings.pipeline_timeout_seconds = 30
+    mock_settings.threshold_allow = 0.3
+    mock_settings.threshold_warn = 0.6
+    mock_settings.threshold_quarantine = 0.8
 
     email_id = uuid4()
     fake_email = MagicMock()

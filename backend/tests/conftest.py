@@ -123,8 +123,24 @@ async def db_session(test_engine):
 
 @pytest.fixture
 async def client():
-    """HTTP test client for FastAPI app."""
+    """HTTP test client for FastAPI app with mocked auth."""
     from httpx import ASGITransport
     from app.main import app
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
+    from unittest.mock import MagicMock, patch
+    from uuid import uuid4
+
+    # Mock user for authenticated endpoints
+    mock_user = MagicMock()
+    mock_user.id = uuid4()
+    mock_user.clerk_id = "test_clerk_123"
+    mock_user.email = "test@strike.sh"
+    mock_user.role = "administrator"
+    mock_user.is_active = True
+
+    # Patch all auth dependencies
+    with (
+        patch("app.api.deps.get_current_user", return_value=mock_user),
+        patch("app.api.deps.require_role", return_value=lambda: mock_user),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            yield ac

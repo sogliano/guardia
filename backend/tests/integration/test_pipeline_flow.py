@@ -28,12 +28,18 @@ class TestPipelineFlow:
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
             # Heuristic: High risk due to failed auth
+            from app.services.pipeline.models import HeuristicResult, EvidenceItem
             mock_heur = AsyncMock()
-            mock_heur.analyze.return_value = (
-                0.75,
-                [
-                    {"type": "auth_failure", "severity": "high", "detail": "SPF/DKIM/DMARC failed"}
+            mock_heur.analyze.return_value = HeuristicResult(
+                score=0.75,
+                evidences=[
+                    EvidenceItem(
+                        type="auth_failure",
+                        severity="high",
+                        description="SPF/DKIM/DMARC failed"
+                    )
                 ],
+                execution_time_ms=5,
             )
             MockHeuristic.return_value = mock_heur
 
@@ -91,8 +97,13 @@ class TestPipelineFlow:
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
             # Heuristic: Low risk (legitimate)
+            from app.services.pipeline.models import HeuristicResult
             mock_heur = AsyncMock()
-            mock_heur.analyze.return_value = (0.05, [])
+            mock_heur.analyze.return_value = HeuristicResult(
+                score=0.05,
+                evidences=[],
+                execution_time_ms=3,
+            )
             MockHeuristic.return_value = mock_heur
 
             # ML: FAILS (returns None)
@@ -140,8 +151,13 @@ class TestPipelineFlow:
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
             # Heuristic: Fast
+            from app.services.pipeline.models import HeuristicResult
             mock_heur = AsyncMock()
-            mock_heur.analyze.return_value = (0.6, [])
+            mock_heur.analyze.return_value = HeuristicResult(
+                score=0.6,
+                evidences=[],
+                execution_time_ms=4,
+            )
             MockHeuristic.return_value = mock_heur
 
             # ML: Fast
