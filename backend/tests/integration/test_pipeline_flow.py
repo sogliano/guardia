@@ -44,17 +44,28 @@ class TestPipelineFlow:
             MockHeuristic.return_value = mock_heur
 
             # ML: High confidence phishing
+            from app.services.pipeline.models import MLResult, LLMResult
             mock_ml = AsyncMock()
-            mock_ml.predict.return_value = (0.92, True)
-            MockML.return_value = mock_ml  # get_ml_classifier() returns classifier instance
+            mock_ml.predict.return_value = MLResult(
+                score=0.92,
+                confidence=0.95,
+                model_available=True,
+                model_version="v1.0",
+                execution_time_ms=18,
+            )
+            MockML.return_value = mock_ml
 
             # LLM: Detailed explanation
             mock_llm = AsyncMock()
-            mock_llm.explain.return_value = {
-                "summary": "Email exhibits classic phishing patterns",
-                "reasoning": "Urgency in subject, auth failures, suspicious URLs",
-                "confidence": "high",
-            }
+            mock_llm.explain.return_value = LLMResult(
+                score=0.85,
+                confidence=0.9,
+                explanation="Email exhibits classic phishing patterns with urgency in subject, auth failures, suspicious URLs",
+                provider="openai",
+                model_used="gpt-4",
+                tokens_used=150,
+                execution_time_ms=2500,
+            )
             MockLLM.return_value = mock_llm
 
             # Execute pipeline
@@ -63,7 +74,7 @@ class TestPipelineFlow:
 
             # Assertions: Verify pipeline executed correctly
             assert result is not None
-            assert result.verdict in ["ALLOWED", "WARN", "QUARANTINE"]
+            assert result.verdict in ["allowed", "warned", "quarantined", "blocked"]
             assert 0.0 <= result.final_score <= 1.0
             assert result.final_score >= 0.75  # Should be high due to phishing signals
 
@@ -107,8 +118,13 @@ class TestPipelineFlow:
             MockHeuristic.return_value = mock_heur
 
             # ML: FAILS (returns None)
+            from app.services.pipeline.models import MLResult
             mock_ml = AsyncMock()
-            mock_ml.predict.return_value = (None, False)
+            mock_ml.predict.return_value = MLResult(
+                score=0.0,
+                confidence=0.0,
+                model_available=False,
+            )
             MockML.return_value = mock_ml
 
             # LLM: FAILS (timeout/error)
@@ -122,7 +138,7 @@ class TestPipelineFlow:
 
             # Assertions: Pipeline should still complete with heuristic-only score
             assert result is not None
-            assert result.verdict == "ALLOWED"  # Low heuristic score
+            assert result.verdict == "allowed"  # Low heuristic score
             assert result.final_score < 0.3  # Should be low
 
             # Verify only heuristic executed successfully
@@ -161,13 +177,26 @@ class TestPipelineFlow:
             MockHeuristic.return_value = mock_heur
 
             # ML: Fast
+            from app.services.pipeline.models import MLResult, LLMResult
             mock_ml = AsyncMock()
-            mock_ml.predict.return_value = (0.8, True)
+            mock_ml.predict.return_value = MLResult(
+                score=0.8,
+                confidence=0.9,
+                model_available=True,
+                model_version="v1.0",
+                execution_time_ms=15,
+            )
             MockML.return_value = mock_ml
 
             # LLM: Slow but within timeout
             mock_llm = AsyncMock()
-            mock_llm.explain.return_value = {"summary": "Analysis complete"}
+            mock_llm.explain.return_value = LLMResult(
+                score=0.75,
+                confidence=0.85,
+                explanation="Analysis complete",
+                provider="openai",
+                execution_time_ms=2000,
+            )
             MockLLM.return_value = mock_llm
 
             # Execute with timeout
@@ -176,4 +205,4 @@ class TestPipelineFlow:
 
             # Should complete successfully within timeout
             assert result is not None
-            assert result.verdict in ["ALLOWED", "WARN", "QUARANTINE"]
+            assert result.verdict in ["allowed", "warned", "quarantined", "blocked"]

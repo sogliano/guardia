@@ -126,7 +126,7 @@ async def client():
     """HTTP test client for FastAPI app with mocked auth."""
     from httpx import ASGITransport
     from app.main import app
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import MagicMock, patch, AsyncMock
     from uuid import uuid4
 
     # Mock user for authenticated endpoints
@@ -137,10 +137,20 @@ async def client():
     mock_user.role = "administrator"
     mock_user.is_active = True
 
+    # Create async mock for get_current_user
+    async def mock_get_current_user(*args, **kwargs):
+        return mock_user
+
+    # Create factory for require_role that returns async function
+    def mock_require_role(*allowed_roles):
+        async def _check(*args, **kwargs):
+            return mock_user
+        return _check
+
     # Patch all auth dependencies
     with (
-        patch("app.api.deps.get_current_user", return_value=mock_user),
-        patch("app.api.deps.require_role", return_value=lambda: mock_user),
+        patch("app.api.deps.get_current_user", side_effect=mock_get_current_user),
+        patch("app.api.deps.require_role", side_effect=mock_require_role),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac

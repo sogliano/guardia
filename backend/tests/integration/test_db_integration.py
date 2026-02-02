@@ -4,6 +4,18 @@ from app.models.email import Email
 from app.models.case import Case
 from app.models.analysis import Analysis
 
+# Check if psycopg2 is available (required for testcontainers)
+try:
+    import psycopg2
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(
+    not PSYCOPG2_AVAILABLE,
+    reason="psycopg2 not installed (required for testcontainers PostgreSQL)"
+)
+
 
 class TestDatabaseIntegration:
     """Integration tests using real PostgreSQL database via testcontainers."""

@@ -367,12 +367,19 @@ async def test_analyze_full_flow(
     fake_case = MagicMock()
     fake_case.id = uuid4()
 
-    # DB: first call = _load_email, second call = _get_or_create_case
-    mock_result_email = MagicMock()
-    mock_result_email.scalar_one_or_none.return_value = fake_email
-    mock_result_case = MagicMock()
-    mock_result_case.scalar_one_or_none.return_value = fake_case
-    mock_db.execute.side_effect = [mock_result_email, mock_result_case]
+    # DB: Mock execute to return email first, then case, then case again for any subsequent calls
+    call_count = 0
+    def mock_execute(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_result = MagicMock()
+        if call_count == 1:
+            mock_result.scalar_one_or_none.return_value = fake_email
+        else:
+            mock_result.scalar_one_or_none.return_value = fake_case
+        return mock_result
+
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
 
     # Heuristic
     h_result = HeuristicResult(score=0.2, evidences=[])
@@ -429,11 +436,19 @@ async def test_analyze_llm_failure_continues(
     fake_case = MagicMock()
     fake_case.id = uuid4()
 
-    mock_result_email = MagicMock()
-    mock_result_email.scalar_one_or_none.return_value = fake_email
-    mock_result_case = MagicMock()
-    mock_result_case.scalar_one_or_none.return_value = fake_case
-    mock_db.execute.side_effect = [mock_result_email, mock_result_case]
+    # DB: Mock execute to return email first, then case for subsequent calls
+    call_count = 0
+    def mock_execute(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_result = MagicMock()
+        if call_count == 1:
+            mock_result.scalar_one_or_none.return_value = fake_email
+        else:
+            mock_result.scalar_one_or_none.return_value = fake_case
+        return mock_result
+
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
 
     MockHeuristic.return_value.analyze = AsyncMock(
         return_value=HeuristicResult(score=0.1, evidences=[])
@@ -482,11 +497,19 @@ async def test_analyze_auto_quarantine(
     fake_case = MagicMock()
     fake_case.id = uuid4()
 
-    mock_result_email = MagicMock()
-    mock_result_email.scalar_one_or_none.return_value = fake_email
-    mock_result_case = MagicMock()
-    mock_result_case.scalar_one_or_none.return_value = fake_case
-    mock_db.execute.side_effect = [mock_result_email, mock_result_case]
+    # DB: Mock execute to return email first, then case for subsequent calls
+    call_count = 0
+    def mock_execute(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_result = MagicMock()
+        if call_count == 1:
+            mock_result.scalar_one_or_none.return_value = fake_email
+        else:
+            mock_result.scalar_one_or_none.return_value = fake_case
+        return mock_result
+
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
 
     MockHeuristic.return_value.analyze = AsyncMock(
         return_value=HeuristicResult(score=0.75, evidences=[

@@ -42,22 +42,37 @@ class TestQuarantineFlow:
 
         mock_db.execute.side_effect = execute_side_effect
 
-        # Execute approve/release
-        service = QuarantineService(mock_db)
-        released_case = await service.release(
-            case_id=case_id,
-            user_id=user_id,
-            reason="False positive - legitimate business email",
-        )
+        # Mock storage and relay
+        from unittest.mock import patch, AsyncMock
+        with (
+            patch("app.services.quarantine_service.EmailStorage") as MockStorage,
+            patch("app.services.quarantine_service.RelayClient") as MockRelay,
+        ):
+            mock_storage = AsyncMock()
+            mock_storage.retrieve.return_value = b"raw email data"
+            mock_storage.delete.return_value = None
+            MockStorage.return_value = mock_storage
 
-        # Assertions
-        assert released_case is not None
-        # In real implementation, case.status would be "resolved"
-        # Here we just verify the service method was called correctly
+            mock_relay = AsyncMock()
+            mock_relay.deferred_forward.return_value = True
+            MockRelay.return_value = mock_relay
 
-        # Verify DB operations occurred
-        assert mock_db.execute.called
-        assert mock_db.add.called  # QuarantineActionRecord should be added
+            # Execute approve/release
+            service = QuarantineService(mock_db)
+            released_case = await service.release(
+                case_id=case_id,
+                user_id=user_id,
+                reason="False positive - legitimate business email",
+            )
+
+            # Assertions
+            assert released_case is not None
+            # In real implementation, case.status would be "resolved"
+            # Here we just verify the service method was called correctly
+
+            # Verify DB operations occurred
+            assert mock_db.execute.called
+            assert mock_db.add.called  # QuarantineActionRecord should be added
 
     @pytest.mark.asyncio
     async def test_quarantine_reject_flow(self, mock_db):
