@@ -21,12 +21,18 @@ class TestPipelineFlow:
 
         # Mock pipeline components with realistic responses
         with (
+            patch("app.services.pipeline.orchestrator.BypassChecker") as MockBypass,
             patch(
                 "app.services.pipeline.orchestrator.HeuristicEngine"
             ) as MockHeuristic,
             patch("app.services.pipeline.orchestrator.get_ml_classifier") as MockML,
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
+            # Bypass: No bypass
+            mock_bypass = AsyncMock()
+            mock_bypass.should_bypass.return_value = (False, None)
+            MockBypass.return_value = mock_bypass
+
             # Heuristic: High risk due to failed auth
             from app.services.pipeline.models import HeuristicResult, EvidenceItem
             mock_heur = AsyncMock()
@@ -101,12 +107,18 @@ class TestPipelineFlow:
         mock_db.execute.return_value = mock_result
 
         with (
+            patch("app.services.pipeline.orchestrator.BypassChecker") as MockBypass,
             patch(
                 "app.services.pipeline.orchestrator.HeuristicEngine"
             ) as MockHeuristic,
             patch("app.services.pipeline.orchestrator.get_ml_classifier") as MockML,
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
+            # Bypass: No bypass
+            mock_bypass = AsyncMock()
+            mock_bypass.should_bypass.return_value = (False, None)
+            MockBypass.return_value = mock_bypass
+
             # Heuristic: Low risk (legitimate)
             from app.services.pipeline.models import HeuristicResult
             mock_heur = AsyncMock()
@@ -160,12 +172,18 @@ class TestPipelineFlow:
         mock_db.execute.return_value = mock_result
 
         with (
+            patch("app.services.pipeline.orchestrator.BypassChecker") as MockBypass,
             patch(
                 "app.services.pipeline.orchestrator.HeuristicEngine"
             ) as MockHeuristic,
             patch("app.services.pipeline.orchestrator.get_ml_classifier") as MockML,
             patch("app.services.pipeline.orchestrator.LLMExplainer") as MockLLM,
         ):
+            # Bypass: No bypass
+            mock_bypass = AsyncMock()
+            mock_bypass.should_bypass.return_value = (False, None)
+            MockBypass.return_value = mock_bypass
+
             # Heuristic: Fast
             from app.services.pipeline.models import HeuristicResult
             mock_heur = AsyncMock()

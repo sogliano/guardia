@@ -33,6 +33,8 @@ class TestQuarantineFlow:
             status="pending",
             case_number=1,
         )
+        # Add email relationship
+        mock_case.email = mock_email
 
         # Mock DB queries
         def execute_side_effect(*args, **kwargs):

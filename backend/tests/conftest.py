@@ -126,10 +126,10 @@ async def client():
     """HTTP test client for FastAPI app with mocked auth."""
     from httpx import ASGITransport
     from app.main import app
-    from unittest.mock import MagicMock, patch, AsyncMock
+    from unittest.mock import MagicMock
     from uuid import uuid4
 
-    # Mock user for authenticated endpoints
+    # Override auth dependencies directly in app
     mock_user = MagicMock()
     mock_user.id = uuid4()
     mock_user.clerk_id = "test_clerk_123"
@@ -137,20 +137,26 @@ async def client():
     mock_user.role = "administrator"
     mock_user.is_active = True
 
-    # Create async mock for get_current_user
-    async def mock_get_current_user(*args, **kwargs):
+    async def override_get_current_user():
         return mock_user
 
-    # Create factory for require_role that returns async function
-    def mock_require_role(*allowed_roles):
-        async def _check(*args, **kwargs):
+    def override_require_role(*allowed_roles):
+        async def _check():
             return mock_user
         return _check
 
-    # Patch all auth dependencies
-    with (
-        patch("app.api.deps.get_current_user", side_effect=mock_get_current_user),
-        patch("app.api.deps.require_role", side_effect=mock_require_role),
-    ):
+    from app.api import deps
+
+    # Store original dependencies
+    original_get_current_user = deps.get_current_user
+    original_require_role = deps.require_role
+
+    # Override dependencies
+    app.dependency_overrides[deps.get_current_user] = override_get_current_user
+
+    try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac
+    finally:
+        # Restore original dependencies
+        app.dependency_overrides.clear()
