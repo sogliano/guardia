@@ -17,7 +17,7 @@ setClerkGetToken(async () => {
   }
 
   try {
-    const token = await getToken.value({ template: 'guardia-backend' })
+    const token = await getToken.value()
 
     if (!token) {
       console.error('Failed to get authentication token from Clerk')
