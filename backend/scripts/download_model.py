@@ -21,7 +21,7 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Default config
-DEFAULT_REPO = "guardia-project/distilbert-guardia-v2"
+DEFAULT_REPO = "Rodrigo-Miranda-0/distilbert-guardia-v2"
 DEFAULT_DEST = "ml_models/distilbert-guardia"
 
 

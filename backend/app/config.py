@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # ML Model
     ml_model_path: str = "./ml_models/distilbert-guardia"
-    ml_model_hf_repo: str = "guardia-project/distilbert-guardia-v2"
+    ml_model_hf_repo: str = "Rodrigo-Miranda-0/distilbert-guardia-v2"
     ml_max_seq_length: int = 256
 
     # MLflow
