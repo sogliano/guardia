@@ -52,6 +52,17 @@ COPY backend/ .
 RUN mkdir -p /app/quarantine_store /app/ml_models && \
     chown -R guardia:guardia /app
 
+# Pre-download ML model to avoid cold starts
+# Uses the python environment with transformers installed
+ARG ML_MODEL_REPO="guardia-project/distilbert-guardia-v2"
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+    model_name = '${ML_MODEL_REPO}'; \
+    print(f'Downloading {model_name}...'); \
+    AutoTokenizer.from_pretrained(model_name).save_pretrained('/app/ml_models/distilbert-guardia'); \
+    AutoModelForSequenceClassification.from_pretrained(model_name).save_pretrained('/app/ml_models/distilbert-guardia'); \
+    print('Model downloaded successfully.')" && \
+    chown -R guardia:guardia /app/ml_models
+
 # Switch to non-root user
 USER guardia
 
