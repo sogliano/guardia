@@ -42,6 +42,9 @@ class MLResult:
     model_version: str = ""
     evidences: list[EvidenceItem] = field(default_factory=list)
     execution_time_ms: int = 0
+    # XAI fields: token-level explanations
+    top_tokens: list[tuple[str, float]] = field(default_factory=list)
+    xai_available: bool = False
 
 
 @dataclass
