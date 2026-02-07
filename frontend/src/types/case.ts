@@ -55,6 +55,20 @@ export interface Analysis {
   evidences?: Evidence[]
 }
 
+/** XAI token with importance score */
+export interface XAIToken {
+  token: string
+  score: number
+}
+
+/** ML Analysis metadata including XAI fields */
+export interface MLAnalysisMetadata {
+  model_available: boolean
+  model_version: string
+  xai_available?: boolean
+  top_tokens?: XAIToken[]
+}
+
 export interface Evidence {
   id: string
   analysis_id: string

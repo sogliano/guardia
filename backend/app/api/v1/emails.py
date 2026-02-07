@@ -20,6 +20,19 @@ async def ingest_email(request: Request, body: EmailIngest, db: DbSession, user:
     svc = EmailService(db)
     email = await svc.ingest(body)
     await db.commit()
+    
+    # Trigger analysis pipeline
+    try:
+        from app.services.pipeline.orchestrator import PipelineOrchestrator
+        orchestrator = PipelineOrchestrator(db)
+        await orchestrator.analyze(email.id)
+        await db.commit()
+    except Exception as e:
+        # Log error but return success since email was ingested
+        import structlog
+        logger = structlog.get_logger()
+        logger.error("ingest_pipeline_failed", error=str(e), email_id=str(email.id))
+
     return email
 
 

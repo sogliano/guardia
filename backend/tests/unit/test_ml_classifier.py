@@ -60,7 +60,7 @@ def test_singleton_pattern():
 
 @pytest.mark.asyncio
 async def test_predict_happy_path_high_score():
-    """Mock torch + model to simulate a high phishing score prediction."""
+    """Mock torch + model to simulate a high phishing score prediction with XAI."""
     import sys
 
     classifier = MLClassifier()
@@ -91,7 +91,9 @@ async def test_predict_happy_path_high_score():
 
     mock_logits = MagicMock()
     mock_model = MagicMock()
+    # Include attentions in model output for XAI
     mock_model.return_value.logits = mock_logits
+    mock_model.return_value.attentions = None  # XAI will return empty list
     classifier._model = mock_model
 
     mock_tokenizer = MagicMock(return_value={"input_ids": MagicMock()})
@@ -107,6 +109,9 @@ async def test_predict_happy_path_high_score():
     assert result.model_version == "test-v1"
     assert len(result.evidences) == 1
     assert result.evidences[0].type == "ml_high_score"
+    # XAI fields present (may be empty if attentions not mocked)
+    assert hasattr(result, "top_tokens")
+    assert hasattr(result, "xai_available")
 
 
 @pytest.mark.asyncio
@@ -132,10 +137,12 @@ async def test_predict_happy_path_low_score():
 
     mock_torch.softmax.return_value = mock_probs_outer
     mock_torch.no_grad.return_value.__enter__ = MagicMock()
+    mock_torch.no_grad.return_value.__enter__ = MagicMock()
     mock_torch.no_grad.return_value.__exit__ = MagicMock(return_value=False)
 
     mock_model = MagicMock()
     mock_model.return_value.logits = MagicMock()
+    mock_model.return_value.attentions = None  # XAI will be empty
     classifier._model = mock_model
     classifier._tokenizer = MagicMock(return_value={"input_ids": MagicMock()})
 
@@ -145,6 +152,9 @@ async def test_predict_happy_path_low_score():
 
     assert result.score == 0.15
     assert result.evidences == []
+    # XAI fields should be present
+    assert result.top_tokens == []
+    assert result.xai_available is False
 
 
 def test_load_model_path_not_exists():

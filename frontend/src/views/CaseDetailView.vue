@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { CaseDetail, Analysis, Evidence, CaseNote } from '@/types/case'
+import type { CaseDetail, Analysis, Evidence, CaseNote, XAIToken } from '@/types/case'
 import { fetchCaseDetail, addCaseNote, updateCaseNote, resolveCase, createFPReview } from '@/services/caseService'
 import { scoreColor } from '@/utils/colors'
 import { formatDate, capitalize } from '@/utils/formatters'
 import { renderMarkdown } from '@/utils/markdown'
 import ErrorState from '@/components/common/ErrorState.vue'
+import TopTokens from '@/components/pipeline/TopTokens.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -198,6 +199,10 @@ function sortedEvidences(evidences: Evidence[]): Evidence[] {
 
 function isStageUnavailable(analysis: Analysis): boolean {
   if (analysis.stage === 'ml') {
+    // Check metadata for explicit unavailability flag
+    const meta = analysis.metadata as Record<string, unknown>
+    if (meta?.model_available === false) return true
+    
     return analysis.score === 0 && analysis.confidence === 0 && analysis.execution_time_ms === 0
   }
   if (analysis.stage === 'llm') {
@@ -930,6 +935,14 @@ onMounted(loadData)
               <div v-if="expandedStages.has(analysis.id) && analysis.stage === 'ml' && analysis.metadata?.model_version" class="stage-v2-ml">
                 <span class="badge badge-info">v{{ analysis.metadata.model_version }}</span>
               </div>
+
+              <!-- XAI: Top Tokens (ML Stage) -->
+              <TopTokens
+                v-if="expandedStages.has(analysis.id) && analysis.stage === 'ml' && analysis.metadata?.xai_available && analysis.metadata?.top_tokens"
+                :tokens="(analysis.metadata.top_tokens as XAIToken[])"
+                :max-tokens="5"
+                class="stage-v2-xai"
+              />
 
               <!-- LLM provider info -->
               <div v-if="expandedStages.has(analysis.id) && analysis.stage === 'llm' && analysis.metadata?.provider" class="stage-v2-ml">

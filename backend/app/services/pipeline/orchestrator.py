@@ -192,6 +192,11 @@ class PipelineOrchestrator:
                 metadata={
                     "model_available": ml_result.model_available,
                     "model_version": ml_result.model_version,
+                    "xai_available": ml_result.xai_available,
+                    "top_tokens": [
+                        {"token": t, "score": round(s, 4)}
+                        for t, s in ml_result.top_tokens
+                    ],
                 },
                 execution_time_ms=ml_result.execution_time_ms,
                 evidences=ml_result.evidences,

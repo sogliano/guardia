@@ -20,31 +20,37 @@ class TestEmailsAPI:
         }
 
         # Mock EmailService
-        mock_email = {
-            "id": str(uuid4()),
-            "message_id": "test123@strike.sh",
-            "sender_email": "test@example.com",
-            "sender_name": "Test Sender",
-            "reply_to": None,
-            "recipient_email": "victim@strike.sh",
-            "recipients_cc": [],
-            "subject": "Test Email",
-            "body_text": "This is a test email",
-            "body_html": None,
-            "headers": {},
-            "urls": [],
-            "attachments": [],
-            "auth_results": {"spf": "pass", "dkim": "pass", "dmarc": "pass"},
-            "received_at": "2026-02-02T00:00:00Z",
-            "ingested_at": "2026-02-02T00:00:00Z",
-            "created_at": "2026-02-02T00:00:00Z",
-            "verdict": "ALLOWED",
-        }
+        class MockEmail:
+            id = uuid4()
+            message_id = "test123@strike.sh"
+            sender_email = "test@example.com"
+            sender_name = "Test Sender"
+            reply_to = None
+            recipient_email = "victim@strike.sh"
+            recipients_cc = []
+            subject = "Test Email"
+            body_text = "This is a test email"
+            body_html = None
+            headers = {}
+            urls = []
+            attachments = []
+            auth_results = {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
+            received_at = "2026-02-02T00:00:00Z"
+            ingested_at = "2026-02-02T00:00:00Z"
+            created_at = "2026-02-02T00:00:00Z"
+            case = None
 
-        with patch("app.api.v1.emails.EmailService") as MockService:
+        with patch("app.api.v1.emails.EmailService") as MockService, \
+             patch("app.services.pipeline.orchestrator.PipelineOrchestrator") as MockOrchestrator:
+            
             mock_svc = AsyncMock()
-            mock_svc.ingest.return_value = mock_email
+            mock_svc.ingest.return_value = MockEmail()
             MockService.return_value = mock_svc
+            
+            # Mock Orchestrator
+            mock_orch = AsyncMock()
+            MockOrchestrator.return_value = mock_orch
+            mock_orch.analyze.return_value = None
 
             response = await client.post("/api/v1/emails/ingest", json=payload)
 
