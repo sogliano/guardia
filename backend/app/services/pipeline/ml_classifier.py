@@ -329,7 +329,7 @@ class MLClassifier:
             return MLResult(
                 score=0.0,
                 confidence=0.0,
-                model_available=True,
+                model_available=False,
                 model_version=self._model_version,
                 execution_time_ms=elapsed,
                 top_tokens=[],
