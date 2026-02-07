@@ -199,6 +199,10 @@ function sortedEvidences(evidences: Evidence[]): Evidence[] {
 
 function isStageUnavailable(analysis: Analysis): boolean {
   if (analysis.stage === 'ml') {
+    // Check metadata for explicit unavailability flag
+    const meta = analysis.metadata as Record<string, unknown>
+    if (meta?.model_available === false) return true
+    
     return analysis.score === 0 && analysis.confidence === 0 && analysis.execution_time_ms === 0
   }
   if (analysis.stage === 'llm') {

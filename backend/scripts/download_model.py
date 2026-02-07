@@ -22,7 +22,7 @@ logger = structlog.get_logger()
 
 # Default config
 DEFAULT_REPO = "Rodrigo-Miranda-0/distilbert-guardia-v2"
-DEFAULT_DEST = "ml_models/distilbert-guardia"
+DEFAULT_DEST = "backend/ml_models/distilbert-guardia"
 
 
 def download_model(repo_id: str, dest_dir: Path, token: str | None = None) -> None:

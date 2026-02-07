@@ -26,6 +26,8 @@ RUN pip install --no-cache-dir \
     "clerk-backend-api>=1.0.0" \
     "httpx>=0.27.0" \
     "transformers>=4.46.0" \
+    "safetensors>=0.4.0" \
+    "huggingface_hub>=0.20.0" \
     "openai>=1.55.0" \
     "python-multipart>=0.0.12" \
     "structlog>=24.4.0" \
