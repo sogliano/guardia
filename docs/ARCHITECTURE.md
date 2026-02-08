@@ -153,8 +153,8 @@ Deterministic, rule-based analysis that examines email metadata for known threat
 
 | Sub-engine | Weight | Signals |
 |-----------|--------|---------|
-| **Authentication** | 35% | SPF fail/softfail, DKIM fail, DMARC fail, compound failures |
-| **Domain** | 25% | Typosquatting, blacklisted domains, suspicious TLDs |
+| **Authentication** | 35% | SPF fail/softfail, DKIM fail, DMARC fail, compound failures, contextual domain multipliers |
+| **Domain** | 25% | Typosquatting, brand lookalike detection, blacklisted domains, suspicious TLDs |
 | **URL** | 25% | URL shorteners, IP-based URLs, domain mismatches |
 | **Keywords** | 15% | Urgency language, phishing terms, excessive capitalization |
 
@@ -162,6 +162,17 @@ Deterministic, rule-based analysis that examines email metadata for known threat
 - 3 sub-engines fired: +15% boost
 - All 4 sub-engines fired: +25% boost
 - All 3 auth mechanisms failed: +30% bonus to auth score
+
+**Brand lookalike detection (v0.2):**
+- Detects character substitution attacks (e.g., `str1ke-security.com` targeting `strike-security.com`)
+- Generates brand variants via common substitutions: i→1/l/!, e→3, a→@/4, o→0, s→5/$, t→7
+- Checks brand+suffix combinations (-security, -tech, -support, etc.)
+- Protected domains sourced from `ACCEPTED_DOMAINS` + allowlist
+- Match triggers `DOMAIN_LOOKALIKE` evidence (score: 0.8)
+
+**Auth contextual modifiers (v0.2):**
+- Auth failures from brand lookalike domains: score multiplied by 1.5x
+- Auth failures from known brand domains: score multiplied by 1.3x
 
 **Output:** Score (0.0-1.0), list of `Evidence` items with type, severity, description.
 
@@ -172,7 +183,7 @@ DistilBERT fine-tuned binary classifier (66M parameters).
 - **Input:** Email subject + body text concatenated
 - **Output:** Phishing probability (0.0-1.0) + confidence score
 - **Training:** Fine-tuned on phishing/legitimate email corpus
-- **Fallback:** When `PIPELINE_ML_ENABLED=false` or model unavailable, pipeline operates in heuristic-only mode with adjusted weights
+- **Fallback:** When the model is unavailable, pipeline operates in heuristic-only mode with adjusted weights
 
 ### 3.3 Layer 3: LLM Analyst (~2-3s)
 
@@ -189,9 +200,11 @@ Independent AI risk assessment providing a score and human-readable explanation.
 
 The LLM sees all evidence from prior stages and provides an **independent third opinion**. It may agree or disagree with the heuristic and ML scores.
 
+**Calibration (v0.2):** The system prompt includes a score differentiation guide and 6 calibration examples ranging from clearly legitimate (0.05) to almost certainly phishing (0.92). Scores above 0.85 are reserved for cases with authentication failures + domain impersonation + social engineering + malicious URLs/attachments all present.
+
 ### 3.4 Final Score Calculation
 
-The final score is a weighted average with graceful degradation:
+The final score is a weighted average with graceful degradation and post-processing adjustments:
 
 | Stages Available | Weights |
 |-----------------|---------|
@@ -199,6 +212,12 @@ The final score is a weighted average with graceful degradation:
 | Heuristic + ML only | 40% + 60% |
 | Heuristic + LLM only | 60% + 40% |
 | Heuristic only | 100% |
+
+**Post-ML guardrail (v0.2):** When heuristics detect a domain attack (lookalike or typosquatting) but ML scores < 0.3 (because ML only sees text, not domain metadata), the ML score is floored to 0.3 to prevent domain-based attacks from slipping through.
+
+**LLM floor/cap mechanism (v0.2):** After the weighted average, two adjustments prevent the formula from washing out strong LLM signals:
+- **LLM floor:** If LLM score >= 0.80, the final score cannot drop below `LLM_score * 0.55`. This ensures high-confidence LLM detections produce at least a WARNED verdict.
+- **LLM cap:** If LLM score < 0.15 (clearly legitimate) and the weighted score > 0.5, the score is capped at `weighted * 0.7`. This reduces false positives when the LLM clearly sees the email is safe.
 
 ### 3.5 Verdict Thresholds
 
@@ -279,7 +298,6 @@ backend/app/
     ├── alert_service.py
     ├── report_service.py
     ├── slack_service.py
-    ├── fp_review_service.py
     └── user_sync_service.py
 ```
 
@@ -421,7 +439,7 @@ ml/
 |----------|-------|
 | Base model | distilbert-base-uncased |
 | Parameters | 66M |
-| Max sequence length | 256 tokens |
+| Max sequence length | 512 tokens |
 | Input | subject + body_text |
 | Output | phishing probability (0.0-1.0) |
 | Inference time | ~18ms |
@@ -759,7 +777,7 @@ graph LR
     end
 
     subgraph Seeding["Direct Seeding"]
-        SEED["seed_test_emails.py"] -->|SQLAlchemy| DB["DB Insert"]
+        SEED["seed_emails.py"] -->|SQLAlchemy| DB["DB Insert"]
         DB --> ORCH["PipelineOrchestrator.analyze"]
     end
 ```
@@ -818,7 +836,14 @@ guardia/
 │   ├── gcp/                     # GCP deployment configs
 │   └── scripts/                 # Infrastructure scripts
 ├── docs/
-│   └── ARCHITECTURE.md          # This file
+│   ├── ARCHITECTURE.md          # This file
+│   ├── API_DOCUMENTATION.md     # REST API reference
+│   ├── DEVELOPER_SETUP.md       # Local dev setup
+│   ├── DEPLOYMENT.md            # Staging/production deployment
+│   ├── ML_TRAINING_GUIDE.md     # DistilBERT training guide
+│   ├── SMTP_GATEWAY_DEPLOYMENT.md # SMTP gateway on GCP VM
+│   ├── TESTING.md               # Testing strategy and conventions
+│   └── archive/                 # Historical implementation docs
 ├── docker-compose.yml           # Local multi-container dev
 ├── Makefile                     # Dev commands
 ├── .env.local                   # Local environment
@@ -845,11 +870,10 @@ guardia/
 | `THRESHOLD_ALLOW` | `0.3` | Score below = allowed |
 | `THRESHOLD_WARN` | `0.6` | Score below = warned |
 | `THRESHOLD_QUARANTINE` | `0.8` | Score below = quarantined, above = blocked |
-| `PIPELINE_ML_ENABLED` | `false` | Enable ML classifier stage |
 | `OPENAI_API_KEY` | — | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model ID |
 | `ML_MODEL_PATH` | `./ml_models/distilbert-guardia` | Path to DistilBERT model |
-| `ML_MAX_SEQ_LENGTH` | `256` | Max tokenizer sequence length |
+| `ML_MAX_SEQ_LENGTH` | `512` | Max tokenizer sequence length |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
 | `SLACK_WEBHOOK_URL` | — | Slack webhook for alerts |
 | `FRONTEND_BASE_URL` | — | Frontend URL (for links in alerts) |
@@ -878,5 +902,5 @@ make migration msg="" # Create new migration
 
 ---
 
-_Last updated: January 2026_
+_Last updated: February 2026_
 _Project: Guard-IA — ORT Uruguay Thesis for Strike Security_

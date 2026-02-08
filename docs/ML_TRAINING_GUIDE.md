@@ -142,15 +142,15 @@ df_balanced.to_csv("data/processed/emails_clean.csv", index=False)
 
 ### 4. Split Dataset
 
-**Distribución:**
-- **Train:** 70% (para entrenar el modelo)
-- **Validation:** 15% (para tuning de hyperparámetros)
-- **Test:** 15% (para evaluación final)
+**Distribución (ver `ml/src/config.py`):**
+- **Train:** 80% (para entrenar el modelo)
+- **Validation:** 10% (para tuning de hyperparámetros)
+- **Test:** 10% (para evaluación final)
 
 ```python
 # Split train/val/test
 train_df, temp_df = train_test_split(
-    df_balanced, test_size=0.3, random_state=42, stratify=df_balanced["label"]
+    df_balanced, test_size=0.2, random_state=42, stratify=df_balanced["label"]
 )
 val_df, test_df = train_test_split(
     temp_df, test_size=0.5, random_state=42, stratify=temp_df["label"]
@@ -179,9 +179,9 @@ tree data/
 # ├── processed/
 # │   └── emails_clean.csv
 # └── splits/
-#     ├── train.csv (70%)
-#     ├── val.csv (15%)
-#     └── test.csv (15%)
+#     ├── train.csv (80%)
+#     ├── val.csv (10%)
+#     └── test.csv (10%)
 ```
 
 ---
@@ -739,4 +739,4 @@ results = classifier(texts, batch_size=8)
 5. ⏳ Monitor in production (accuracy, latency)
 6. ⏳ Retrain quarterly con nuevo data
 
-**Para dudas:** Ver [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) o [ARCHITECTURE.md](./ARCHITECTURE.md).
+**Para dudas:** Ver [ARCHITECTURE.md](./ARCHITECTURE.md) o [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md).

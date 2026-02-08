@@ -858,8 +858,5 @@ curl -X POST "http://localhost:8000/api/v1/cases/{case_id}/resolve" \
 ## Resources
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - Arquitectura completa
-- [TESTING.md](./TESTING.md) - Cómo testear la API
-- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Problemas comunes
-- [Postman Collection](../postman/guardia-api.json) - Collection para testing
-
-**Para developers:** Ver [ONBOARDING.md](./ONBOARDING.md) para setup completo.
+- [TESTING.md](./TESTING.md) - Como testear la API
+- [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md) - Setup local y workflow de desarrollo

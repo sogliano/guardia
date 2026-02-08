@@ -7,6 +7,7 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
+      meta: { public: true },
     },
     {
       path: '/',
@@ -37,7 +38,7 @@ const router = createRouter({
           name: 'emails',
           component: () => import('@/views/EmailExplorerView.vue'),
         },
-{
+        {
           path: 'monitoring',
           name: 'monitoring',
           component: () => import('@/views/MonitoringView.vue'),

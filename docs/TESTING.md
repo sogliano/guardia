@@ -1035,4 +1035,4 @@ make test-coverage
 make test-e2e
 ```
 
-Ver [CONTRIBUTING.md](../CONTRIBUTING.md) para workflow completo.
+Ver [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md) para workflow completo.

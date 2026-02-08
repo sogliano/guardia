@@ -2,7 +2,9 @@
 
 from datetime import datetime, timedelta, timezone
 
-import numpy as np
+import math
+import statistics
+
 import structlog
 from sqlalchemy import Integer, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,31 @@ from app.models.analysis import Analysis
 from app.models.case import Case
 
 logger = structlog.get_logger()
+
+
+def _pstdev(data: list[float]) -> float:
+    """Population standard deviation (matches numpy.std default)."""
+    n = len(data)
+    if n < 2:
+        return 0.0
+    mean = sum(data) / n
+    return math.sqrt(sum((x - mean) ** 2 for x in data) / n)
+
+
+def _pearson_correlation(x: list[float], y: list[float]) -> float:
+    """Pearson correlation coefficient between two sequences."""
+    n = len(x)
+    if n < 2:
+        return 0.0
+    mean_x = sum(x) / n
+    mean_y = sum(y) / n
+    num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+    den_x = math.sqrt(sum((xi - mean_x) ** 2 for xi in x))
+    den_y = math.sqrt(sum((yi - mean_y) ** 2 for yi in y))
+    if den_x == 0 or den_y == 0:
+        return 0.0
+    return num / (den_x * den_y)
+
 
 # Pricing per 1M tokens (input/output blended estimate)
 MODEL_COST_PER_1M_TOKENS: dict[str, float] = {
@@ -226,7 +253,7 @@ class MonitoringService:
         for a in rows:
             tokens = (a.metadata_ or {}).get("tokens_used")
             model = (a.metadata_ or {}).get("model_used")
-            explanation = (a.metadata_ or {}).get("explanation", "")
+            explanation = a.explanation or ""
             status = "error" if a.score is None else "success"
             if a.execution_time_ms and a.execution_time_ms > 10000:
                 status = "timeout"
@@ -278,10 +305,10 @@ class MonitoringService:
             return q
 
         kpi = await self._get_ml_kpi(_ml_filter, prev_from, prev_to)
-        score_dist = await self._get_ml_score_distribution(_ml_filter)
+        score_dist = await self._get_score_distribution(_ml_filter)
         conf_acc = await self._get_ml_confidence_accuracy(_ml_filter)
         latency_trend = await self._get_ml_latency_trend(_ml_filter)
-        score_agreement = await self._get_ml_score_agreement(_ml_filter)
+        score_agreement = await self._get_stage_score_agreement(_ml_filter)
         recent = await self._get_recent_ml_analyses(date_from, date_to)
 
         return {
@@ -329,31 +356,6 @@ class MonitoringService:
             "prev_total_calls": prev_total,
         }
 
-    async def _get_ml_score_distribution(self, ml_filter) -> list[dict]:
-        buckets = [
-            ("0.0-0.1", 0.0, 0.1),
-            ("0.1-0.2", 0.1, 0.2),
-            ("0.2-0.3", 0.2, 0.3),
-            ("0.3-0.4", 0.3, 0.4),
-            ("0.4-0.5", 0.4, 0.5),
-            ("0.5-0.6", 0.5, 0.6),
-            ("0.6-0.7", 0.6, 0.7),
-            ("0.7-0.8", 0.7, 0.8),
-            ("0.8-0.9", 0.8, 0.9),
-            ("0.9-1.0", 0.9, 1.0),
-        ]
-        result = []
-        for label, low, high in buckets:
-            q = ml_filter(select(func.count()))
-            q = q.where(Analysis.score.is_not(None))
-            q = q.where(Analysis.score >= low)
-            q = q.where(Analysis.score < high) if high < 1.0 else q.where(
-                Analysis.score <= high
-            )
-            count = (await self.db.execute(q)).scalar() or 0
-            result.append({"range": label, "count": count})
-        return result
-
     async def _get_ml_confidence_accuracy(self, ml_filter) -> list[dict]:
         q = ml_filter(
             select(
@@ -390,39 +392,6 @@ class MonitoringService:
             }
             for r in rows
         ]
-
-    async def _get_ml_score_agreement(self, ml_filter) -> dict:
-        q = ml_filter(
-            select(Analysis.score, Case.final_score)
-            .join(Case, Analysis.case_id == Case.id)
-        ).where(
-            Analysis.score.is_not(None),
-            Case.final_score.is_not(None),
-        )
-        rows = (await self.db.execute(q)).all()
-        total = len(rows)
-        if total == 0:
-            return {
-                "agree_pct": 0, "minor_diff_pct": 0,
-                "major_divergence_pct": 0, "total": 0,
-            }
-
-        agree = minor = major = 0
-        for ml_score, final_score in rows:
-            diff = abs(ml_score - final_score)
-            if diff < 0.15:
-                agree += 1
-            elif diff < 0.30:
-                minor += 1
-            else:
-                major += 1
-
-        return {
-            "agree_pct": round(agree / total * 100, 1),
-            "minor_diff_pct": round(minor / total * 100, 1),
-            "major_divergence_pct": round(major / total * 100, 1),
-            "total": total,
-        }
 
     async def _get_recent_ml_analyses(
         self, date_from: datetime, date_to: datetime,
@@ -478,8 +447,8 @@ class MonitoringService:
 
         kpi = await self._get_heuristics_kpi(_heur_filter, prev_from, prev_to)
         top_rules = await self._get_top_triggered_rules(_heur_filter)
-        score_dist = await self._get_heuristics_score_distribution(_heur_filter)
-        score_agreement = await self._get_heuristics_score_agreement(_heur_filter)
+        score_dist = await self._get_score_distribution(_heur_filter)
+        score_agreement = await self._get_stage_score_agreement(_heur_filter)
         recent = await self._get_recent_heuristics_analyses(date_from, date_to)
 
         return {
@@ -559,64 +528,6 @@ class MonitoringService:
             for rule, count in sorted_rules
         ]
 
-    async def _get_heuristics_score_distribution(self, heur_filter) -> list[dict]:
-        buckets = [
-            ("0.0-0.1", 0.0, 0.1),
-            ("0.1-0.2", 0.1, 0.2),
-            ("0.2-0.3", 0.2, 0.3),
-            ("0.3-0.4", 0.3, 0.4),
-            ("0.4-0.5", 0.4, 0.5),
-            ("0.5-0.6", 0.5, 0.6),
-            ("0.6-0.7", 0.6, 0.7),
-            ("0.7-0.8", 0.7, 0.8),
-            ("0.8-0.9", 0.8, 0.9),
-            ("0.9-1.0", 0.9, 1.0),
-        ]
-        result = []
-        for label, low, high in buckets:
-            q = heur_filter(select(func.count()))
-            q = q.where(Analysis.score.is_not(None))
-            q = q.where(Analysis.score >= low)
-            q = q.where(Analysis.score < high) if high < 1.0 else q.where(
-                Analysis.score <= high
-            )
-            count = (await self.db.execute(q)).scalar() or 0
-            result.append({"range": label, "count": count})
-        return result
-
-    async def _get_heuristics_score_agreement(self, heur_filter) -> dict:
-        q = heur_filter(
-            select(Analysis.score, Case.final_score)
-            .join(Case, Analysis.case_id == Case.id)
-        ).where(
-            Analysis.score.is_not(None),
-            Case.final_score.is_not(None),
-        )
-        rows = (await self.db.execute(q)).all()
-        total = len(rows)
-        if total == 0:
-            return {
-                "agree_pct": 0, "minor_diff_pct": 0,
-                "major_divergence_pct": 0, "total": 0,
-            }
-
-        agree = minor = major = 0
-        for heur_score, final_score in rows:
-            diff = abs(heur_score - final_score)
-            if diff < 0.15:
-                agree += 1
-            elif diff < 0.30:
-                minor += 1
-            else:
-                major += 1
-
-        return {
-            "agree_pct": round(agree / total * 100, 1),
-            "minor_diff_pct": round(minor / total * 100, 1),
-            "major_divergence_pct": round(major / total * 100, 1),
-            "total": total,
-        }
-
     async def _get_recent_heuristics_analyses(
         self, date_from: datetime, date_to: datetime,
     ) -> list[dict]:
@@ -651,6 +562,61 @@ class MonitoringService:
             })
         return result
 
+    async def _get_score_distribution(self, stage_filter) -> list[dict]:
+        """Shared score distribution for any pipeline stage."""
+        buckets = [
+            ("0.0-0.1", 0.0, 0.1), ("0.1-0.2", 0.1, 0.2),
+            ("0.2-0.3", 0.2, 0.3), ("0.3-0.4", 0.3, 0.4),
+            ("0.4-0.5", 0.4, 0.5), ("0.5-0.6", 0.5, 0.6),
+            ("0.6-0.7", 0.6, 0.7), ("0.7-0.8", 0.7, 0.8),
+            ("0.8-0.9", 0.8, 0.9), ("0.9-1.0", 0.9, 1.0),
+        ]
+        result = []
+        for label, low, high in buckets:
+            q = stage_filter(select(func.count()))
+            q = q.where(Analysis.score.is_not(None))
+            q = q.where(Analysis.score >= low)
+            q = q.where(Analysis.score < high) if high < 1.0 else q.where(
+                Analysis.score <= high
+            )
+            count = (await self.db.execute(q)).scalar() or 0
+            result.append({"range": label, "count": count})
+        return result
+
+    async def _get_stage_score_agreement(self, stage_filter) -> dict:
+        """Shared score-vs-final agreement for any pipeline stage."""
+        q = stage_filter(
+            select(Analysis.score, Case.final_score)
+            .join(Case, Analysis.case_id == Case.id)
+        ).where(
+            Analysis.score.is_not(None),
+            Case.final_score.is_not(None),
+        )
+        rows = (await self.db.execute(q)).all()
+        total = len(rows)
+        if total == 0:
+            return {
+                "agree_pct": 0, "minor_diff_pct": 0,
+                "major_divergence_pct": 0, "total": 0,
+            }
+
+        agree = minor = major = 0
+        for stage_score, final_score in rows:
+            diff = abs(stage_score - final_score)
+            if diff < 0.15:
+                agree += 1
+            elif diff < 0.30:
+                minor += 1
+            else:
+                major += 1
+
+        return {
+            "agree_pct": round(agree / total * 100, 1),
+            "minor_diff_pct": round(minor / total * 100, 1),
+            "major_divergence_pct": round(major / total * 100, 1),
+            "total": total,
+        }
+
     async def get_score_analysis(
         self,
         limit: int = 50,
@@ -672,7 +638,7 @@ class MonitoringService:
             ]
             scores_valid = [s for s in scores if s is not None]
 
-            std_dev = float(np.std(scores_valid)) if len(scores_valid) >= 2 else 0.0
+            std_dev = _pstdev(scores_valid) if len(scores_valid) >= 2 else 0.0
             agreement_level = self._get_agreement_level(std_dev)
 
             breakdown.append({
@@ -754,9 +720,9 @@ class MonitoringService:
         ml_scores = [c["ml_score"] for c in complete_cases]
         llm_scores = [c["llm_score"] for c in complete_cases]
 
-        corr_heur_ml = float(np.corrcoef(heur_scores, ml_scores)[0, 1])
-        corr_heur_llm = float(np.corrcoef(heur_scores, llm_scores)[0, 1])
-        corr_ml_llm = float(np.corrcoef(ml_scores, llm_scores)[0, 1])
+        corr_heur_ml = _pearson_correlation(heur_scores, ml_scores)
+        corr_heur_llm = _pearson_correlation(heur_scores, llm_scores)
+        corr_ml_llm = _pearson_correlation(ml_scores, llm_scores)
 
         def get_risk_category(score: float) -> str:
             if score < 0.3:
@@ -778,7 +744,7 @@ class MonitoringService:
             if cat_heur == cat_ml == cat_llm:
                 agreements += 1
 
-            std_dev = np.std([
+            std_dev = _pstdev([
                 case["heuristic_score"],
                 case["ml_score"],
                 case["llm_score"],
@@ -786,7 +752,7 @@ class MonitoringService:
             std_devs.append(std_dev)
 
         agreement_rate = (agreements / len(complete_cases)) * 100
-        avg_std_dev = float(np.mean(std_devs))
+        avg_std_dev = statistics.mean(std_devs) if std_devs else 0.0
 
         return {
             "agreement_rate": round(agreement_rate, 2),

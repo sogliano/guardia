@@ -149,7 +149,6 @@ CLERK_PUBLISHABLE_KEY=pk_test_...,\
 CLERK_PEM_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----...,\
 OPENAI_API_KEY=sk-proj-...,\
 OPENAI_MODEL=gpt-4o-mini,\
-PIPELINE_ML_ENABLED=false,\
 CORS_ORIGINS=https://guardia-staging.vercel.app,\
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...,\
 FRONTEND_BASE_URL=https://guardia-staging.vercel.app,\
@@ -168,7 +167,6 @@ CLERK_SECRET_KEY=sk_live_...,\
 CLERK_PUBLISHABLE_KEY=pk_live_...,\
 OPENAI_API_KEY=sk-proj-...,\
 OPENAI_MODEL=gpt-4o,\
-PIPELINE_ML_ENABLED=true,\
 CORS_ORIGINS=https://guardia.vercel.app,\
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...,\
 FRONTEND_BASE_URL=https://guardia.vercel.app,\
@@ -235,12 +233,26 @@ Opcionalmente en `production` podes agregar:
 3. Seleccionar el branch (cualquiera)
 4. Click **Run workflow** (boton verde)
 
+El workflow automaticamente:
+- Corre tests con coverage >= 60%
+- Buildea y pushea imagen Docker a Artifact Registry
+- Deploya a Cloud Run staging
+- Sincroniza la VM SMTP Gateway (git pull del branch seleccionado + restart servicio)
+
 ### Deploy Production
 
 1. GitHub > Actions > **Deploy Production**
 2. Click **Run workflow**
 3. **Solo funciona con branch `main`** — cualquier otro branch es rechazado automaticamente
 4. Click **Run workflow**
+
+El workflow automaticamente:
+- Valida que sea branch `main`
+- Corre tests con coverage >= 60%
+- Descarga modelo ML desde HuggingFace
+- Buildea y pushea imagen Docker a Artifact Registry
+- Deploya a Cloud Run production
+- Sincroniza la VM SMTP Gateway (git pull + restart servicio)
 
 ---
 

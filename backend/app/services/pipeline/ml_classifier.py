@@ -12,6 +12,7 @@ XAI Integration: Extracts top-k influential tokens using attention weights.
 
 import asyncio
 import json
+import string
 import time
 import threading
 from pathlib import Path
@@ -81,8 +82,6 @@ class MLClassifier:
         - Pure whitespace
         - URL fragments and common noise
         """
-        import string
-        
         if not token:
             return False
         

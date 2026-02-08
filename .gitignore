@@ -84,6 +84,9 @@ backend/app/db/migrations/versions/*.pyc
 # Quarantine store (runtime email storage)
 backend/quarantine_store/
 
+# Infrastructure scripts with secrets
+infra/scripts/set-cloudrun-secrets.sh
+
 # Misc
 *.bak
 *.tmp

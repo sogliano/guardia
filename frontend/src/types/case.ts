@@ -141,3 +141,22 @@ export interface CaseDetail extends Case {
   notes: CaseNote[]
   fp_reviews: FPReview[]
 }
+
+export interface QuarantineEmailDetail {
+  case_id: string
+  subject: string | null
+  sender_email: string
+  sender_name: string | null
+  recipient_email: string
+  reply_to: string | null
+  received_at: string | null
+  message_id: string
+  auth_results: Record<string, unknown>
+  body_preview: string | null
+  urls: unknown[]
+  attachments: unknown[]
+  risk_level: string | null
+  final_score: number | null
+  threat_category: string | null
+  ai_explanation: string | null
+}

@@ -19,6 +19,18 @@ class Settings(BaseSettings):
     clerk_secret_key: str = ""
     clerk_publishable_key: str = ""
     clerk_pem_public_key: str = ""
+    clerk_issuer_url: str = ""
+
+    @field_validator("app_secret_key")
+    @classmethod
+    def validate_app_secret_key(cls, v: str, info: ValidationInfo) -> str:
+        """Reject default secret key in production/staging."""
+        env = info.data.get("app_env", "local")
+        if env in ("production", "staging") and v == "change-me-in-production":
+            raise ValueError(
+                "app_secret_key must be changed from default in production/staging"
+            )
+        return v
 
     @field_validator("clerk_pem_public_key")
     @classmethod
@@ -47,11 +59,10 @@ class Settings(BaseSettings):
     threshold_warn: float = 0.6
     threshold_quarantine: float = 0.8
     pipeline_timeout_seconds: int = 30
-    pipeline_ml_enabled: bool = True
 
     # LLM - OpenAI
     openai_api_key: str = ""
-    openai_model: str = "gpt-4.1"
+    openai_model: str = "gpt-4o-mini"
 
     # Pipeline Allowlist (full bypass for trusted domains)
     allowlist_domains: str = "strike.sh"
@@ -66,7 +77,7 @@ class Settings(BaseSettings):
     # ML Model
     ml_model_path: str = "./ml_models/distilbert-guardia"
     ml_model_hf_repo: str = "Rodrigo-Miranda-0/distilbert-guardia-v2"
-    ml_max_seq_length: int = 256
+    ml_max_seq_length: int = 512
 
     # MLflow
     mlflow_tracking_uri: str = "http://localhost:5000"

@@ -8,6 +8,7 @@ import type {
   Analysis,
   FPReview,
   FPReviewCreate,
+  QuarantineEmailDetail,
 } from '@/types/case'
 
 export async function fetchCases(params: {
@@ -65,25 +66,6 @@ export async function createFPReview(caseId: string, body: FPReviewCreate): Prom
 }
 
 // Quarantine actions
-export interface QuarantineEmailDetail {
-  case_id: string
-  subject: string | null
-  sender_email: string
-  sender_name: string | null
-  recipient_email: string
-  reply_to: string | null
-  received_at: string | null
-  message_id: string
-  auth_results: Record<string, unknown>
-  body_preview: string | null
-  urls: unknown[]
-  attachments: unknown[]
-  risk_level: string | null
-  final_score: number | null
-  threat_category: string | null
-  ai_explanation: string | null
-}
-
 export async function fetchQuarantineEmailDetail(caseId: string): Promise<QuarantineEmailDetail> {
   const { data } = await api.get<QuarantineEmailDetail>(`/quarantine/${caseId}/email`)
   return data
