@@ -169,7 +169,7 @@ class GuardIAHandler:
             return existing
 
         email_data = EmailIngest(**parsed)
-        email_record = EmailModel(
+        email_record = Email(
             message_id=email_data.message_id,
             sender_email=email_data.sender_email,
             sender_name=email_data.sender_name,
