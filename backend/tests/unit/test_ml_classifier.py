@@ -1,6 +1,7 @@
 """Tests for ML classifier graceful degradation and load/predict flows."""
 
 import json
+import sys
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -61,8 +62,6 @@ def test_singleton_pattern():
 @pytest.mark.asyncio
 async def test_predict_happy_path_high_score():
     """Mock torch + model to simulate a high phishing score prediction with XAI."""
-    import sys
-
     classifier = MLClassifier()
     classifier._load_attempted = True
     classifier._model_available = True
@@ -100,8 +99,12 @@ async def test_predict_happy_path_high_score():
     classifier._tokenizer = mock_tokenizer
 
     with patch.dict(sys.modules, {"torch": mock_torch}):
-        with patch("app.services.pipeline.ml_classifier.torch", mock_torch):
+        setattr(ml_module, "torch", mock_torch)
+        try:
             result = await classifier.predict("suspicious email text")
+        finally:
+            if not getattr(ml_module, "_TORCH_AVAILABLE", False):
+                delattr(ml_module, "torch")
 
     assert result.score == 0.9
     assert result.confidence == 0.9
@@ -117,8 +120,6 @@ async def test_predict_happy_path_high_score():
 @pytest.mark.asyncio
 async def test_predict_happy_path_low_score():
     """Low score → no evidence generated."""
-    import sys
-
     classifier = MLClassifier()
     classifier._load_attempted = True
     classifier._model_available = True
@@ -147,8 +148,12 @@ async def test_predict_happy_path_low_score():
     classifier._tokenizer = MagicMock(return_value={"input_ids": MagicMock()})
 
     with patch.dict(sys.modules, {"torch": mock_torch}):
-        with patch("app.services.pipeline.ml_classifier.torch", mock_torch):
+        setattr(ml_module, "torch", mock_torch)
+        try:
             result = await classifier.predict("clean email")
+        finally:
+            if not getattr(ml_module, "_TORCH_AVAILABLE", False):
+                delattr(ml_module, "torch")
 
     assert result.score == 0.15
     assert result.evidences == []
