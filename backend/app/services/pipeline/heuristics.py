@@ -25,6 +25,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.constants import (
     ATTACHMENT_DOUBLE_EXT_BONUS,
     ATTACHMENT_SUSPICIOUS_BONUS,
@@ -36,6 +37,8 @@ from app.core.constants import (
     HEURISTIC_AUTH_DMARC_FAIL_SCORE,
     HEURISTIC_AUTH_DMARC_NONE_SCORE,
     HEURISTIC_AUTH_HEADER_MAX_BONUS,
+    HEURISTIC_AUTH_KNOWN_DOMAIN_MULTIPLIER,
+    HEURISTIC_AUTH_LOOKALIKE_DOMAIN_MULTIPLIER,
     HEURISTIC_AUTH_REPLY_TO_MISMATCH_SCORE,
     HEURISTIC_AUTH_SPF_ERROR_SCORE,
     HEURISTIC_AUTH_SPF_FAIL_SCORE,
@@ -43,6 +46,7 @@ from app.core.constants import (
     HEURISTIC_AUTH_SPF_SOFTFAIL_SCORE,
     HEURISTIC_CORRELATION_BOOST_3,
     HEURISTIC_CORRELATION_BOOST_4,
+    HEURISTIC_DOMAIN_LOOKALIKE_SCORE,
     HEURISTIC_DOMAIN_SUSPICIOUS_TLD_SCORE,
     HEURISTIC_DOMAIN_TYPOSQUATTING_SCORE,
     HEURISTIC_HEADER_EXCESSIVE_HOPS_BONUS,
@@ -116,6 +120,66 @@ def _levenshtein(s1: str, s2: str) -> int:
             ))
         prev_row = curr_row
     return prev_row[-1]
+
+
+# Character substitution map for brand lookalike detection
+_CHAR_SUBSTITUTIONS: dict[str, list[str]] = {
+    "i": ["1", "l", "!"],
+    "e": ["3"],
+    "a": ["@", "4"],
+    "o": ["0"],
+    "s": ["5", "$"],
+    "t": ["7"],
+    "l": ["1", "i"],
+}
+
+# Common brand suffixes used in lookalike domains
+_BRAND_SUFFIXES = [
+    "-security", "-sec", "-it", "-tech", "-mail",
+    "-support", "-team", "-corp", "-inc", "-group",
+    "security", "sec",
+]
+
+
+def _generate_brand_variants(brand: str) -> set[str]:
+    """Generate common character substitution variants of a brand name."""
+    variants = {brand}
+    for i, char in enumerate(brand):
+        if char in _CHAR_SUBSTITUTIONS:
+            for sub in _CHAR_SUBSTITUTIONS[char]:
+                variant = brand[:i] + sub + brand[i + 1:]
+                variants.add(variant)
+    return variants
+
+
+def _is_brand_lookalike(domain: str, protected_domains: set[str]) -> tuple[bool, str]:
+    """Check if domain is a lookalike of any protected domain's brand.
+
+    Returns (is_lookalike, matched_protected_domain).
+    """
+    for protected in protected_domains:
+        brand = protected.split(".")[0]
+        if len(brand) < 3:
+            continue
+
+        if domain == protected:
+            return False, ""
+
+        variants = _generate_brand_variants(brand)
+        domain_lower = domain.lower()
+        domain_name = domain_lower.split(".")[0]
+
+        for variant in variants:
+            if variant in domain_lower:
+                return True, protected
+
+        for suffix in _BRAND_SUFFIXES:
+            for variant in variants:
+                stripped = suffix.lstrip("-")
+                if domain_name in (f"{variant}{suffix}", f"{stripped}{variant}"):
+                    return True, protected
+
+    return False, ""
 
 
 class HeuristicEngine:
@@ -308,6 +372,36 @@ class HeuristicEngine:
                     raw_data={"domain": domain, "similar_to": known, "distance": dist},
                 ))
                 break
+
+        # 4. Brand lookalike detection (protected domain impersonation)
+        if not any(e.type == EvidenceType.DOMAIN_TYPOSQUATTING for e in evidences):
+            protected_domains = {
+                d.strip().lower()
+                for d in settings.accepted_domains.split(",")
+                if d.strip()
+            }
+            protected_domains |= settings.allowlist_domains_set
+
+            is_lookalike, matched_domain = _is_brand_lookalike(
+                domain, protected_domains
+            )
+            if is_lookalike:
+                score = max(score, HEURISTIC_DOMAIN_LOOKALIKE_SCORE)
+                evidences.append(EvidenceItem(
+                    type=EvidenceType.DOMAIN_LOOKALIKE,
+                    severity=Severity.HIGH,
+                    description=(
+                        f"The domain '{domain}' appears to be a lookalike "
+                        f"of the protected domain '{matched_domain}'. "
+                        f"It contains the organization's brand name or a "
+                        f"close variant, which is a common impersonation "
+                        f"technique in targeted phishing attacks."
+                    ),
+                    raw_data={
+                        "domain": domain,
+                        "protected_domain": matched_domain,
+                    },
+                ))
 
         return min(1.0, score), evidences
 
@@ -839,6 +933,26 @@ class HeuristicEngine:
                         "reply_to_domain": reply_domain,
                     },
                 ))
+
+        # --- Auth contextual modifier ---
+        # Auth failures from known brands or protected domain lookalikes
+        # are more suspicious than from unknown domains
+        if score > 0:
+            auth_sender = email_data.get("sender_email", "").lower()
+            if auth_sender and "@" in auth_sender:
+                auth_domain = auth_sender.rsplit("@", 1)[1]
+                protected_domains = {
+                    d.strip().lower()
+                    for d in settings.accepted_domains.split(",")
+                    if d.strip()
+                }
+                protected_domains |= settings.allowlist_domains_set
+                is_lookalike, _ = _is_brand_lookalike(auth_domain, protected_domains)
+
+                if is_lookalike:
+                    score *= HEURISTIC_AUTH_LOOKALIKE_DOMAIN_MULTIPLIER
+                elif auth_domain in KNOWN_DOMAINS:
+                    score *= HEURISTIC_AUTH_KNOWN_DOMAIN_MULTIPLIER
 
         return min(1.0, score), evidences
 

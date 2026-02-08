@@ -45,6 +45,12 @@ When an email originates from @strike.sh with valid authentication, weigh this s
 
 IMPORTANT: Do NOT inflate scores based on single weak signals. Authentication gaps alone (e.g. missing DKIM/DMARC on an otherwise normal email with no malicious URLs, no attachments, and no social engineering) should not push a score above 0.30. Reserve scores above 0.50 for emails where multiple independent threat signals converge.
 
+Score differentiation guide — before finalizing your score, verify:
+- Would this email fool a trained security analyst? If yes, score 0.70+
+- Would it fool a careful regular user? If yes, score 0.50-0.70
+- Is it obviously suspicious to most users? Score 0.30-0.50
+- Is it a lazy mass-phishing attempt with obvious red flags? Score 0.15-0.30
+
 ## Output Format
 Plain text with **bold** and bullet points only. No markdown headers (#).
 
@@ -85,7 +91,17 @@ Output: {"score": 0.08, "explanation": "This is a **legitimate internal notifica
 
 **Example 4 — Ambiguous (score: 0.45)**
 Input: From contracts@vendor-payments-portal.net, Subject "Invoice #4892 - Payment Due", SPF=pass, DKIM=none, DMARC=none, 1 attachment (invoice_4892.pdf), heuristic 0.38, ML 0.42.
-Output: {"score": 0.45, "explanation": "This email presents a **moderately suspicious invoice** from an unverified vendor domain. Several characteristics warrant manual review.\\n\\n- **Authentication:** SPF passes but DKIM and DMARC are absent, reducing confidence in content integrity.\\n- **Sender Domain:** **vendor-payments-portal.net** is generic and does not identify a specific vendor — a pattern common in BEC campaigns.\\n- **Attachments:** A PDF (invoice_4892.pdf) is present. While standard for invoices, PDFs can contain embedded malicious links.\\n- **Automated Correlation:** Both stages scored moderate (heuristic: 0.38, ML: 0.42), reflecting ambiguity.\\n\\nThis email should be **monitored** and flagged for manual review."}"""
+Output: {"score": 0.45, "explanation": "This email presents a **moderately suspicious invoice** from an unverified vendor domain. Several characteristics warrant manual review.\\n\\n- **Authentication:** SPF passes but DKIM and DMARC are absent, reducing confidence in content integrity.\\n- **Sender Domain:** **vendor-payments-portal.net** is generic and does not identify a specific vendor — a pattern common in BEC campaigns.\\n- **Attachments:** A PDF (invoice_4892.pdf) is present. While standard for invoices, PDFs can contain embedded malicious links.\\n- **Automated Correlation:** Both stages scored moderate (heuristic: 0.38, ML: 0.42), reflecting ambiguity.\\n\\nThis email should be **monitored** and flagged for manual review."}
+
+**Example 5 — Medium-risk vendor invoice (score: 0.55)**
+Input: From billing@acme-invoices.net, Subject "Invoice #7231 - Overdue Balance", SPF=pass, DKIM=none, DMARC=none, 1 attachment (INV-7231.pdf), 1 URL (acme-invoices.net/pay), heuristic 0.35, ML 0.50.
+Output: {"score": 0.55, "explanation": "This email presents a **suspicious invoice** with multiple converging risk signals that warrant elevated caution.\\n\\n- **Authentication:** SPF passes but DKIM and DMARC are absent, providing limited assurance of message integrity.\\n- **Sender Domain:** **acme-invoices.net** is a generic invoice-themed domain not tied to any known vendor. The .net TLD and generic naming pattern are commonly used in BEC invoice scams.\\n- **Social Engineering:** The subject references an 'Overdue Balance', a pressure tactic to prompt immediate payment without verification.\\n- **Links / Reply-To:** Contains a payment link on the same unverified domain.\\n- **Attachments:** PDF invoice attached. While standard for billing, this could contain embedded phishing links.\\n- **Automated Correlation:** Both stages scored moderate (heuristic: 0.35, ML: 0.50), reflecting mixed signals.\\n\\nThis email should be **quarantined** for manual verification of the vendor relationship before any payment action."}
+
+**Example 6 — Domain lookalike with social engineering (score: 0.75)**
+Input: From it-support@str1ke-security.com, Subject "Mandatory: Reset Your VPN Credentials", SPF=pass, DKIM=pass, DMARC=none, 1 URL (str1ke-security.com/reset), heuristic 0.65, ML 0.30.
+Output: {"score": 0.75, "explanation": "This email is a **high-risk impersonation attack** targeting Strike Security employees through a convincing lookalike domain.\\n\\n- **Authentication:** SPF and DKIM pass, but this only confirms the email legitimately originates from **str1ke-security.com** — not from the real **strike.sh**. DMARC is absent.\\n- **Sender Domain:** **str1ke-security.com** uses character substitution ('1' for 'i') and appends '-security' to mimic the protected organization. This is a targeted lookalike domain, not the legitimate **strike.sh**.\\n- **Social Engineering:** The subject uses authority ('Mandatory') and urgency ('Reset Your VPN Credentials') to pressure credential submission. The it-support@ sender name adds false legitimacy.\\n- **Links / Reply-To:** The reset link points to the lookalike domain, likely a credential harvesting page.\\n- **Automated Correlation:** Heuristic scored high (0.65) detecting the domain lookalike, while ML scored low (0.30) seeing only benign-looking text — a known ML blind spot for domain-based attacks.\\n\\nThis email should be **blocked**. It is a targeted spear-phishing attempt impersonating the organization's IT department."}
+
+IMPORTANT: Reserve scores above 0.85 for cases where ALL of the following are present: (1) authentication failures, (2) domain impersonation or known malicious sender, (3) social engineering content, and (4) malicious URLs or attachments."""
 
 # OpenAI response_format JSON schema for structured output
 _OPENAI_RESPONSE_FORMAT = {

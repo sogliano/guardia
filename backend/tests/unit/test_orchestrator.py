@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 from app.services.pipeline.orchestrator import PipelineOrchestrator
 from app.services.pipeline.models import HeuristicResult, MLResult, LLMResult, EvidenceItem
-from app.core.constants import RiskLevel, Verdict, ThreatCategory, CaseStatus
+from app.core.constants import RiskLevel, Verdict, ThreatCategory, CaseStatus, EvidenceType
 
 
 @pytest.fixture
@@ -531,3 +531,126 @@ async def test_analyze_auto_quarantine(
 
     assert result.verdict == Verdict.QUARANTINED
     assert fake_case.status == CaseStatus.QUARANTINED
+
+
+# ---------------------------------------------------------------------------
+# _calculate_final_score — LLM floor/cap (F1)
+# ---------------------------------------------------------------------------
+
+def test_final_score_llm_floor_applied(orchestrator):
+    """LLM score >= 0.80 enforces a floor via llm_score * 0.55."""
+    h = HeuristicResult(score=0.05)
+    ml = MLResult(score=0.02, confidence=0.9, model_available=True)
+    llm = LLMResult(score=0.85, confidence=1.0)
+    # Weighted: 0.05*0.30 + 0.02*0.50 + 0.85*0.20 = 0.015 + 0.01 + 0.17 = 0.195
+    # LLM floor: 0.85 * 0.55 = 0.4675
+    result = orchestrator._calculate_final_score(h, ml, llm)
+    assert abs(result - 0.4675) < 0.001
+
+
+def test_final_score_llm_floor_not_applied_when_weighted_higher(orchestrator):
+    """LLM floor not applied when weighted score already exceeds floor."""
+    h = HeuristicResult(score=0.8)
+    ml = MLResult(score=0.7, confidence=0.9, model_available=True)
+    llm = LLMResult(score=0.85, confidence=1.0)
+    # Weighted: 0.8*0.30 + 0.7*0.50 + 0.85*0.20 = 0.24 + 0.35 + 0.17 = 0.76
+    # LLM floor: 0.85 * 0.55 = 0.4675 — not applied since 0.76 > 0.4675
+    result = orchestrator._calculate_final_score(h, ml, llm)
+    assert abs(result - 0.76) < 0.001
+
+
+def test_final_score_llm_cap_applied(orchestrator):
+    """LLM score < 0.15 and weighted > 0.5 reduces score."""
+    h = HeuristicResult(score=0.9)
+    ml = MLResult(score=0.8, confidence=0.9, model_available=True)
+    llm = LLMResult(score=0.10, confidence=1.0)
+    # Weighted: 0.9*0.30 + 0.8*0.50 + 0.10*0.20 = 0.27 + 0.40 + 0.02 = 0.69
+    # LLM cap: max(0.10, 0.69 * 0.7) = max(0.10, 0.483) = 0.483
+    result = orchestrator._calculate_final_score(h, ml, llm)
+    assert abs(result - 0.483) < 0.001
+
+
+def test_final_score_llm_cap_not_applied_when_weighted_low(orchestrator):
+    """LLM cap not applied when weighted <= 0.5."""
+    h = HeuristicResult(score=0.3)
+    ml = MLResult(score=0.3, confidence=0.9, model_available=True)
+    llm = LLMResult(score=0.10, confidence=1.0)
+    # Weighted: 0.3*0.30 + 0.3*0.50 + 0.10*0.20 = 0.09 + 0.15 + 0.02 = 0.26
+    # 0.26 <= 0.5, so cap not applied
+    result = orchestrator._calculate_final_score(h, ml, llm)
+    assert abs(result - 0.26) < 0.001
+
+
+# ---------------------------------------------------------------------------
+# ML domain guardrail (ML1) — full pipeline test
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@patch("app.services.pipeline.orchestrator.settings")
+@patch("app.services.pipeline.orchestrator.LLMExplainer")
+@patch("app.services.pipeline.orchestrator.get_ml_classifier")
+@patch("app.services.pipeline.orchestrator.HeuristicEngine")
+async def test_analyze_ml_domain_guardrail(
+    MockHeuristic, MockMLGetter, MockLLMExplainer, mock_settings, mock_db
+):
+    """ML score gets floored to 0.3 when domain attack detected but ML scored low."""
+    mock_settings.pipeline_timeout_seconds = 30
+    mock_settings.threshold_allow = 0.3
+    mock_settings.threshold_warn = 0.6
+    mock_settings.threshold_quarantine = 0.8
+
+    email_id = uuid4()
+    fake_email = MagicMock()
+    fake_email.message_id = "m1"
+    fake_email.sender_email = "support@str1ke-security.com"
+    fake_email.sender_name = None
+    fake_email.reply_to = None
+    fake_email.recipient_email = "victim@strike.sh"
+    fake_email.recipients_cc = []
+    fake_email.subject = "Reset password"
+    fake_email.body_text = "Please reset your password."
+    fake_email.body_html = None
+    fake_email.headers = {}
+    fake_email.urls = []
+    fake_email.attachments = []
+    fake_email.auth_results = {"spf": "pass", "dkim": "pass", "dmarc": "none"}
+
+    fake_case = MagicMock()
+    fake_case.id = uuid4()
+
+    call_count = 0
+    def mock_execute(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_result = MagicMock()
+        if call_count == 1:
+            mock_result.scalar_one_or_none.return_value = fake_email
+        else:
+            mock_result.scalar_one_or_none.return_value = fake_case
+        return mock_result
+
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
+
+    # Heuristic detects domain lookalike
+    MockHeuristic.return_value.analyze = AsyncMock(
+        return_value=HeuristicResult(score=0.6, evidences=[
+            EvidenceItem(
+                type=EvidenceType.DOMAIN_LOOKALIKE,
+                severity="high",
+                description="Lookalike domain detected",
+            ),
+        ])
+    )
+    # ML scores low (text looks innocent)
+    MockMLGetter.return_value.predict = AsyncMock(
+        return_value=MLResult(score=0.05, confidence=0.9, model_available=True)
+    )
+    MockLLMExplainer.return_value.explain = AsyncMock(return_value=LLMResult())
+
+    orch = PipelineOrchestrator(mock_db)
+    result = await orch.analyze(email_id)
+
+    # Without guardrail: no LLM (confidence=0), so 0.6*0.4 + 0.05*0.6 = 0.27 → ALLOWED
+    # With guardrail: ML floored to 0.3, so 0.6*0.4 + 0.3*0.6 = 0.42 → WARNED
+    assert result.final_score > 0.3
+    assert result.verdict == Verdict.WARNED

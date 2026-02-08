@@ -22,6 +22,7 @@ from app.core.constants import (
     SCORE_WEIGHT_ML,
     SCORE_WEIGHT_ML_NO_LLM,
     CaseStatus,
+    EvidenceType,
     PipelineStage,
     RiskLevel,
     ThreatCategory,
@@ -200,6 +201,27 @@ class PipelineOrchestrator:
             evidences=ml_result.evidences,
         )
 
+        # 4b. Post-ML guardrail: domain context adjustment
+        # ML only sees text, so domain-based attacks with innocent content get low ML scores.
+        # If heuristics detected a domain attack, enforce a minimum ML score.
+        domain_evidence_types = {
+            EvidenceType.DOMAIN_LOOKALIKE,
+            EvidenceType.DOMAIN_TYPOSQUATTING,
+        }
+        has_domain_attack = any(
+            ev.type in domain_evidence_types for ev in heuristic_result.evidences
+        )
+        if has_domain_attack and ml_result.score < 0.3 and ml_result.model_available:
+            original_ml_score = ml_result.score
+            ml_result.score = 0.3
+            logger.info(
+                "ml_domain_guardrail_applied",
+                original_score=round(original_ml_score, 4),
+                adjusted_score=0.3,
+                case_id=str(case.id),
+                reason="domain_attack_detected_by_heuristics",
+            )
+
         # 5. LLM analyst (score + explanation)
         llm_result = LLMResult()
         try:
@@ -343,6 +365,10 @@ class PipelineOrchestrator:
         No LLM:          40% heuristic + 60% ML
         No ML:           60% heuristic + 40% LLM
         Only heuristic:  100% heuristic
+
+        Post-calculation adjustments:
+        - LLM floor: if LLM >= 0.80, enforce minimum of llm_score * 0.55
+        - LLM cap: if LLM < 0.15 and weighted > 0.5, reduce to weighted * 0.7
         """
         has_ml = ml.model_available and ml.confidence is not None and ml.confidence > 0
         has_llm = llm.confidence is not None and llm.confidence > 0
@@ -359,6 +385,29 @@ class PipelineOrchestrator:
             score = heuristic.score * SCORE_WEIGHT_HEURISTIC_NO_ML + llm.score * SCORE_WEIGHT_LLM_NO_ML
         else:
             score = heuristic.score
+
+        # LLM floor: high LLM score should not be fully averaged out
+        if has_llm and llm.score >= 0.80:
+            llm_floor = llm.score * 0.55
+            if score < llm_floor:
+                logger.info(
+                    "llm_floor_applied",
+                    weighted_score=round(score, 4),
+                    llm_score=round(llm.score, 4),
+                    floor=round(llm_floor, 4),
+                )
+                score = llm_floor
+
+        # LLM cap: clearly legitimate LLM assessment reduces false positives
+        if has_llm and llm.score < 0.15 and score > 0.5:
+            capped = max(llm.score, score * 0.7)
+            logger.info(
+                "llm_cap_applied",
+                weighted_score=round(score, 4),
+                llm_score=round(llm.score, 4),
+                capped=round(capped, 4),
+            )
+            score = capped
 
         return min(1.0, max(0.0, score))
 

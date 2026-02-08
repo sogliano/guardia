@@ -47,6 +47,7 @@ class EvidenceType(StrEnum):
     DOMAIN_TYPOSQUATTING = "domain_typosquatting"
     DOMAIN_BLACKLISTED = "domain_blacklisted"
     DOMAIN_SUSPICIOUS_TLD = "domain_suspicious_tld"
+    DOMAIN_LOOKALIKE = "domain_lookalike"
     # URL
     URL_SHORTENER = "url_shortener"
     URL_IP_BASED = "url_ip_based"
@@ -190,6 +191,7 @@ SCORE_WEIGHT_LLM_NO_ML = 0.40
 # Domain analysis
 HEURISTIC_DOMAIN_SUSPICIOUS_TLD_SCORE = 0.5
 HEURISTIC_DOMAIN_TYPOSQUATTING_SCORE = 0.8
+HEURISTIC_DOMAIN_LOOKALIKE_SCORE = 0.8
 
 # URL analysis
 HEURISTIC_URL_IP_BASED_SCORE = 0.7
@@ -229,6 +231,11 @@ HEURISTIC_AUTH_DMARC_NONE_SCORE = 0.15
 HEURISTIC_AUTH_DMARC_ERROR_SCORE = 0.15
 HEURISTIC_AUTH_REPLY_TO_MISMATCH_SCORE = 0.20
 HEURISTIC_AUTH_HEADER_MAX_BONUS = 0.25
+
+# Auth contextual modifiers: auth failures from known brands or
+# protected domain lookalikes are more suspicious than from unknown domains
+HEURISTIC_AUTH_KNOWN_DOMAIN_MULTIPLIER = 1.3
+HEURISTIC_AUTH_LOOKALIKE_DOMAIN_MULTIPLIER = 1.5
 
 # ML classifier
 ML_CLASSIFIER_THRESHOLD_HIGH = 0.5
