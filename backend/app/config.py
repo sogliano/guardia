@@ -62,7 +62,7 @@ class Settings(BaseSettings):
 
     # LLM - OpenAI
     openai_api_key: str = ""
-    openai_model: str = "gpt-4.1"
+    openai_model: str = "gpt-4o-mini"
 
     # Pipeline Allowlist (full bypass for trusted domains)
     allowlist_domains: str = "strike.sh"
