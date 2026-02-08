@@ -486,13 +486,24 @@ sudo systemctl stop guardia-smtp      # Parar
 sudo journalctl -u guardia-smtp -f    # Logs en vivo
 ```
 
-### Actualizar codigo en la VM
+### Actualizar codigo en la VM (manual)
 
 ```bash
 cd /opt/guardia
 git pull origin main
 sudo systemctl restart guardia-smtp
 ```
+
+### Actualizacion automatica via GitHub Actions
+
+Los workflows `deploy-backend-staging.yml` y `deploy-backend-production.yml` incluyen un job `sync-smtp-gateway` que automaticamente:
+
+1. Se conecta a la VM via `gcloud compute ssh`
+2. Hace `git fetch` + `git checkout` + `git pull` de la branch del deploy
+3. Reinstala dependencias con `pip install -e '.[dev]'`
+4. Reinicia el servicio `guardia-smtp`
+
+Esto se ejecuta automaticamente despues de cada deploy exitoso al Cloud Run backend, manteniendo la VM sincronizada con la misma version del codigo.
 
 ### Actualizar modelo ML
 

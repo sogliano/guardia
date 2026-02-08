@@ -233,12 +233,26 @@ Opcionalmente en `production` podes agregar:
 3. Seleccionar el branch (cualquiera)
 4. Click **Run workflow** (boton verde)
 
+El workflow automaticamente:
+- Corre tests con coverage >= 60%
+- Buildea y pushea imagen Docker a Artifact Registry
+- Deploya a Cloud Run staging
+- Sincroniza la VM SMTP Gateway (git pull del branch seleccionado + restart servicio)
+
 ### Deploy Production
 
 1. GitHub > Actions > **Deploy Production**
 2. Click **Run workflow**
 3. **Solo funciona con branch `main`** — cualquier otro branch es rechazado automaticamente
 4. Click **Run workflow**
+
+El workflow automaticamente:
+- Valida que sea branch `main`
+- Corre tests con coverage >= 60%
+- Descarga modelo ML desde HuggingFace
+- Buildea y pushea imagen Docker a Artifact Registry
+- Deploya a Cloud Run production
+- Sincroniza la VM SMTP Gateway (git pull + restart servicio)
 
 ---
 

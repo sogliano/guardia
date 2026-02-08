@@ -12,9 +12,9 @@ guardia/
 └── infra/      → Docker / Nginx / GCP
 ```
 
-**Pipeline:** Heuristics (~5ms) → DistilBERT ML (~18ms) → LLM Explainer (2-3s, OpenAI GPT). LLM explains only, never decides.
+**Pipeline:** Heuristics (~5ms) → DistilBERT ML (~18ms) → LLM Explainer (2-3s, OpenAI GPT). Final score = weighted average with LLM floor/cap adjustments.
 
-**Thresholds:** ALLOW < 0.3, WARN 0.3-0.6, QUARANTINE ≥ 0.8
+**Thresholds:** ALLOW < 0.3, WARN 0.3-0.6, QUARANTINE 0.6-0.8, BLOCKED ≥ 0.8
 
 ## Key Paths
 
@@ -799,7 +799,7 @@ make simulate-email   # Send test email to pipeline
 - **Thesis project:** decisions balance production viability with academic rigor
 - **Fail-open pipeline:** if crashes, email is forwarded (avoid blocking legitimate mail)
 - **3-layer detection:** Heuristics (fast) + ML (accurate) + LLM (explainable)
-- **LLM explains only, never decides:** Final score is weighted average of heuristics + ML
+- **LLM as third opinion with floor/cap:** Final score is weighted average (H+ML+LLM) with LLM floor (high LLM >= 0.80 enforces minimum) and LLM cap (low LLM < 0.15 reduces false positives)
 
 ---
 
