@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { watch } from 'vue'
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView } from 'vue-router'
 import { useAuth as useClerkAuth } from '@clerk/vue'
 import { useAuthStore } from '@/stores/auth'
 import { setClerkGetToken } from '@/services/api'
+import router from '@/router'
 
 const { isLoaded, isSignedIn, getToken } = useClerkAuth()
 const authStore = useAuthStore()
-const router = useRouter()
 
 // Bridge Clerk's getToken to our axios interceptor
 setClerkGetToken(async () => {
@@ -41,10 +41,10 @@ router.beforeEach(async (to) => {
     })
   }
 
-  if (isSignedIn.value && to.name === 'login') {
+  if (isSignedIn.value && to.meta.public) {
     return { name: 'dashboard' }
   }
-  if (!isSignedIn.value && to.name !== 'login') {
+  if (!isSignedIn.value && !to.meta.public) {
     return { name: 'login' }
   }
 })
@@ -57,12 +57,12 @@ watch(
 
     if (signedIn) {
       await authStore.fetchProfile()
-      if (router.currentRoute.value.name === 'login') {
+      if (router.currentRoute.value.meta.public) {
         router.push({ name: 'dashboard' })
       }
     } else {
       authStore.clearProfile()
-      if (router.currentRoute.value.name !== 'login') {
+      if (!router.currentRoute.value.meta.public) {
         router.push({ name: 'login' })
       }
     }

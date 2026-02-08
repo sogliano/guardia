@@ -172,7 +172,7 @@ DistilBERT fine-tuned binary classifier (66M parameters).
 - **Input:** Email subject + body text concatenated
 - **Output:** Phishing probability (0.0-1.0) + confidence score
 - **Training:** Fine-tuned on phishing/legitimate email corpus
-- **Fallback:** When `PIPELINE_ML_ENABLED=false` or model unavailable, pipeline operates in heuristic-only mode with adjusted weights
+- **Fallback:** When the model is unavailable, pipeline operates in heuristic-only mode with adjusted weights
 
 ### 3.3 Layer 3: LLM Analyst (~2-3s)
 
@@ -279,7 +279,6 @@ backend/app/
     ├── alert_service.py
     ├── report_service.py
     ├── slack_service.py
-    ├── fp_review_service.py
     └── user_sync_service.py
 ```
 
@@ -759,7 +758,7 @@ graph LR
     end
 
     subgraph Seeding["Direct Seeding"]
-        SEED["seed_test_emails.py"] -->|SQLAlchemy| DB["DB Insert"]
+        SEED["seed_emails.py"] -->|SQLAlchemy| DB["DB Insert"]
         DB --> ORCH["PipelineOrchestrator.analyze"]
     end
 ```
@@ -818,7 +817,14 @@ guardia/
 │   ├── gcp/                     # GCP deployment configs
 │   └── scripts/                 # Infrastructure scripts
 ├── docs/
-│   └── ARCHITECTURE.md          # This file
+│   ├── ARCHITECTURE.md          # This file
+│   ├── API_DOCUMENTATION.md     # REST API reference
+│   ├── DEVELOPER_SETUP.md       # Local dev setup
+│   ├── DEPLOYMENT.md            # Staging/production deployment
+│   ├── ML_TRAINING_GUIDE.md     # DistilBERT training guide
+│   ├── SMTP_GATEWAY_DEPLOYMENT.md # SMTP gateway on GCP VM
+│   ├── TESTING.md               # Testing strategy and conventions
+│   └── archive/                 # Historical implementation docs
 ├── docker-compose.yml           # Local multi-container dev
 ├── Makefile                     # Dev commands
 ├── .env.local                   # Local environment
@@ -845,7 +851,6 @@ guardia/
 | `THRESHOLD_ALLOW` | `0.3` | Score below = allowed |
 | `THRESHOLD_WARN` | `0.6` | Score below = warned |
 | `THRESHOLD_QUARANTINE` | `0.8` | Score below = quarantined, above = blocked |
-| `PIPELINE_ML_ENABLED` | `false` | Enable ML classifier stage |
 | `OPENAI_API_KEY` | — | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model ID |
 | `ML_MODEL_PATH` | `./ml_models/distilbert-guardia` | Path to DistilBERT model |
@@ -878,5 +883,5 @@ make migration msg="" # Create new migration
 
 ---
 
-_Last updated: January 2026_
+_Last updated: February 2026_
 _Project: Guard-IA — ORT Uruguay Thesis for Strike Security_

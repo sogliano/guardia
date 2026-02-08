@@ -807,10 +807,8 @@ make simulate-email   # Send test email to pipeline
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Arquitectura completa, diagramas, ERD
 - [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) - Referencia completa de API REST
+- [DEVELOPER_SETUP.md](docs/DEVELOPER_SETUP.md) - Setup local y workflow de desarrollo
 - [TESTING.md](docs/TESTING.md) - Estrategia de testing, ejemplos, coverage
-- [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Problemas comunes y soluciones
-- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Guía de deployment (Vercel, Cloud Run, Neon)
-- [DATABASE_MAINTENANCE.md](docs/DATABASE_MAINTENANCE.md) - Migrations, indexes, backups
+- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Guia de deployment (Vercel, Cloud Run, Neon)
+- [SMTP_GATEWAY_DEPLOYMENT.md](docs/SMTP_GATEWAY_DEPLOYMENT.md) - Deploy SMTP gateway en GCP
 - [ML_TRAINING_GUIDE.md](docs/ML_TRAINING_GUIDE.md) - Entrenar modelo DistilBERT
-- [RUNBOOK.md](docs/RUNBOOK.md) - Incident response, rollbacks, monitoring
-- [ONBOARDING.md](docs/ONBOARDING.md) - Setup para nuevos developers y usuarios

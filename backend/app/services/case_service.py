@@ -12,6 +12,7 @@ from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.case_note import CaseNote
 from app.models.email import Email
+from app.models.fp_review import FPReview
 
 
 class CaseService:
@@ -218,3 +219,59 @@ class CaseService:
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_fp_reviews(self, case_id: UUID) -> list[FPReview]:
+        """List all FP reviews for a case."""
+        stmt = (
+            select(FPReview)
+            .where(FPReview.case_id == case_id)
+            .order_by(FPReview.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def create_fp_review(
+        self,
+        case_id: UUID,
+        reviewer_id: UUID,
+        decision: str,
+        notes: str | None = None,
+    ) -> FPReview:
+        """Create an FP review record."""
+        review = FPReview(
+            case_id=case_id,
+            reviewer_id=reviewer_id,
+            decision=decision,
+            notes=notes,
+        )
+        self.db.add(review)
+        await self.db.flush()
+        return review
+
+    async def list_fp_reviews(self, case_id: UUID) -> list[FPReview]:
+        """List all FP reviews for a case."""
+        stmt = (
+            select(FPReview)
+            .where(FPReview.case_id == case_id)
+            .order_by(FPReview.created_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def create_fp_review(
+        self,
+        case_id: UUID,
+        reviewer_id: UUID,
+        decision: str,
+        notes: str | None = None,
+    ) -> FPReview:
+        """Create an FP review record."""
+        review = FPReview(
+            case_id=case_id,
+            reviewer_id=reviewer_id,
+            decision=decision,
+            notes=notes,
+        )
+        self.db.add(review)
+        await self.db.flush()
+        return review

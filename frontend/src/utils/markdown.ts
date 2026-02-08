@@ -1,6 +1,9 @@
+import DOMPurify from 'dompurify'
+
 /**
  * Simple markdown-to-HTML renderer for LLM output text.
  * Handles headers, bold, inline code, bullet lists, and paragraph breaks.
+ * Output is sanitized with DOMPurify to prevent XSS.
  */
 export function renderMarkdown(text: string): string {
   if (!text) return ''
@@ -49,7 +52,7 @@ export function renderMarkdown(text: string): string {
 
   if (inList) result.push('</ul>')
 
-  return result.join('')
+  return DOMPurify.sanitize(result.join(''))
 }
 
 function applyInline(text: string): string {

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
+import { scoreColor } from '@/utils/colors'
 import LoadingState from '@/components/common/LoadingState.vue'
 
 interface ScoreMetrics {
@@ -44,9 +45,9 @@ async function fetchScoreAnalysis() {
 }
 
 function agreementIcon(level: string): string {
-  if (level === 'high') return '✓'
-  if (level === 'moderate') return '⚠'
-  return '❌'
+  if (level === 'high') return 'check_circle'
+  if (level === 'moderate') return 'warning'
+  return 'cancel'
 }
 
 function agreementColor(level: string): string {
@@ -59,14 +60,6 @@ function agreementLabel(level: string): string {
   if (level === 'high') return 'Alta concordancia'
   if (level === 'moderate') return 'Divergencia moderada'
   return 'Divergencia alta'
-}
-
-function scoreColor(score: number | null): string {
-  if (score === null) return '#6B7280'
-  if (score < 0.3) return '#22C55E'
-  if (score < 0.6) return '#FBBF24'
-  if (score < 0.8) return '#F97316'
-  return '#EF4444'
 }
 
 function formatScore(score: number | null): string {
@@ -105,12 +98,12 @@ const metricsHealth = computed(() => {
   if (!metrics.value) return { color: '#6B7280', label: 'N/A' }
   const { agreement_rate, avg_std_dev } = metrics.value
   if (agreement_rate >= 85 && avg_std_dev < 0.1) {
-    return { color: '#22C55E', label: '🟢 Excelente concordancia' }
+    return { color: '#22C55E', label: 'Excelente concordancia', icon: 'check_circle' }
   }
   if (agreement_rate >= 70 && avg_std_dev <= 0.2) {
-    return { color: '#FBBF24', label: '🟡 Concordancia moderada' }
+    return { color: '#FBBF24', label: 'Concordancia moderada', icon: 'warning' }
   }
-  return { color: '#EF4444', label: '🔴 Divergencia alta' }
+  return { color: '#EF4444', label: 'Divergencia alta', icon: 'cancel' }
 })
 
 onMounted(() => {
@@ -125,6 +118,7 @@ onMounted(() => {
       <div class="metrics-header">
         <h3>Engine Agreement Metrics</h3>
         <div class="health-badge" :style="{ color: metricsHealth.color }">
+          <span class="material-symbols-rounded">{{ metricsHealth.icon }}</span>
           {{ metricsHealth.label }}
         </div>
       </div>
@@ -203,7 +197,7 @@ onMounted(() => {
                 </span>
               </td>
               <td>
-                <span :class="agreementColor(c.agreement_level)" :title="agreementLabel(c.agreement_level)" class="agreement-icon">
+                <span :class="agreementColor(c.agreement_level)" :title="agreementLabel(c.agreement_level)" class="agreement-icon material-symbols-rounded">
                   {{ agreementIcon(c.agreement_level) }}
                 </span>
               </td>

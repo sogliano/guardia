@@ -583,6 +583,7 @@ class HeuristicEngine:
         # CAPS abuse: more than 30% uppercase words (excluding short emails)
         original_body = email_data.get("body_text") or ""
         words = original_body.split()
+        caps_ratio = 0.0
         if len(words) > 10:
             caps_words = sum(1 for w in words if w.isupper() and len(w) > 2)
             caps_ratio = caps_words / len(words)
@@ -608,7 +609,7 @@ class HeuristicEngine:
             score += HEURISTIC_KEYWORD_URGENCY_BASE + HEURISTIC_KEYWORD_URGENCY_INCREMENT * min(len(urgency_hits), 4)
         if financial_hits:
             score += HEURISTIC_KEYWORD_FINANCIAL_BASE + HEURISTIC_KEYWORD_FINANCIAL_INCREMENT * min(len(financial_hits), 3)
-        if len(words) > 10 and caps_ratio > HEURISTIC_KEYWORD_CAPS_ABUSE_THRESHOLD:  # type: ignore[possibly-undefined]
+        if len(words) > 10 and caps_ratio > HEURISTIC_KEYWORD_CAPS_ABUSE_THRESHOLD:
             score += HEURISTIC_KEYWORD_CAPS_ABUSE_PENALTY
 
         return min(1.0, score), evidences
@@ -1058,7 +1059,7 @@ class HeuristicEngine:
             sender_domain = sender_email.rsplit("@", 1)[1]
             if sender_domain in ("gmail.com", "googlemail.com"):
                 if not headers.get("x-google-dkim-signature"):
-                    bonus += 0.10
+                    bonus += HEURISTIC_HEADER_MISSING_GMAIL_BONUS
                     evidences.append(EvidenceItem(
                         type=EvidenceType.HEADER_MISSING_STANDARD,
                         severity=Severity.HIGH,

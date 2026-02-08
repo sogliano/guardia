@@ -8,38 +8,29 @@ def verify_clerk_token(token: str) -> dict:
     Verify a Clerk-issued JWT using the PEM public key (RS256).
     Returns the decoded payload dict on success, raises PyJWTError on failure.
 
-    NOTE: In development (local/development), audience verification is disabled
-    because Clerk tokens may not include the 'aud' claim.
-    In production/staging, audience verification is enabled for security.
+    In local/development mode, issuer verification is skipped.
+    In production/staging, issuer is verified if clerk_issuer_url is configured.
+    Audience verification is always disabled (Clerk doesn't send aud by default).
     """
-    # Disable audience verification for local development only
+    options = {
+        "verify_exp": True,
+        "verify_nbf": True,
+        "verify_aud": False,  # Clerk doesn't send aud claim by default
+    }
+
+    kwargs: dict = {}
     is_local = settings.app_env in ("local", "development")
 
-    if is_local:
-        # Development: skip audience verification
-        payload = jwt.decode(
-            token,
-            key=settings.clerk_pem_public_key,
-            algorithms=["RS256"],
-            options={
-                "verify_exp": True,
-                "verify_nbf": True,
-                "verify_aud": False,  # Disabled for local dev
-            },
-        )
+    if not is_local and settings.clerk_issuer_url:
+        options["verify_iss"] = True
+        kwargs["issuer"] = settings.clerk_issuer_url
     else:
-        # Production/Staging: skip audience verification
-        # Clerk tokens don't include 'aud' claim by default
-        payload = jwt.decode(
-            token,
-            key=settings.clerk_pem_public_key,
-            algorithms=["RS256"],
-            options={
-                "verify_exp": True,
-                "verify_nbf": True,
-                "verify_aud": False,  # Clerk doesn't send aud claim
-                "verify_iss": False,  # Disable issuer verification
-            },
-        )
+        options["verify_iss"] = False
 
-    return payload
+    return jwt.decode(
+        token,
+        key=settings.clerk_pem_public_key,
+        algorithms=["RS256"],
+        options=options,
+        **kwargs,
+    )

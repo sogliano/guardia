@@ -97,6 +97,13 @@ class QuarantineAction(StrEnum):
 # --- Policies ---
 
 class PolicyListType(StrEnum):
+    """Types of policy lists.
+
+    WHITELIST: Used by heuristic engine to skip domain analysis for trusted senders.
+    BLACKLIST: Used by heuristic engine to flag known malicious domains.
+    ALLOWLIST: Used by bypass checker to skip the entire pipeline for trusted domains.
+    """
+
     WHITELIST = "whitelist"
     BLACKLIST = "blacklist"
     ALLOWLIST = "allowlist"

@@ -17,6 +17,7 @@ from starlette.responses import Response
 from app.api.middleware.logging import LoggingMiddleware
 from app.api.v1.router import api_router
 from app.config import settings
+from app.core.constants import GUARD_IA_VERSION
 from app.core.exceptions import PipelineError
 from app.core.rate_limit import limiter
 from app.db.session import async_session_factory, engine
@@ -34,9 +35,26 @@ def _setup_signal_handlers():
     signal.signal(signal.SIGINT, handle_shutdown)
 
 
+_SENSITIVE_KEYS = {"app_secret_key", "database_url", "clerk_secret_key",
+                    "clerk_pem_public_key", "openai_api_key", "slack_webhook_url"}
+
+
+def _log_config() -> None:
+    """Log loaded config keys at startup (values redacted for sensitive keys)."""
+    config_data = {}
+    for key in settings.model_fields:
+        value = getattr(settings, key)
+        if key in _SENSITIVE_KEYS:
+            config_data[key] = "***" if value else "(empty)"
+        else:
+            config_data[key] = str(value)
+    logger.info("config_loaded", **config_data)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _setup_signal_handlers()
+    _log_config()
     logger.info("startup", env=settings.app_env, debug=settings.app_debug)
     yield
     await engine.dispose()
@@ -67,7 +85,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Guard-IA",
         description="Corporate email fraud detection middleware",
-        version="0.1.0",
+        version=GUARD_IA_VERSION,
         lifespan=lifespan,
         redirect_slashes=False,
     )
@@ -129,7 +147,7 @@ def create_app() -> FastAPI:
         except Exception:
             pass
         status = "ok" if db_ok else "degraded"
-        return {"status": status, "version": "0.1.0", "database": db_ok}
+        return {"status": status, "version": GUARD_IA_VERSION, "database": db_ok}
 
     return app
 

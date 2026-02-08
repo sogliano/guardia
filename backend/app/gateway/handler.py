@@ -8,6 +8,8 @@ from uuid import UUID
 
 import structlog
 from aiosmtpd.smtp import Envelope, Session, SMTP
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.constants import (
@@ -23,6 +25,7 @@ from app.gateway.relay import RelayClient
 from app.gateway.storage import EmailStorage
 from app.models.email import Email
 from app.schemas.email import EmailIngest
+from app.services.pipeline.orchestrator import PipelineOrchestrator
 
 logger = structlog.get_logger()
 
@@ -103,8 +106,13 @@ class GuardIAHandler:
                 await self.relay.forward(
                     raw_data=raw_data, sender=sender, recipients=recipients,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error(
+                    "relay_forward_failed_inactive",
+                    error=str(exc),
+                    sender=sender,
+                    recipients=recipients,
+                )
             return SMTP_RESPONSE_OK
 
         try:
@@ -143,18 +151,18 @@ class GuardIAHandler:
                     sender=sender,
                     recipients=recipients,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error(
+                    "relay_forward_failed_failopen",
+                    error=str(exc),
+                    sender=sender,
+                )
             return SMTP_RESPONSE_OK
 
-    async def _persist_email(self, db, parsed: dict) -> Email:  # type: ignore[no-untyped-def]
+    async def _persist_email(self, db: AsyncSession, parsed: dict) -> Email:
         """Create Email record in database."""
-        from sqlalchemy import select
-
-        from app.models.email import Email as EmailModel
-
         # Check for duplicate message_id
-        stmt = select(EmailModel).where(EmailModel.message_id == parsed["message_id"])
+        stmt = select(Email).where(Email.message_id == parsed["message_id"])
         result = await db.execute(stmt)
         existing = result.scalar_one_or_none()
         if existing:
@@ -181,11 +189,9 @@ class GuardIAHandler:
         await db.flush()
         return email_record
 
-    async def _run_pipeline(self, db, email_id: UUID):  # type: ignore[no-untyped-def]
+    async def _run_pipeline(self, db: AsyncSession, email_id: UUID):
         """Run the detection pipeline. Returns PipelineResult or None."""
         try:
-            from app.services.pipeline.orchestrator import PipelineOrchestrator
-
             orchestrator = PipelineOrchestrator(db)
             return await orchestrator.analyze(email_id)
         except Exception as exc:

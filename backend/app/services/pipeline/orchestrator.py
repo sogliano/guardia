@@ -178,29 +178,27 @@ class PipelineOrchestrator:
         )
 
         # 4. ML classification
-        ml_result = MLResult()
-        if settings.pipeline_ml_enabled:
-            ml_classifier = get_ml_classifier()
-            text = self._build_ml_input(email_data)
-            ml_result = await ml_classifier.predict(text)
-            await self._persist_analysis(
-                case_id=case.id,
-                stage=PipelineStage.ML,
-                score=ml_result.score,
-                confidence=ml_result.confidence,
-                explanation=None,
-                metadata={
-                    "model_available": ml_result.model_available,
-                    "model_version": ml_result.model_version,
-                    "xai_available": ml_result.xai_available,
-                    "top_tokens": [
-                        {"token": t, "score": round(s, 4)}
-                        for t, s in ml_result.top_tokens
-                    ],
-                },
-                execution_time_ms=ml_result.execution_time_ms,
-                evidences=ml_result.evidences,
-            )
+        ml_classifier = get_ml_classifier()
+        text = self._build_ml_input(email_data)
+        ml_result = await ml_classifier.predict(text)
+        await self._persist_analysis(
+            case_id=case.id,
+            stage=PipelineStage.ML,
+            score=ml_result.score,
+            confidence=ml_result.confidence,
+            explanation=None,
+            metadata={
+                "model_available": ml_result.model_available,
+                "model_version": ml_result.model_version,
+                "xai_available": ml_result.xai_available,
+                "top_tokens": [
+                    {"token": t, "score": round(s, 4)}
+                    for t, s in ml_result.top_tokens
+                ],
+            },
+            execution_time_ms=ml_result.execution_time_ms,
+            evidences=ml_result.evidences,
+        )
 
         # 5. LLM analyst (score + explanation)
         llm_result = LLMResult()
@@ -230,6 +228,16 @@ class PipelineOrchestrator:
             )
         except Exception as exc:
             logger.error("llm_analyst_error", error=str(exc), case_id=str(case.id))
+            await self._persist_analysis(
+                case_id=case.id,
+                stage=PipelineStage.LLM,
+                score=None,
+                confidence=None,
+                explanation=f"LLM error: {exc}",
+                metadata={"error": True, "error_message": str(exc)},
+                execution_time_ms=0,
+                evidences=[],
+            )
 
         # 6. Calculate final score (3-way weighted)
         final_score = self._calculate_final_score(heuristic_result, ml_result, llm_result)

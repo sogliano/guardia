@@ -15,7 +15,6 @@ from app.schemas.case import CaseDetailResponse, CaseList, CaseResolve, CaseResp
 from app.schemas.case_note import CaseNoteCreate, CaseNoteResponse, CaseNoteUpdate
 from app.schemas.fp_review import FPReviewCreate, FPReviewResponse
 from app.services.case_service import CaseService
-from app.services.fp_review_service import FPReviewService
 
 router = APIRouter()
 
@@ -165,8 +164,7 @@ async def create_fp_review(
     case = await case_svc.get_case(resolved_id)
     if not case:
         raise NotFoundError("Case not found")
-    fp_svc = FPReviewService(db)
-    review = await fp_svc.create_review(
+    review = await case_svc.create_fp_review(
         case_id=resolved_id,
         reviewer_id=user.id,
         decision=body.decision,

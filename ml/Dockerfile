@@ -11,4 +11,7 @@ RUN pip install --no-cache-dir -e .
 
 COPY . .
 
+RUN groupadd -r guardia && useradd -r -g guardia guardia
+USER guardia
+
 CMD ["python", "-m", "src.train"]

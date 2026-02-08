@@ -342,7 +342,6 @@ async def test_analyze_full_flow(
 ):
     """Full analyze() with mocked stages runs without error."""
     # Configure settings with actual numeric values (direct assignment)
-    mock_settings.pipeline_ml_enabled = True
     mock_settings.pipeline_timeout_seconds = 30
     mock_settings.threshold_allow = 0.3
     mock_settings.threshold_warn = 0.6
@@ -405,13 +404,13 @@ async def test_analyze_full_flow(
 @pytest.mark.asyncio
 @patch("app.services.pipeline.orchestrator.settings")
 @patch("app.services.pipeline.orchestrator.LLMExplainer")
+@patch("app.services.pipeline.orchestrator.get_ml_classifier")
 @patch("app.services.pipeline.orchestrator.HeuristicEngine")
 async def test_analyze_llm_failure_continues(
-    MockHeuristic, MockLLMExplainer, mock_settings, mock_db
+    MockHeuristic, MockMLGetter, MockLLMExplainer, mock_settings, mock_db
 ):
     """LLM explainer failing doesn't break the pipeline."""
     # Configure settings with actual numeric values (direct assignment)
-    mock_settings.pipeline_ml_enabled = False
     mock_settings.pipeline_timeout_seconds = 30
     mock_settings.threshold_allow = 0.3
     mock_settings.threshold_warn = 0.6
@@ -453,6 +452,9 @@ async def test_analyze_llm_failure_continues(
     MockHeuristic.return_value.analyze = AsyncMock(
         return_value=HeuristicResult(score=0.1, evidences=[])
     )
+    MockMLGetter.return_value.predict = AsyncMock(
+        return_value=MLResult(score=0.1, confidence=0.9, model_available=True)
+    )
     MockLLMExplainer.return_value.explain = AsyncMock(side_effect=RuntimeError("LLM down"))
 
     orch = PipelineOrchestrator(mock_db)
@@ -466,13 +468,13 @@ async def test_analyze_llm_failure_continues(
 @pytest.mark.asyncio
 @patch("app.services.pipeline.orchestrator.settings")
 @patch("app.services.pipeline.orchestrator.LLMExplainer")
+@patch("app.services.pipeline.orchestrator.get_ml_classifier")
 @patch("app.services.pipeline.orchestrator.HeuristicEngine")
 async def test_analyze_auto_quarantine(
-    MockHeuristic, MockLLMExplainer, mock_settings, mock_db
+    MockHeuristic, MockMLGetter, MockLLMExplainer, mock_settings, mock_db
 ):
     """High score → quarantined verdict → case status set to QUARANTINED."""
     # Configure settings with actual numeric values (direct assignment)
-    mock_settings.pipeline_ml_enabled = False
     mock_settings.pipeline_timeout_seconds = 30
     mock_settings.threshold_allow = 0.3
     mock_settings.threshold_warn = 0.6
@@ -511,10 +513,16 @@ async def test_analyze_auto_quarantine(
 
     mock_db.execute = AsyncMock(side_effect=mock_execute)
 
+    # Scores chosen to produce final_score in [0.6, 0.8) → QUARANTINED
+    # With no LLM (confidence=0): 40% heuristic + 60% ML
+    # 0.5 * 0.4 + 0.8 * 0.6 = 0.20 + 0.48 = 0.68 → QUARANTINED
     MockHeuristic.return_value.analyze = AsyncMock(
-        return_value=HeuristicResult(score=0.75, evidences=[
+        return_value=HeuristicResult(score=0.5, evidences=[
             EvidenceItem(type="domain_blacklisted", severity="critical", description="x"),
         ])
+    )
+    MockMLGetter.return_value.predict = AsyncMock(
+        return_value=MLResult(score=0.8, confidence=0.95, model_available=True)
     )
     MockLLMExplainer.return_value.explain = AsyncMock(return_value=LLMResult())
 

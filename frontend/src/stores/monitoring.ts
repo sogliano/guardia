@@ -15,7 +15,11 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   const activeTab = ref<'llm' | 'ml' | 'heuristics' | 'score-analysis'>('heuristics')
   const globalFilters = useGlobalFiltersStore()
 
+  let initialized = false
+
   async function fetchMonitoring() {
+    initialized = true
+    if (activeTab.value === 'score-analysis') return
     loading.value = true
     error.value = null
     try {
@@ -27,12 +31,10 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     }
   }
 
-  let initialized = false
-
   watch(
     () => globalFilters.filterParams,
     () => {
-      if (initialized && activeTab.value !== 'score-analysis') {
+      if (initialized) {
         fetchMonitoring()
       }
     },
@@ -42,17 +44,11 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   watch(
     () => activeTab.value,
     () => {
-      if (initialized && activeTab.value !== 'score-analysis') {
+      if (initialized) {
         fetchMonitoring()
       }
     },
   )
-
-  const originalFetch = fetchMonitoring
-  fetchMonitoring = async function() {
-    initialized = true
-    return originalFetch()
-  }
 
   const kpi = computed(() => data.value?.kpi ?? null)
   const tokenTrend = computed(() => {

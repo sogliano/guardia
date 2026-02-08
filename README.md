@@ -83,7 +83,7 @@ npm run dev
 
 ```bash
 cd backend
-python -m scripts.seed_test_emails
+python -m scripts.seed_emails
 ```
 
 ---
@@ -168,7 +168,7 @@ guardia/
 │   ├── data/             # Datasets (raw/processed/splits)
 │   └── models/           # Saved model weights
 ├── infra/                # Docker, Nginx configs
-├── docs/                 # Architecture docs, status reviews
+├── docs/                 # Architecture, API, deployment, testing guides
 ├── docker-compose.yml
 └── Makefile
 ```
@@ -260,7 +260,7 @@ OPENAI_API_KEY=sk-proj-...
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 
 # App Config
-APP_ENV=development
+APP_ENV=local
 APP_DEBUG=true
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 RATE_LIMIT_PER_MINUTE=1000
@@ -486,7 +486,7 @@ cp -r models/distilbert-guardia ../backend/ml_models/
 
 **Expected dataset:**
 - ~5k-10k labeled emails (phishing/legitimate)
-- 70/15/15 train/val/test split
+- 80/10/10 train/val/test split
 - Balanced classes
 
 **Model location:**

@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Query, Request
 
 from app.api.deps import CurrentUser, DbSession
@@ -9,6 +10,9 @@ from app.core.exceptions import NotFoundError
 from app.core.rate_limit import limiter
 from app.schemas.email import EmailIngest, EmailList, EmailResponse
 from app.services.email_service import EmailService
+from app.services.pipeline.orchestrator import PipelineOrchestrator
+
+logger = structlog.get_logger()
 
 router = APIRouter()
 
@@ -23,14 +27,10 @@ async def ingest_email(request: Request, body: EmailIngest, db: DbSession, user:
     
     # Trigger analysis pipeline
     try:
-        from app.services.pipeline.orchestrator import PipelineOrchestrator
         orchestrator = PipelineOrchestrator(db)
         await orchestrator.analyze(email.id)
         await db.commit()
     except Exception as e:
-        # Log error but return success since email was ingested
-        import structlog
-        logger = structlog.get_logger()
         logger.error("ingest_pipeline_failed", error=str(e), email_id=str(email.id))
 
     return email
