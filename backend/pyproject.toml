@@ -18,9 +18,6 @@ dependencies = [
     "PyJWT[crypto]>=2.8.0",
     "clerk-backend-api>=1.0.0",
     "httpx>=0.27.0",
-    "transformers>=4.46.0",
-    "torch>=2.5.0",
-    "safetensors>=0.4.0",
     "openai>=1.55.0",
     "python-multipart>=0.0.12",
     "structlog>=24.4.0",
@@ -33,6 +30,11 @@ dependencies = [
 packages = ["app"]
 
 [project.optional-dependencies]
+ml = [
+    "transformers>=4.46.0",
+    "torch>=2.5.0",
+    "safetensors>=0.4.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",

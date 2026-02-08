@@ -97,6 +97,7 @@ jobs:
           service: ${{ env.CLOUD_RUN_SERVICE }}
           region: ${{ env.GCP_REGION }}
           image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/guardia/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          flags: '--cpu=2 --memory=4Gi --cpu-boost --min-instances=0 --max-instances=2'
 
   sync-smtp-gateway:
     name: Sync SMTP Gateway VM
@@ -118,4 +119,4 @@ jobs:
           gcloud compute ssh guardia-smtp-gateway \
             --zone=us-east1-b \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --command="cd /opt/guardia && sudo git fetch origin && sudo git checkout ${{ github.ref_name }} && sudo git pull origin ${{ github.ref_name }} && cd backend && sudo /opt/guardia/backend/.venv/bin/pip install -e '.[dev]' --quiet && sudo systemctl restart guardia-smtp && echo 'SMTP gateway updated and restarted'"
+            --command="sudo git config --global --add safe.directory /opt/guardia && cd /opt/guardia && sudo git fetch origin && sudo git checkout ${{ github.ref_name }} && sudo git pull origin ${{ github.ref_name }} && cd backend && [ -d .venv ] || sudo python3 -m venv .venv && sudo .venv/bin/pip install --no-cache-dir -e . --quiet && sudo systemctl restart guardia-smtp && echo 'SMTP gateway updated and restarted'"
