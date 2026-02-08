@@ -119,4 +119,4 @@ jobs:
           gcloud compute ssh guardia-smtp-gateway \
             --zone=us-east1-b \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --command="cd /opt/guardia && sudo git fetch origin && sudo git checkout ${{ github.ref_name }} && sudo git pull origin ${{ github.ref_name }} && cd backend && sudo /opt/guardia/backend/.venv/bin/pip install -e '.[dev]' --quiet && sudo systemctl restart guardia-smtp && echo 'SMTP gateway updated and restarted'"
+            --command="sudo git config --global --add safe.directory /opt/guardia && cd /opt/guardia && sudo git fetch origin && sudo git checkout ${{ github.ref_name }} && sudo git pull origin ${{ github.ref_name }} && cd backend && sudo /opt/guardia/backend/.venv/bin/pip install -e '.[dev]' --quiet && sudo systemctl restart guardia-smtp && echo 'SMTP gateway updated and restarted'"
