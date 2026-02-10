@@ -7,10 +7,12 @@ import asyncio
 import ssl
 
 import structlog
+import uvicorn
 from aiosmtpd.controller import Controller
 
 from app.config import settings
 from app.gateway.handler import GuardIAHandler
+from app.gateway.internal_api import create_internal_app
 
 logger = structlog.get_logger()
 
@@ -26,6 +28,28 @@ def _build_tls_context() -> ssl.SSLContext | None:
     ctx.load_cert_chain(settings.smtp_tls_cert, settings.smtp_tls_key)
     logger.info("tls_configured", cert=settings.smtp_tls_cert)
     return ctx
+
+
+async def _run_internal_api() -> None:
+    """Run the internal HTTP API for quarantine operations."""
+    app = create_internal_app()
+    config = uvicorn.Config(
+        app=app,
+        host="0.0.0.0",
+        port=settings.gateway_internal_port,
+        log_level="info",
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+async def _keep_alive() -> None:
+    """Keep the event loop running indefinitely."""
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        pass
 
 
 async def start_smtp_server() -> None:
@@ -52,9 +76,14 @@ async def start_smtp_server() -> None:
     )
 
     try:
-        # Keep the server running
-        while True:
-            await asyncio.sleep(3600)
+        if settings.gateway_internal_token:
+            logger.info(
+                "internal_api_starting",
+                port=settings.gateway_internal_port,
+            )
+            await asyncio.gather(_run_internal_api(), _keep_alive())
+        else:
+            await _keep_alive()
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("smtp_gateway_stopping")
     finally:

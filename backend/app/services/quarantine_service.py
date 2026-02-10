@@ -2,14 +2,14 @@
 
 from uuid import UUID
 
+import httpx
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.core.constants import CaseStatus, QuarantineAction, Verdict
-from app.gateway.relay import RelayClient
-from app.gateway.storage import EmailStorage
 from app.models.case import Case
 from app.models.email import Email
 from app.models.quarantine_action import QuarantineActionRecord
@@ -20,8 +20,6 @@ logger = structlog.get_logger()
 class QuarantineService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
-        self.storage = EmailStorage()
-        self.relay = RelayClient()
 
     async def list_quarantined(
         self,
@@ -126,39 +124,50 @@ class QuarantineService:
     async def release(
         self, case_id: UUID, user_id: UUID, reason: str | None = None
     ) -> Case | None:
-        """Release a quarantined email: forward to Google and update status."""
+        """Release a quarantined email via the VM internal API."""
         case = await self._get_quarantined_case(case_id)
         if not case:
             return None
 
-        # Retrieve raw email from storage
-        raw_data = await self.storage.retrieve(str(case_id))
-        if not raw_data:
-            logger.error("quarantine_release_no_raw_data", case_id=str(case_id))
+        if not settings.gateway_api_url:
+            logger.warning("quarantine_release_no_gateway_url", case_id=str(case_id))
             return None
 
-        # Load email record for sender/recipients
         email = await self._load_email(case.email_id)
         if not email:
             return None
 
-        # Forward to Google
-        forwarded = await self.relay.deferred_forward(
-            raw_data=raw_data,
-            sender=email.sender_email,
-            recipients=[email.recipient_email],
-            case_id=str(case_id),
-        )
-
-        if not forwarded:
-            logger.error("quarantine_release_forward_failed", case_id=str(case_id))
+        url = f"{settings.gateway_api_url.rstrip('/')}/internal/quarantine/{case_id}/release"
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "sender": email.sender_email,
+                        "recipients": [email.recipient_email],
+                    },
+                    headers={"X-Gateway-Token": settings.gateway_internal_token},
+                )
+        except Exception as exc:
+            logger.error(
+                "quarantine_release_gateway_error",
+                case_id=str(case_id),
+                error=str(exc),
+            )
             return None
 
-        # Update case
+        if resp.status_code != 200:
+            logger.error(
+                "quarantine_release_forward_failed",
+                case_id=str(case_id),
+                status=resp.status_code,
+                body=resp.text,
+            )
+            return None
+
         case.status = CaseStatus.RESOLVED
         case.verdict = Verdict.ALLOWED
 
-        # Record action
         action = QuarantineActionRecord(
             case_id=case_id,
             action=QuarantineAction.RELEASED,
@@ -166,9 +175,6 @@ class QuarantineService:
             performed_by=user_id,
         )
         self.db.add(action)
-
-        # Clean up storage
-        await self.storage.delete(str(case_id))
         await self.db.flush()
 
         logger.info("quarantine_released", case_id=str(case_id), user_id=str(user_id))
@@ -200,10 +206,34 @@ class QuarantineService:
     async def delete_quarantined(
         self, case_id: UUID, user_id: UUID, reason: str | None = None
     ) -> Case | None:
-        """Delete quarantined email from storage and resolve case."""
+        """Delete quarantined email via the VM internal API and resolve case."""
         case = await self._get_quarantined_case(case_id)
         if not case:
             return None
+
+        if settings.gateway_api_url:
+            url = (
+                f"{settings.gateway_api_url.rstrip('/')}"
+                f"/internal/quarantine/{case_id}/delete"
+            )
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(
+                        url,
+                        headers={"X-Gateway-Token": settings.gateway_internal_token},
+                    )
+                if resp.status_code not in (200, 404):
+                    logger.error(
+                        "quarantine_delete_gateway_error",
+                        case_id=str(case_id),
+                        status=resp.status_code,
+                    )
+            except Exception as exc:
+                logger.error(
+                    "quarantine_delete_gateway_error",
+                    case_id=str(case_id),
+                    error=str(exc),
+                )
 
         case.status = CaseStatus.RESOLVED
         case.verdict = Verdict.BLOCKED
@@ -215,8 +245,6 @@ class QuarantineService:
             performed_by=user_id,
         )
         self.db.add(action)
-
-        await self.storage.delete(str(case_id))
         await self.db.flush()
 
         logger.info("quarantine_deleted", case_id=str(case_id), user_id=str(user_id))

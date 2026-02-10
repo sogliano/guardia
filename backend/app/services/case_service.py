@@ -3,15 +3,14 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
+import httpx
+import structlog
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-import structlog
-
+from app.config import settings
 from app.core.constants import CaseStatus, QuarantineAction, Verdict
-from app.gateway.relay import RelayClient
-from app.gateway.storage import EmailStorage
 from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.case_note import CaseNote
@@ -201,13 +200,9 @@ class CaseService:
     async def _release_quarantined_email(
         self, case: Case, user_id: UUID
     ) -> None:
-        """Forward a quarantined email to its destination."""
-        storage = EmailStorage()
-        relay = RelayClient()
-
-        raw_data = await storage.retrieve(str(case.id))
-        if not raw_data:
-            logger.warning("resolve_allow_no_raw_data", case_id=str(case.id))
+        """Forward a quarantined email via the VM internal API."""
+        if not settings.gateway_api_url:
+            logger.warning("resolve_allow_no_gateway_url", case_id=str(case.id))
             return
 
         email = await self._load_email(case.email_id)
@@ -215,25 +210,40 @@ class CaseService:
             logger.warning("resolve_allow_no_email", case_id=str(case.id))
             return
 
-        forwarded = await relay.deferred_forward(
-            raw_data=raw_data,
-            sender=email.sender_email,
-            recipients=[email.recipient_email],
-            case_id=str(case.id),
-        )
+        url = f"{settings.gateway_api_url.rstrip('/')}/internal/quarantine/{case.id}/release"
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "sender": email.sender_email,
+                        "recipients": [email.recipient_email],
+                    },
+                    headers={"X-Gateway-Token": settings.gateway_internal_token},
+                )
 
-        if forwarded:
-            await storage.delete(str(case.id))
-            action = QuarantineActionRecord(
-                case_id=case.id,
-                action=QuarantineAction.RELEASED,
-                reason="Allowed via quick action",
-                performed_by=user_id,
+            if resp.status_code == 200:
+                action = QuarantineActionRecord(
+                    case_id=case.id,
+                    action=QuarantineAction.RELEASED,
+                    reason="Allowed via quick action",
+                    performed_by=user_id,
+                )
+                self.db.add(action)
+                logger.info("resolve_allow_forwarded", case_id=str(case.id))
+            else:
+                logger.error(
+                    "resolve_allow_forward_failed",
+                    case_id=str(case.id),
+                    status=resp.status_code,
+                    body=resp.text,
+                )
+        except Exception as exc:
+            logger.error(
+                "resolve_allow_gateway_error",
+                case_id=str(case.id),
+                error=str(exc),
             )
-            self.db.add(action)
-            logger.info("resolve_allow_forwarded", case_id=str(case.id))
-        else:
-            logger.error("resolve_allow_forward_failed", case_id=str(case.id))
 
     async def _load_email(self, email_id: UUID) -> Email | None:
         """Load email record by ID."""
@@ -277,34 +287,6 @@ class CaseService:
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
-
-    async def list_fp_reviews(self, case_id: UUID) -> list[FPReview]:
-        """List all FP reviews for a case."""
-        stmt = (
-            select(FPReview)
-            .where(FPReview.case_id == case_id)
-            .order_by(FPReview.created_at.desc())
-        )
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
-
-    async def create_fp_review(
-        self,
-        case_id: UUID,
-        reviewer_id: UUID,
-        decision: str,
-        notes: str | None = None,
-    ) -> FPReview:
-        """Create an FP review record."""
-        review = FPReview(
-            case_id=case_id,
-            reviewer_id=reviewer_id,
-            decision=decision,
-            notes=notes,
-        )
-        self.db.add(review)
-        await self.db.flush()
-        return review
 
     async def list_fp_reviews(self, case_id: UUID) -> list[FPReview]:
         """List all FP reviews for a case."""

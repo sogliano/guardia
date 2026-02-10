@@ -36,7 +36,8 @@ def _setup_signal_handlers():
 
 
 _SENSITIVE_KEYS = {"app_secret_key", "database_url", "clerk_secret_key",
-                    "clerk_pem_public_key", "openai_api_key", "slack_webhook_url"}
+                    "clerk_pem_public_key", "openai_api_key", "slack_webhook_url",
+                    "gateway_internal_token"}
 
 
 def _log_config() -> None:

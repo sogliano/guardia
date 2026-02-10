@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     # Storage
     quarantine_storage_path: str = "./quarantine_store"
 
+    # Gateway Internal API (Cloud Run → VM communication)
+    gateway_internal_port: int = 8025
+    gateway_internal_token: str = ""
+    gateway_api_url: str = ""  # e.g. http://VM_INTERNAL_IP:8025
+
     model_config = {
         "env_file": (f"../.env.{_env}", f".env.{_env}", "../.env", ".env"),
         "env_file_encoding": "utf-8",
