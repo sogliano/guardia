@@ -89,30 +89,9 @@ jobs:
           image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/guardia/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           flags: '--cpu=2 --memory=4Gi --cpu-boost --min-instances=0 --max-instances=2'
 
-  check-gateway-changes:
-    name: Check if gateway sync needed
-    needs: deploy
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.diff.outputs.changed }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Check for backend changes
-        id: diff
-        run: |
-          if git diff --name-only HEAD~1 HEAD | grep -qE '^backend/'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
   sync-smtp-gateway:
     name: Sync SMTP Gateway VM
-    needs: check-gateway-changes
-    if: needs.check-gateway-changes.outputs.changed == 'true'
+    needs: deploy
     runs-on: ubuntu-latest
     environment: staging
 
