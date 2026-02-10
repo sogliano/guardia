@@ -241,6 +241,12 @@ HEURISTIC_AUTH_LOOKALIKE_DOMAIN_MULTIPLIER = 1.5
 ML_CLASSIFIER_THRESHOLD_HIGH = 0.5
 ML_CLASSIFIER_THRESHOLD_CRITICAL = 0.8
 
+# Short-text dampening: reduces false positives on very short emails
+# Texts below SKIP are not scored by ML at all (score=0.0)
+# Texts between SKIP and DAMPEN get a linearly scaled-down score
+ML_MIN_WORDS_SKIP = 5       # fewer than 5 words → skip ML entirely
+ML_MIN_WORDS_DAMPEN = 20    # 5-20 words → linearly dampen score
+
 # --- SMTP Gateway ---
 
 SMTP_RESPONSE_OK = "250 Message accepted for delivery"

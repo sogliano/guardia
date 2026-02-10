@@ -68,6 +68,8 @@ docker-compose.override.yml
 # ML models (large binary files)
 ml/models/distilbert-guardia/*.bin
 ml/models/distilbert-guardia/*.safetensors
+backend/ml_models/distilbert-guardia/*.bin
+backend/ml_models/distilbert-guardia/*.safetensors
 *.onnx
 *.pt
 *.h5

@@ -62,6 +62,7 @@ def test_singleton_pattern():
 @pytest.mark.asyncio
 async def test_predict_happy_path_high_score():
     """Mock torch + model to simulate a high phishing score prediction with XAI."""
+
     classifier = MLClassifier()
     classifier._load_attempted = True
     classifier._model_available = True
@@ -141,7 +142,6 @@ async def test_predict_happy_path_low_score():
     mock_torch.no_grad.return_value.__enter__ = MagicMock()
     mock_torch.no_grad.return_value.__exit__ = MagicMock(return_value=False)
 
-    mock_model = MagicMock()
     mock_model.return_value.logits = MagicMock()
     mock_model.return_value.attentions = None  # XAI will be empty
     classifier._model = mock_model

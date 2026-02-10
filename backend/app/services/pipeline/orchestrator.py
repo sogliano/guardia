@@ -179,48 +179,50 @@ class PipelineOrchestrator:
         )
 
         # 4. ML classification
-        ml_classifier = get_ml_classifier()
-        text = self._build_ml_input(email_data)
-        ml_result = await ml_classifier.predict(text)
-        await self._persist_analysis(
-            case_id=case.id,
-            stage=PipelineStage.ML,
-            score=ml_result.score,
-            confidence=ml_result.confidence,
-            explanation=None,
-            metadata={
-                "model_available": ml_result.model_available,
-                "model_version": ml_result.model_version,
-                "xai_available": ml_result.xai_available,
-                "top_tokens": [
-                    {"token": t, "score": round(s, 4)}
-                    for t, s in ml_result.top_tokens
-                ],
-            },
-            execution_time_ms=ml_result.execution_time_ms,
-            evidences=ml_result.evidences,
-        )
-
-        # 4b. Post-ML guardrail: domain context adjustment
-        # ML only sees text, so domain-based attacks with innocent content get low ML scores.
-        # If heuristics detected a domain attack, enforce a minimum ML score.
-        domain_evidence_types = {
-            EvidenceType.DOMAIN_LOOKALIKE,
-            EvidenceType.DOMAIN_TYPOSQUATTING,
-        }
-        has_domain_attack = any(
-            ev.type in domain_evidence_types for ev in heuristic_result.evidences
-        )
-        if has_domain_attack and ml_result.score < 0.3 and ml_result.model_available:
-            original_ml_score = ml_result.score
-            ml_result.score = 0.3
-            logger.info(
-                "ml_domain_guardrail_applied",
-                original_score=round(original_ml_score, 4),
-                adjusted_score=0.3,
-                case_id=str(case.id),
-                reason="domain_attack_detected_by_heuristics",
+        ml_result = MLResult()
+        if settings.pipeline_ml_enabled:
+            ml_classifier = get_ml_classifier()
+            text = self._build_ml_input(email_data)
+            ml_result = await ml_classifier.predict(text)
+            await self._persist_analysis(
+                case_id=case.id,
+                stage=PipelineStage.ML,
+                score=ml_result.score,
+                confidence=ml_result.confidence,
+                explanation=None,
+                metadata={
+                    "model_available": ml_result.model_available,
+                    "model_version": ml_result.model_version,
+                    "xai_available": ml_result.xai_available,
+                    "top_tokens": [
+                        {"token": t, "score": round(s, 4)}
+                        for t, s in ml_result.top_tokens
+                    ],
+                },
+                execution_time_ms=ml_result.execution_time_ms,
+                evidences=ml_result.evidences,
             )
+
+            # 4b. Post-ML guardrail: domain context adjustment
+            # ML only sees text, so domain-based attacks with innocent content get low ML scores.
+            # If heuristics detected a domain attack, enforce a minimum ML score.
+            domain_evidence_types = {
+                EvidenceType.DOMAIN_LOOKALIKE,
+                EvidenceType.DOMAIN_TYPOSQUATTING,
+            }
+            has_domain_attack = any(
+                ev.type in domain_evidence_types for ev in heuristic_result.evidences
+            )
+            if has_domain_attack and ml_result.score < 0.3 and ml_result.model_available:
+                original_ml_score = ml_result.score
+                ml_result.score = 0.3
+                logger.info(
+                    "ml_domain_guardrail_applied",
+                    original_score=round(original_ml_score, 4),
+                    adjusted_score=0.3,
+                    case_id=str(case.id),
+                    reason="domain_attack_detected_by_heuristics",
+                )
 
         # 5. LLM analyst (score + explanation)
         llm_result = LLMResult()
