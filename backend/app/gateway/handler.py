@@ -6,6 +6,9 @@ and makes SMTP-level decisions (accept/quarantine/reject).
 
 from uuid import UUID
 
+import email as email_lib
+from email import policy
+
 import structlog
 from aiosmtpd.smtp import Envelope, Session, SMTP
 from sqlalchemy import select
@@ -13,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.constants import (
+    GUARD_IA_HEADER_VERDICT,
     SMTP_RESPONSE_INVALID_DOMAIN,
     SMTP_RESPONSE_OK,
     SMTP_RESPONSE_QUARANTINE,
@@ -93,6 +97,17 @@ class GuardIAHandler:
             size=len(raw_data) if raw_data else 0,
         )
 
+        # Skip pipeline for emails already processed by Guard-IA (e.g. released
+        # from quarantine that re-enter via MX).  Drop silently — the relay
+        # already delivered to Google; the re-entry is a routing echo.
+        if raw_data and self._is_already_processed(raw_data):
+            logger.info(
+                "bypass_pipeline_already_processed",
+                sender=sender,
+                recipients=recipients,
+            )
+            return SMTP_RESPONSE_OK
+
         # User-level filter: if active_users is configured, only run pipeline
         # for emails addressed to those users. Others get forwarded directly.
         active = settings.active_users_set
@@ -158,6 +173,15 @@ class GuardIAHandler:
                     sender=sender,
                 )
             return SMTP_RESPONSE_OK
+
+    @staticmethod
+    def _is_already_processed(raw_data: bytes) -> bool:
+        """Check if the email carries a Guard-IA verdict header (re-entry)."""
+        try:
+            msg = email_lib.message_from_bytes(raw_data, policy=policy.default)
+            return msg.get(GUARD_IA_HEADER_VERDICT) is not None
+        except Exception:
+            return False
 
     async def _persist_email(self, db: AsyncSession, parsed: dict) -> Email:
         """Create Email record in database."""
