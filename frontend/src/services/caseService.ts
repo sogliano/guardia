@@ -14,9 +14,9 @@ import type {
 export async function fetchCases(params: {
   page?: number
   size?: number
-  status?: string
+  status?: string | string[]
   risk_level?: string
-  verdict?: string
+  verdict?: string | string[]
   date_from?: string
   date_to?: string
   search?: string

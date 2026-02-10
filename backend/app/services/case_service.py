@@ -23,9 +23,9 @@ class CaseService:
         self,
         page: int = 1,
         size: int = 20,
-        status: str | None = None,
+        status: list[str] | None = None,
         risk_level: str | None = None,
-        verdict: str | None = None,
+        verdict: list[str] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         search: str | None = None,
@@ -38,11 +38,11 @@ class CaseService:
         joined = False
 
         if status:
-            query = query.where(Case.status == status)
+            query = query.where(Case.status.in_(status))
         if risk_level:
             query = query.where(Case.risk_level == risk_level)
         if verdict:
-            query = query.where(Case.verdict == verdict)
+            query = query.where(Case.verdict.in_(verdict))
         if date_from:
             query = query.where(Case.created_at >= date_from)
         if date_to:
