@@ -24,6 +24,8 @@ dependencies = [
     "aiosmtpd>=1.4.6",
     "aiosmtplib>=3.0.0",
     "slowapi>=0.1.9",
+    "google-auth>=2.23.0",
+    "google-api-python-client>=2.100.0",
 ]
 
 [tool.setuptools]

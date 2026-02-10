@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     google_relay_password: str = ""
     accepted_domains: str = "strike.sh"
 
+    # Gmail API delivery (alternative to SMTP relay)
+    google_service_account_json: str = ""  # Path to service account key JSON
+
     # Pipeline
     threshold_allow: float = 0.3
     threshold_warn: float = 0.6

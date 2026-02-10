@@ -1,4 +1,8 @@
-"""SMTP relay client: forwards accepted emails to Google Workspace."""
+"""SMTP relay client: forwards accepted emails to Google Workspace.
+
+Uses Gmail API when google_service_account_json is configured,
+falls back to SMTP relay otherwise.
+"""
 
 import email as email_lib
 from email import policy
@@ -20,7 +24,11 @@ logger = structlog.get_logger()
 
 
 class RelayClient:
-    """Async SMTP client for relaying emails to Google Workspace."""
+    """Async client for delivering emails to Google Workspace.
+
+    Uses Gmail API when google_service_account_json is configured,
+    falls back to SMTP relay otherwise.
+    """
 
     def __init__(
         self,
@@ -29,6 +37,20 @@ class RelayClient:
     ) -> None:
         self.host = host or settings.google_relay_host
         self.port = port or settings.google_relay_port
+        self._gmail = None
+
+        if settings.google_service_account_json:
+            try:
+                from app.gateway.gmail_delivery import GmailDeliveryService
+
+                self._gmail = GmailDeliveryService(settings.google_service_account_json)
+                logger.info("relay_using_gmail_api")
+            except Exception as exc:
+                logger.error(
+                    "gmail_delivery_init_failed",
+                    error=str(exc),
+                    msg="Falling back to SMTP relay",
+                )
 
     async def forward(
         self,
@@ -40,9 +62,10 @@ class RelayClient:
         verdict: str | None = None,
         warn: bool = False,
     ) -> bool:
-        """Forward email to Google Workspace via SMTP relay.
+        """Forward email to Google Workspace.
 
         Injects X-Guard-IA-* headers before forwarding.
+        Uses Gmail API if configured, otherwise SMTP relay.
 
         Returns True on success, False on failure.
         """
@@ -62,6 +85,44 @@ class RelayClient:
 
             modified_data = msg.as_bytes()
 
+            if self._gmail:
+                return await self._forward_gmail_api(modified_data, sender, recipients)
+            return await self._forward_smtp(modified_data, sender, recipients)
+
+        except Exception as exc:
+            logger.error(
+                "relay_unexpected_error",
+                error=str(exc),
+                sender=sender,
+                recipients=recipients,
+            )
+            return False
+
+    async def _forward_gmail_api(
+        self, modified_data: bytes, sender: str, recipients: list[str],
+    ) -> bool:
+        """Forward via Gmail API users.messages.import."""
+        success = await self._gmail.deliver_multi(recipients, modified_data)
+        if success:
+            logger.info(
+                "email_forwarded",
+                sender=sender,
+                recipients=recipients,
+                method="gmail_api",
+            )
+        else:
+            logger.error(
+                "gmail_api_forward_failed",
+                sender=sender,
+                recipients=recipients,
+            )
+        return success
+
+    async def _forward_smtp(
+        self, modified_data: bytes, sender: str, recipients: list[str],
+    ) -> bool:
+        """Forward via SMTP relay (fallback)."""
+        try:
             send_kwargs: dict = {
                 "hostname": self.host,
                 "port": self.port,
@@ -83,9 +144,8 @@ class RelayClient:
                 "email_forwarded",
                 sender=sender,
                 recipients=recipients,
+                method="smtp_relay",
                 host=self.host,
-                score=score,
-                verdict=verdict,
             )
             return True
 
@@ -96,14 +156,6 @@ class RelayClient:
                 sender=sender,
                 recipients=recipients,
                 host=self.host,
-            )
-            return False
-        except Exception as exc:
-            logger.error(
-                "relay_unexpected_error",
-                error=str(exc),
-                sender=sender,
-                recipients=recipients,
             )
             return False
 
