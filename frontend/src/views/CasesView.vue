@@ -43,10 +43,10 @@ const allowingCaseId = ref<string | null>(null)
 const blockingCaseId = ref<string | null>(null)
 
 type SortDir = 'asc' | 'desc'
-const naSortCol = ref<string | null>(null)
-const naSortDir = ref<SortDir>('asc')
-const sortCol = ref<string | null>(null)
-const sortDir = ref<SortDir>('asc')
+const naSortCol = ref<string | null>('case_number')
+const naSortDir = ref<SortDir>('desc')
+const sortCol = ref<string | null>('case_number')
+const sortDir = ref<SortDir>('desc')
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
