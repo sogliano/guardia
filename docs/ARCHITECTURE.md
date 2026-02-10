@@ -40,57 +40,57 @@ Guard-IA is a **pre-delivery email fraud detection system** that intercepts emai
 ```mermaid
 graph TB
     subgraph Internet
-        EMAIL["📧 Inbound Email"]
-        ANALYST["👤 Security Analyst"]
+        EMAIL["Inbound Email"]
+        ANALYST["Security Analyst"]
     end
 
-    subgraph GUARDIA["Guard-IA System"]
-        subgraph Gateway["SMTP Gateway :2525"]
-            SMTP["aiosmtpd SMTP Server"]
-            PARSER["Email Parser - RFC 5322"]
+    subgraph GCP["Google Cloud Platform"]
+        subgraph VM["GCE VM - e2-small - 34.138.132.198"]
+            SMTP["aiosmtpd :25"]
+            PARSER["Email Parser RFC 5322"]
+            subgraph Pipeline["Detection Pipeline"]
+                HEUR["Heuristic Engine ~5ms"]
+                MLCLS["ML Classifier DistilBERT ~18ms"]
+                LLMEXP["LLM Analyst GPT-4o-mini ~2-3s"]
+            end
+            INTAPI["Internal API :8025"]
         end
 
-        subgraph Pipeline["Detection Pipeline"]
-            ORCH["Pipeline Orchestrator"]
-            HEUR["Heuristic Engine ~5ms"]
-            ML["ML Classifier DistilBERT ~18ms"]
-            LLM["LLM Analyst GPT ~2-3s"]
+        subgraph CloudRun["Cloud Run - us-east1"]
+            API["FastAPI Backend /api/v1"]
         end
+    end
 
-        subgraph Backend["FastAPI Backend :8000"]
-            API["REST API /api/v1"]
-            SERVICES["Business Services"]
-        end
+    subgraph Vercel
+        SPA["Vue 3 + Vite SPA"]
+    end
 
-        subgraph Frontend["Vue 3 Frontend :3000"]
-            SPA["SPA Dashboard Vite + TypeScript"]
-        end
-
-        DB[("PostgreSQL 16 Neon")]
+    subgraph GWS["Google Workspace"]
+        INBOX["Gmail Inbox"]
     end
 
     subgraph External["External Services"]
+        DB[("Neon PostgreSQL")]
         CLERK["Clerk Auth RS256 JWT"]
-        SLACK["Slack Webhooks"]
-        GOOGLE["Google Workspace Email Relay"]
         OPENAI["OpenAI API"]
+        GMAIL_API["Gmail API"]
+        HF["HuggingFace Hub"]
+        SLACK["Slack Webhooks"]
     end
 
-    EMAIL -->|SMTP| SMTP
-    SMTP --> PARSER
-    PARSER --> ORCH
-    ORCH --> HEUR
-    ORCH --> ML
-    ORCH --> LLM
-    LLM -.-> OPENAI
-    ORCH -->|Score + Verdict| DB
-    ORCH -->|"forward allowed/warned"| GOOGLE
-    ORCH -->|"high risk alert"| SLACK
+    EMAIL -->|"SMTP :25"| SMTP
+    SMTP --> PARSER --> HEUR --> MLCLS --> LLMEXP
+    LLMEXP -.->|HTTPS| OPENAI
+    MLCLS -.->|"first load"| HF
+    SMTP -->|persist| DB
+    LLMEXP -->|"deliver allowed/warned"| GMAIL_API
+    GMAIL_API --> INBOX
+    LLMEXP -->|"high risk alert"| SLACK
 
-    API --> DB
-    API --> SERVICES
-    SPA -->|"HTTP Bearer JWT"| API
-    ANALYST --> SPA
+    ANALYST -->|HTTPS| SPA
+    SPA -->|"HTTPS /api/v1"| API
+    API -->|"SQL async"| DB
+    API -->|"quarantine release"| INTAPI
     SPA -.->|Auth| CLERK
     API -.->|JWT verify| CLERK
 ```
@@ -130,7 +130,7 @@ flowchart TD
     G --> H
 
     H --> I{"Verdict"}
-    I -->|"Allowed / Warned"| J["Forward to Google Workspace"]
+    I -->|"Allowed / Warned"| J["Deliver via Gmail API"]
     I -->|"Quarantined"| K["Hold in Quarantine Store"]
     I -->|"Blocked"| L["550 Reject at SMTP"]
     I -->|"High Risk"| M["Alert via Slack Webhook"]
@@ -255,17 +255,14 @@ backend/app/
 ├── config.py            # Pydantic Settings (multi-env)
 ├── api/
 │   └── v1/
-│       ├── router.py    # Route aggregator
-│       ├── auth.py      # Authentication endpoints
-│       ├── emails.py    # Email ingestion & queries
-│       ├── cases.py     # Case management & resolution
-│       ├── dashboard.py # Analytics aggregation
-│       ├── quarantine.py# Quarantine actions
-│       ├── policies.py  # Whitelist/blacklist management
-│       ├── alerts.py    # Alert rules & events
-│       ├── reports.py   # Report generation
-│       ├── settings.py  # System settings
-│       └── notifications.py
+│       ├── router.py      # Route aggregator
+│       ├── auth.py        # Authentication endpoints
+│       ├── emails.py      # Email queries
+│       ├── ingestion.py   # Email ingestion (POST /emails/ingest)
+│       ├── cases.py       # Case management & resolution
+│       ├── dashboard.py   # Analytics aggregation
+│       ├── quarantine.py  # Quarantine actions
+│       └── monitoring.py  # Pipeline monitoring & health
 ├── core/
 │   ├── constants.py     # Enums, thresholds, weights
 │   ├── security.py      # JWT verification (Clerk RS256)
@@ -274,29 +271,31 @@ backend/app/
 │   ├── session.py       # Async engine + session factory
 │   └── migrations/      # Alembic migrations
 ├── gateway/
-│   ├── server.py        # SMTP server (port 2525)
-│   ├── handler.py       # SMTP DATA handler → pipeline
-│   ├── parser.py        # RFC 5322 email parser
-│   ├── relay.py         # Forward to Google Workspace
-│   └── storage.py       # Quarantine file storage
+│   ├── server.py          # SMTP server (:25) + Internal API launcher
+│   ├── handler.py         # SMTP DATA handler → pipeline
+│   ├── parser.py          # RFC 5322 email parser
+│   ├── relay.py           # Gmail API delivery (primary) + SMTP relay (fallback)
+│   ├── gmail_delivery.py  # Gmail API users.messages.import via service account
+│   ├── internal_api.py    # HTTP API :8025 for quarantine ops (Cloud Run → VM)
+│   └── storage.py         # Quarantine .eml file storage
 ├── models/              # SQLAlchemy ORM models (16 tables)
 ├── schemas/             # Pydantic v2 request/response models
 └── services/
     ├── pipeline/
     │   ├── orchestrator.py   # 3-layer pipeline coordinator
-    │   ├── heuristics.py     # Rule-based analysis
+    │   ├── heuristics.py     # Rule-based analysis (4 sub-engines)
     │   ├── heuristic_data.py # Pattern databases
-    │   ├── ml_classifier.py  # DistilBERT inference
+    │   ├── ml_classifier.py  # DistilBERT inference + HF Hub auto-download
     │   ├── llm_explainer.py  # GPT risk assessment
+    │   ├── bypass_checker.py # Allowlist bypass logic
+    │   ├── url_resolver.py   # URL analysis helper
     │   └── models.py         # Pipeline data models
+    ├── ingestion/            # Email ingestion logic
     ├── email_service.py
     ├── case_service.py
     ├── dashboard_service.py
-    ├── notification_service.py
-    ├── quarantine_service.py
-    ├── policy_service.py
-    ├── alert_service.py
-    ├── report_service.py
+    ├── monitoring_service.py
+    ├── quarantine_service.py # Quarantine + Cloud Run → VM release
     ├── slack_service.py
     └── user_sync_service.py
 ```
@@ -314,7 +313,7 @@ Base URL: `/api/v1`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/emails/ingest` | Ingest new email |
+| POST | `/emails/ingest` | Ingest new email into pipeline |
 | GET | `/emails` | List emails (paginated, filtered) |
 | GET | `/emails/{id}` | Get email by ID |
 | GET | `/cases` | List cases (paginated, filtered) |
@@ -324,15 +323,52 @@ Base URL: `/api/v1`
 | GET | `/dashboard/stats` | Dashboard statistics |
 | GET | `/dashboard/pipeline-health` | Pipeline performance metrics |
 | GET | `/quarantine` | List quarantined emails |
-| POST | `/quarantine/{id}/release` | Release from quarantine |
+| GET | `/quarantine/{id}/email` | Get quarantined email detail |
+| POST | `/quarantine/{id}/release` | Release from quarantine (calls VM Internal API) |
+| POST | `/quarantine/{id}/keep` | Confirm quarantine (mark as blocked) |
 | POST | `/quarantine/{id}/delete` | Delete quarantined email |
-| GET/POST | `/policies` | Manage whitelist/blacklist |
-| GET/POST | `/alerts` | Alert rules management |
-| GET | `/notifications` | User notifications |
 | POST | `/auth/sync` | Sync Clerk user to local DB |
-| GET | `/reports` | Generate reports |
-| GET | `/settings` | System settings |
+| GET | `/monitoring/pipeline-health` | Pipeline monitoring metrics |
 | GET | `/health` | Health check (DB connectivity) |
+
+### 4.5 Email Delivery Architecture
+
+Guard-IA supports two email delivery methods with automatic fallback:
+
+| Method | Transport | When Used |
+|--------|-----------|-----------|
+| **Gmail API** (primary) | HTTPS (`users.messages.import`) | When `GOOGLE_SERVICE_ACCOUNT_JSON` is configured |
+| **SMTP Relay** (fallback) | SMTP to `aspmx.l.google.com:25` | When Gmail API is not configured or fails |
+
+**Gmail API delivery** uses a Google Cloud service account with **domain-wide delegation** to impersonate each recipient and import the raw MIME message directly into their inbox. Scope: `https://www.googleapis.com/auth/gmail.insert`. The `neverMarkSpam=True` flag is set because Guard-IA has already analyzed the email.
+
+**Implementation:** `relay.py` checks if `GmailDeliveryService` is available. If so, it delegates to `gmail_delivery.py` which calls `users.messages.import` via `asyncio.to_thread()` (the Google API client is synchronous). On failure, it falls back to SMTP relay.
+
+### 4.6 Quarantine Release Flow
+
+When an email is quarantined, it is stored as a `.eml` file on the VM disk. The analyst can release it from the dashboard, which triggers a chain across Cloud Run and the VM:
+
+```mermaid
+sequenceDiagram
+    participant A as Analyst (Dashboard)
+    participant V as Vercel (SPA)
+    participant CR as Cloud Run (FastAPI)
+    participant VM as VM Internal API :8025
+    participant R as Relay (Gmail API)
+    participant G as Gmail Inbox
+
+    A->>V: Click "Release"
+    V->>CR: POST /api/v1/quarantine/{id}/release
+    CR->>VM: POST /internal/quarantine/{id}/release
+    Note over VM: Retrieve .eml from disk
+    VM->>R: forward(recipients, raw_mime)
+    R->>G: Gmail API import
+    Note over VM: Delete .eml file
+    VM-->>CR: 200 OK
+    CR-->>V: Case resolved
+```
+
+**Auth:** Cloud Run authenticates to the VM Internal API via `X-Gateway-Token` header (shared secret configured in `GATEWAY_INTERNAL_TOKEN`).
 
 ---
 
@@ -444,7 +480,9 @@ ml/
 | Output | phishing probability (0.0-1.0) |
 | Inference time | ~18ms |
 
-**Experiment tracking:** MLflow (local at port 5000).
+**Auto-download:** When the local model directory does not exist, the ML classifier automatically downloads the model from HuggingFace Hub (`Rodrigo-Miranda-0/distilbert-guardia-v2`) and caches it locally. Configured via `ML_MODEL_HF_REPO` setting. If the HF repo is private, set `HF_TOKEN` in the environment.
+
+**Experiment tracking:** MLflow (local at port 5000, development only — not used in production).
 
 ---
 
@@ -665,7 +703,8 @@ graph TB
 
         subgraph Compute["Compute"]
             VERCEL["Vercel - guardia-staging.vercel.app - Vue 3 SPA"]
-            CLOUDRUN["Cloud Run - guardia-api us-east1 - FastAPI Docker 1CPU/2GB"]
+            CLOUDRUN["Cloud Run - guardia-api us-east1 - FastAPI 2CPU/4GB"]
+            GCE["GCE VM - e2-small 34.138.132.198 - SMTP Gateway + Pipeline"]
         end
 
         subgraph Data["Data & Auth"]
@@ -675,22 +714,31 @@ graph TB
 
         subgraph APIs["External APIs"]
             OAI["OpenAI API - gpt-4o-mini"]
+            GMAIL["Gmail API - users.messages.import"]
+            HF2["HuggingFace Hub - distilbert-guardia-v2"]
             SLACK2["Slack Webhooks"]
         end
     end
 
     VERCEL -->|"HTTPS /api/v1"| CLOUDRUN
     CLOUDRUN --> NEON
+    CLOUDRUN -->|"quarantine release :8025"| GCE
+    GCE --> NEON
+    GCE -->|"deliver emails"| GMAIL
+    GCE -.->|LLM calls| OAI
+    GCE -.->|model download| HF2
+    GCE -.->|Alerts| SLACK2
     VERCEL -.->|Auth| CLERK2
     CLOUDRUN -.->|JWT verify| CLERK2
-    CLOUDRUN -.->|LLM calls| OAI
-    CLOUDRUN -.->|Alerts| SLACK2
 
     style VERCEL fill:#000,color:#fff
     style CLOUDRUN fill:#4285f4,color:#fff
+    style GCE fill:#4285f4,color:#fff
     style NEON fill:#00e599,color:#000
     style CLERK2 fill:#6c47ff,color:#fff
     style OAI fill:#10a37f,color:#fff
+    style GMAIL fill:#ea4335,color:#fff
+    style HF2 fill:#ffd21e,color:#000
     style SLACK2 fill:#4a154b,color:#fff
 ```
 
@@ -716,10 +764,11 @@ graph TB
 | Setting | Value |
 |---------|-------|
 | Region | us-east1 |
-| CPU | 1 |
-| Memory | 2 GiB |
+| CPU | 2 |
+| Memory | 4 GiB |
+| CPU Boost | Enabled |
 | Min instances | 0 (scale to zero) |
-| Max instances | 1 |
+| Max instances | 2 |
 | Concurrency | 80 |
 | Request timeout | 300s |
 | Billing | Request-based |
@@ -727,11 +776,9 @@ graph TB
 
 ### 9.7 Vercel Configuration
 
-- **Framework:** Vite
-- **Root Directory:** `frontend`
-- **Build Command:** `vite build`
-- **Output Directory:** `dist`
 - **SPA Rewrites:** `/(.*) → /index.html` (via `vercel.json`)
+
+> **Important:** Vercel does NOT build the frontend. GitHub Actions runs `npm run build` (Vite) injecting `VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` from GitHub environment secrets, then uploads the pre-built `dist/` directory via `vercel deploy --prod --yes dist/`. The Vercel dashboard environment variables and build settings are not used. Git integration is disconnected.
 
 ---
 
@@ -753,32 +800,32 @@ Services:
 | Service | Purpose | Tier |
 |---------|---------|------|
 | **Neon** | Serverless PostgreSQL | Free (0.5 GB) |
-| **Clerk** | Authentication (JWT) | Free (10K MAU) |
-| **Vercel** | Frontend hosting (CDN) | Free (Hobby) |
-| **Google Cloud Run** | Backend hosting (container) | Free tier (2M requests/mo) |
-| **OpenAI API** | LLM Analyst | Pay-per-use |
+| **Clerk** | Authentication (JWT RS256) | Free (10K MAU) |
+| **Vercel** | Frontend hosting (static SPA) | Free (Hobby) |
+| **Google Cloud Run** | Backend API hosting (container) | Free tier (2M requests/mo) |
+| **Google Compute Engine** | SMTP Gateway VM (e2-small) | ~$18/mo |
+| **Gmail API** | Email delivery via `users.messages.import` | Google Workspace account |
+| **OpenAI API** | LLM Analyst (GPT-4o-mini) | Pay-per-use |
+| **HuggingFace Hub** | ML model hosting (distilbert-guardia-v2) | Free |
 | **Slack API** | Alert notifications | Free (webhooks) |
-| **Google Workspace** | Email relay target | Company account |
+| **Google Workspace** | Gmail inboxes for `guardia-sec.com` | Company account |
 
 ### 10.3 SMTP Gateway
 
 ```mermaid
 graph LR
-    subgraph Production
-        I1["Internet"] -->|MX DNS| GW1["Guard-IA :2525"]
+    subgraph Staging["Staging / Production"]
+        I1["Internet"] -->|"MX DNS :25"| GW1["Guard-IA SMTP"]
         GW1 --> P1["Pipeline"]
-        P1 --> R1["Relay to aspmx.l.google.com"]
+        P1 -->|"Gmail API (primary)"| G1["users.messages.import"]
+        P1 -.->|"SMTP relay (fallback)"| R1["aspmx.l.google.com"]
+        GW1 -->|":8025"| INT["Internal API"]
     end
 
     subgraph Local["Local Simulation"]
         SIM["simulate_email.py"] -->|smtplib| GW2["Guard-IA :2525"]
         GW2 --> P2["Pipeline"]
         P2 --> X1["No relay"]
-    end
-
-    subgraph Seeding["Direct Seeding"]
-        SEED["seed_emails.py"] -->|SQLAlchemy| DB["DB Insert"]
-        DB --> ORCH["PipelineOrchestrator.analyze"]
     end
 ```
 
@@ -798,10 +845,10 @@ guardia/
 │   ├── app/
 │   │   ├── main.py              # FastAPI application
 │   │   ├── config.py            # Settings (Pydantic)
-│   │   ├── api/v1/              # REST endpoints (12 modules)
+│   │   ├── api/v1/              # REST endpoints (8 modules)
 │   │   ├── core/                # Constants, security, exceptions
 │   │   ├── db/                  # SQLAlchemy session, Alembic migrations
-│   │   ├── gateway/             # SMTP server, parser, relay
+│   │   ├── gateway/             # SMTP server, Gmail API delivery, internal API
 │   │   ├── models/              # ORM models (16 tables)
 │   │   ├── schemas/             # Pydantic v2 schemas
 │   │   └── services/            # Business logic + pipeline
@@ -873,12 +920,18 @@ guardia/
 | `OPENAI_API_KEY` | — | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model ID |
 | `ML_MODEL_PATH` | `./ml_models/distilbert-guardia` | Path to DistilBERT model |
+| `ML_MODEL_HF_REPO` | `Rodrigo-Miranda-0/distilbert-guardia-v2` | HuggingFace Hub model repo (auto-download) |
 | `ML_MAX_SEQ_LENGTH` | `512` | Max tokenizer sequence length |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | — | Path to Google service account JSON (enables Gmail API delivery) |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
 | `SLACK_WEBHOOK_URL` | — | Slack webhook for alerts |
 | `FRONTEND_BASE_URL` | — | Frontend URL (for links in alerts) |
 | `ACCEPTED_DOMAINS` | `strike.sh` | Accepted recipient domains |
 | `ACTIVE_USERS` | — | Per-user pipeline filter (comma-separated) |
+| `GATEWAY_API_URL` | — | VM Internal API URL (e.g., `http://VM_IP:8025`) |
+| `GATEWAY_INTERNAL_PORT` | `8025` | Internal API port on VM |
+| `GATEWAY_INTERNAL_TOKEN` | — | Shared secret for Cloud Run → VM auth |
+| `PIPELINE_TIMEOUT_SECONDS` | `30` | Global pipeline timeout |
 
 ### 12.2 Makefile Commands
 

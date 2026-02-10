@@ -838,6 +838,54 @@ curl -X POST "http://localhost:8000/api/v1/cases/{case_id}/resolve" \
 
 ---
 
+## Internal API (VM-side)
+
+El SMTP Gateway VM expone un HTTP API interno en el puerto 8025 para operaciones de quarantine. Este API es llamado por Cloud Run, no por usuarios finales.
+
+**Base URL:** `http://VM_INTERNAL_IP:8025`
+**Auth:** Header `X-Gateway-Token` con shared secret
+
+### GET /internal/health
+
+Health check del API interno. No requiere autenticacion.
+
+**Response:** `200 OK`
+```json
+{"status": "ok"}
+```
+
+### POST /internal/quarantine/{case_id}/release
+
+Libera un email quarantineado. Recupera el .eml del disco, lo envia via relay (Gmail API o SMTP), y luego elimina el archivo.
+
+**Headers:** `X-Gateway-Token: <shared-secret>`
+
+**Request Body:**
+```json
+{
+  "sender": "original@sender.com",
+  "recipients": ["user@guardia-sec.com"]
+}
+```
+
+**Response:** `200 OK`
+```json
+{"status": "released", "case_id": "uuid"}
+```
+
+### POST /internal/quarantine/{case_id}/delete
+
+Elimina un .eml quarantineado del disco sin reenviarlo.
+
+**Headers:** `X-Gateway-Token: <shared-secret>`
+
+**Response:** `200 OK`
+```json
+{"status": "deleted", "case_id": "uuid"}
+```
+
+---
+
 ## Changelog
 
 ### v0.2.0 (Current)

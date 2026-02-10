@@ -137,10 +137,12 @@ python -m scripts.seed_emails
 |-----------|-----------|
 | **Backend** | Python 3.11, FastAPI, SQLAlchemy async, PostgreSQL 16 |
 | **Frontend** | Vue 3 (Composition API), TypeScript, Pinia, Vite |
-| **ML** | DistilBERT (66M params), MLflow tracking |
+| **ML** | DistilBERT (66M params), HuggingFace Hub, MLflow tracking |
 | **Auth** | Clerk (RS256 JWT, invitation-only) |
-| **Hosting** | Google Cloud Run (backend), Vercel (frontend), Neon (DB) |
-| **LLM** | OpenAI GPT-4o-mini (staging), GPT-4 (production) |
+| **SMTP Gateway** | GCE VM (aiosmtpd :25, detection pipeline, Gmail API delivery) |
+| **Hosting** | Cloud Run (API), Vercel (SPA), Neon (DB), GCE VM (SMTP) |
+| **Email Delivery** | Gmail API `users.messages.import` (primary), SMTP relay (fallback) |
+| **LLM** | OpenAI GPT-4o-mini |
 
 ### Project Structure
 
@@ -151,7 +153,7 @@ guardia/
 │   │   ├── api/v1/       # REST endpoints (cases, emails, dashboard, etc.)
 │   │   ├── services/     # Business logic + detection pipeline
 │   │   ├── models/       # SQLAlchemy ORM (16 tables)
-│   │   ├── gateway/      # SMTP server + email parser
+│   │   ├── gateway/      # SMTP server, Gmail API delivery, internal API
 │   │   └── db/           # Alembic migrations
 │   ├── tests/            # pytest + pytest-asyncio
 │   └── pyproject.toml
