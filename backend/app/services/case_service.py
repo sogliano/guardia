@@ -7,12 +7,19 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.constants import CaseStatus
+import structlog
+
+from app.core.constants import CaseStatus, QuarantineAction, Verdict
+from app.gateway.relay import RelayClient
+from app.gateway.storage import EmailStorage
 from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.case_note import CaseNote
 from app.models.email import Email
 from app.models.fp_review import FPReview
+from app.models.quarantine_action import QuarantineActionRecord
+
+logger = structlog.get_logger()
 
 
 class CaseService:
@@ -169,12 +176,20 @@ class CaseService:
     async def resolve_case(
         self, case_id: UUID, verdict: str, user_id: UUID
     ) -> Case | None:
-        """Resolve a case with a final verdict."""
+        """Resolve a case with a final verdict.
+
+        If the case is quarantined and verdict is 'allowed', release the
+        email (forward to Google) before resolving.
+        """
         stmt = select(Case).where(Case.id == case_id).with_for_update()
         result = await self.db.execute(stmt)
         case = result.scalar_one_or_none()
         if not case:
             return None
+
+        # If quarantined + allowing, forward the stored email first
+        if case.status == CaseStatus.QUARANTINED and verdict == Verdict.ALLOWED:
+            await self._release_quarantined_email(case, user_id)
 
         case.status = CaseStatus.RESOLVED
         case.verdict = verdict
@@ -182,6 +197,49 @@ class CaseService:
         case.resolved_at = datetime.now(timezone.utc)
         await self.db.flush()
         return case
+
+    async def _release_quarantined_email(
+        self, case: Case, user_id: UUID
+    ) -> None:
+        """Forward a quarantined email to its destination."""
+        storage = EmailStorage()
+        relay = RelayClient()
+
+        raw_data = await storage.retrieve(str(case.id))
+        if not raw_data:
+            logger.warning("resolve_allow_no_raw_data", case_id=str(case.id))
+            return
+
+        email = await self._load_email(case.email_id)
+        if not email:
+            logger.warning("resolve_allow_no_email", case_id=str(case.id))
+            return
+
+        forwarded = await relay.deferred_forward(
+            raw_data=raw_data,
+            sender=email.sender_email,
+            recipients=[email.recipient_email],
+            case_id=str(case.id),
+        )
+
+        if forwarded:
+            await storage.delete(str(case.id))
+            action = QuarantineActionRecord(
+                case_id=case.id,
+                action=QuarantineAction.RELEASED,
+                reason="Allowed via quick action",
+                performed_by=user_id,
+            )
+            self.db.add(action)
+            logger.info("resolve_allow_forwarded", case_id=str(case.id))
+        else:
+            logger.error("resolve_allow_forward_failed", case_id=str(case.id))
+
+    async def _load_email(self, email_id: UUID) -> Email | None:
+        """Load email record by ID."""
+        stmt = select(Email).where(Email.id == email_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def add_note(
         self, case_id: UUID, author_id: UUID, content: str
