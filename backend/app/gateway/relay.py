@@ -69,7 +69,7 @@ class RelayClient:
                 hostname=self.host,
                 port=self.port,
                 start_tls=True,
-                source_address=settings.smtp_domain,
+                source_address=(settings.smtp_domain, 0),
             )
 
             logger.info(
