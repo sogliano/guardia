@@ -101,7 +101,7 @@ async def test_predict_happy_path_high_score():
     with patch.dict(sys.modules, {"torch": mock_torch}):
         setattr(ml_module, "torch", mock_torch)
         try:
-            result = await classifier.predict("suspicious email text")
+            result = await classifier.predict("this is a suspicious phishing email text with enough words to pass the short text dampening threshold and get a full score from the model")
         finally:
             if not getattr(ml_module, "_TORCH_AVAILABLE", False):
                 delattr(ml_module, "torch")
@@ -150,7 +150,7 @@ async def test_predict_happy_path_low_score():
     with patch.dict(sys.modules, {"torch": mock_torch}):
         setattr(ml_module, "torch", mock_torch)
         try:
-            result = await classifier.predict("clean email")
+            result = await classifier.predict("this is a clean legitimate email with enough words to pass the short text dampening threshold and get a full score from the model")
         finally:
             if not getattr(ml_module, "_TORCH_AVAILABLE", False):
                 delattr(ml_module, "torch")

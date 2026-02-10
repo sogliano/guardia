@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     threshold_warn: float = 0.6
     threshold_quarantine: float = 0.8
     pipeline_timeout_seconds: int = 30
+    pipeline_ml_enabled: bool = True
 
     # LLM - OpenAI
     openai_api_key: str = ""

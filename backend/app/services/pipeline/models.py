@@ -45,6 +45,8 @@ class MLResult:
     # XAI fields: token-level explanations
     top_tokens: list[tuple[str, float]] = field(default_factory=list)
     xai_available: bool = False
+    # Set when ML was skipped (e.g. "insufficient_text")
+    skipped_reason: str = ""
 
 
 @dataclass

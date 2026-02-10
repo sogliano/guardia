@@ -30,6 +30,8 @@ from app.config import settings
 from app.core.constants import (
     ML_CLASSIFIER_THRESHOLD_CRITICAL,
     ML_CLASSIFIER_THRESHOLD_HIGH,
+    ML_MIN_WORDS_DAMPEN,
+    ML_MIN_WORDS_SKIP,
     EvidenceType,
     Severity,
 )
@@ -82,6 +84,7 @@ class MLClassifier:
         - Pure whitespace
         - URL fragments and common noise
         """
+
         if not token:
             return False
         
@@ -252,6 +255,25 @@ class MLClassifier:
                 xai_available=False,
             )
 
+        # ── Short-text early exit ────────────────────────────────
+        # Skip ML entirely for very short texts to avoid false positives.
+        word_count = len(text.split())
+        if word_count < ML_MIN_WORDS_SKIP:
+            logger.info(
+                "ml_skipped_short_text",
+                word_count=word_count,
+                threshold=ML_MIN_WORDS_SKIP,
+            )
+            return MLResult(
+                score=0.0,
+                confidence=0.0,
+                model_available=True,
+                model_version=self._model_version,
+                execution_time_ms=int((time.monotonic() - start) * 1000),
+                top_tokens=[],
+                xai_available=False,
+            )
+
         try:
             # Tokenize
             inputs = self._tokenizer(
@@ -274,6 +296,18 @@ class MLClassifier:
             # Assuming binary classification: [legitimate, phishing]
             phishing_score = probs[0][1].item()
             confidence = max(probs[0][0].item(), probs[0][1].item())
+
+            # ── Short-text dampening ─────────────────────────────────
+            # For texts between ML_MIN_WORDS_SKIP and ML_MIN_WORDS_DAMPEN,
+            # linearly scale down the phishing score to reduce false positives.
+            dampen_factor = 1.0
+            if word_count < ML_MIN_WORDS_DAMPEN:
+                # Linear ramp: 0.0 at SKIP threshold → 1.0 at DAMPEN threshold
+                dampen_factor = max(0.0, min(1.0, (
+                    (word_count - ML_MIN_WORDS_SKIP)
+                    / (ML_MIN_WORDS_DAMPEN - ML_MIN_WORDS_SKIP)
+                )))
+                phishing_score *= dampen_factor
 
             # Extract XAI top tokens
             top_tokens = self._extract_top_tokens(inputs, attentions)
@@ -309,6 +343,8 @@ class MLClassifier:
                 confidence=round(confidence, 4),
                 duration_ms=elapsed,
                 xai_tokens=len(top_tokens),
+                word_count=word_count,
+                dampen_factor=round(dampen_factor, 2),
             )
 
             return MLResult(
