@@ -62,14 +62,21 @@ class RelayClient:
 
             modified_data = msg.as_bytes()
 
+            send_kwargs: dict = {
+                "hostname": self.host,
+                "port": self.port,
+                "start_tls": True,
+                "local_hostname": settings.smtp_domain,
+            }
+            if settings.google_relay_user and settings.google_relay_password:
+                send_kwargs["username"] = settings.google_relay_user
+                send_kwargs["password"] = settings.google_relay_password
+
             await aiosmtplib.send(
                 modified_data,
                 sender=sender,
                 recipients=recipients,
-                hostname=self.host,
-                port=self.port,
-                start_tls=True,
-                local_hostname=settings.smtp_domain,
+                **send_kwargs,
             )
 
             logger.info(

@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # Google Workspace Relay
     google_relay_host: str = "aspmx.l.google.com"
     google_relay_port: int = 25
+    google_relay_user: str = ""
+    google_relay_password: str = ""
     accepted_domains: str = "strike.sh"
 
     # Pipeline
