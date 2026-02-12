@@ -62,7 +62,6 @@ def test_singleton_pattern():
 @pytest.mark.asyncio
 async def test_predict_happy_path_high_score():
     """Mock torch + model to simulate a high phishing score prediction with XAI."""
-
     classifier = MLClassifier()
     classifier._load_attempted = True
     classifier._model_available = True
@@ -102,7 +101,7 @@ async def test_predict_happy_path_high_score():
     with patch.dict(sys.modules, {"torch": mock_torch}):
         setattr(ml_module, "torch", mock_torch)
         try:
-            result = await classifier.predict("suspicious email text")
+            result = await classifier.predict("this is a suspicious phishing email text with enough words to pass the short text dampening threshold and get a full score from the model")
         finally:
             if not getattr(ml_module, "_TORCH_AVAILABLE", False):
                 delattr(ml_module, "torch")
@@ -142,6 +141,7 @@ async def test_predict_happy_path_low_score():
     mock_torch.no_grad.return_value.__enter__ = MagicMock()
     mock_torch.no_grad.return_value.__exit__ = MagicMock(return_value=False)
 
+    mock_model = MagicMock()
     mock_model.return_value.logits = MagicMock()
     mock_model.return_value.attentions = None  # XAI will be empty
     classifier._model = mock_model
@@ -150,7 +150,7 @@ async def test_predict_happy_path_low_score():
     with patch.dict(sys.modules, {"torch": mock_torch}):
         setattr(ml_module, "torch", mock_torch)
         try:
-            result = await classifier.predict("clean email")
+            result = await classifier.predict("this is a clean legitimate email with enough words to pass the short text dampening threshold and get a full score from the model")
         finally:
             if not getattr(ml_module, "_TORCH_AVAILABLE", False):
                 delattr(ml_module, "torch")

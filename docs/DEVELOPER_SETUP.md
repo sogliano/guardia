@@ -73,6 +73,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Editar .env con:
 #   DATABASE_URL, CLERK_PEM_PUBLIC_KEY, OPENAI_API_KEY
+#   GOOGLE_SERVICE_ACCOUNT_JSON (opcional, para Gmail API delivery)
+#   GATEWAY_INTERNAL_TOKEN (opcional, habilita Internal API :8025)
 
 # Migrations
 PYTHONPATH=$PWD alembic upgrade head

@@ -54,6 +54,8 @@ Si tenes proyectos anteriores (ej: "guardia-staging-7jpfvd6ht-nicos-projects..."
 7. Ir a **Settings > Domains** y agregar: `guardia-staging.vercel.app` (si no esta ya)
 8. **IMPORTANTE:** Ir a **Settings > Git** y **desconectar el repositorio** (Disconnect). Queremos que SOLO el GitHub Action haga deploys, no que Vercel haga auto-deploy en cada push.
 
+> **Nota:** Vercel NO buildea el frontend. GitHub Actions ejecuta `npm run build` (Vite) inyectando `VITE_API_BASE_URL` y `VITE_CLERK_PUBLISHABLE_KEY` desde GitHub environment secrets, y sube el directorio `dist/` pre-compilado via `vercel deploy --prod --yes dist/`. Las env vars del dashboard de Vercel no se usan en el build.
+
 ### 1.3 Crear proyecto PRODUCTION
 
 Repetir exactamente lo mismo pero con:
@@ -104,8 +106,9 @@ gcloud run deploy guardia-api-staging \
   --region=us-east1 \
   --platform=managed \
   --port=8000 \
-  --memory=2Gi \
-  --cpu=1 \
+  --memory=4Gi \
+  --cpu=2 \
+  --cpu-boost \
   --min-instances=0 \
   --max-instances=2 \
   --timeout=300 \
@@ -123,8 +126,9 @@ gcloud run deploy guardia-api-production \
   --region=us-east1 \
   --platform=managed \
   --port=8000 \
-  --memory=2Gi \
-  --cpu=1 \
+  --memory=4Gi \
+  --cpu=2 \
+  --cpu-boost \
   --min-instances=0 \
   --max-instances=3 \
   --timeout=300 \
@@ -152,7 +156,9 @@ OPENAI_MODEL=gpt-4o-mini,\
 CORS_ORIGINS=https://guardia-staging.vercel.app,\
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...,\
 FRONTEND_BASE_URL=https://guardia-staging.vercel.app,\
-ACCEPTED_DOMAINS=strike.sh"
+ACCEPTED_DOMAINS=strike.sh,\
+GATEWAY_API_URL=http://INTERNAL_IP:8025,\
+GATEWAY_INTERNAL_TOKEN=<shared-secret>"
 ```
 
 ```bash
@@ -170,7 +176,9 @@ OPENAI_MODEL=gpt-4o,\
 CORS_ORIGINS=https://guardia.vercel.app,\
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...,\
 FRONTEND_BASE_URL=https://guardia.vercel.app,\
-ACCEPTED_DOMAINS=strike.sh"
+ACCEPTED_DOMAINS=strike.sh,\
+GATEWAY_API_URL=http://INTERNAL_IP:8025,\
+GATEWAY_INTERNAL_TOKEN=<shared-secret>"
 ```
 
 > Tip: Tambien podes configurar env vars desde la Google Cloud Console (Cloud Run > tu servicio > Edit & Deploy New Revision > Variables & Secrets).
@@ -201,6 +209,7 @@ Ir a tu repo en GitHub > **Settings > Secrets and variables > Actions**.
 | `VERCEL_TOKEN` | El token que creaste en Vercel |
 | `VERCEL_ORG_ID` | `team_ngBtqsNkGq3hBWT7Art79GPA` |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Tu Clerk publishable key |
+| `HF_TOKEN` | HuggingFace token (para modelo ML privado) |
 
 ### 3.2 Environment Secrets (por ambiente)
 
@@ -211,12 +220,16 @@ Ir a **Settings > Environments** y crear dos environments:
 | Secret | Valor |
 |--------|-------|
 | `VERCEL_PROJECT_ID` | El Project ID del proyecto `guardia-staging` en Vercel |
+| `VITE_API_BASE_URL` | `https://guardia-api-staging-81580052566.us-east1.run.app/api/v1` |
 
 #### Environment: `production`
 
 | Secret | Valor |
 |--------|-------|
 | `VERCEL_PROJECT_ID` | El Project ID del proyecto `guardia-production` en Vercel |
+| `VITE_API_BASE_URL` | `https://guardia-api-production-XXXXX.us-east1.run.app/api/v1` |
+
+> **IMPORTANTE:** `VITE_API_BASE_URL` DEBE estar como **environment secret** (no repo secret), porque el workflow usa `environment: staging/production` y el valor difiere por ambiente. Si no esta configurado, el frontend hace requests a `localhost:8000` (fallback en `api.ts`).
 
 Opcionalmente en `production` podes agregar:
 - **Required reviewers** — para que alguien apruebe antes de deployar

@@ -52,19 +52,22 @@ class TestQuarantineFlow:
 
         mock_db.execute = AsyncMock(side_effect=execute_side_effect)
 
-        # Mock storage and relay
-        with (
-            patch("app.services.quarantine_service.EmailStorage") as MockStorage,
-            patch("app.services.quarantine_service.RelayClient") as MockRelay,
-        ):
-            mock_storage = AsyncMock()
-            mock_storage.retrieve.return_value = b"raw email data"
-            mock_storage.delete.return_value = None
-            MockStorage.return_value = mock_storage
+        # Mock httpx call to VM internal API
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"status": "released"}'
+        mock_http_client = AsyncMock()
+        mock_http_client.post.return_value = mock_response
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock(return_value=False)
 
-            mock_relay = AsyncMock()
-            mock_relay.deferred_forward.return_value = True
-            MockRelay.return_value = mock_relay
+        with (
+            patch("app.services.quarantine_service.httpx.AsyncClient",
+                  return_value=mock_http_client),
+            patch("app.services.quarantine_service.settings") as mock_settings,
+        ):
+            mock_settings.gateway_api_url = "http://10.0.0.1:8025"
+            mock_settings.gateway_internal_token = "test-token"
 
             # Execute approve/release
             service = QuarantineService(mock_db)
@@ -76,12 +79,16 @@ class TestQuarantineFlow:
 
             # Assertions
             assert released_case is not None
-            # In real implementation, case.status would be "resolved"
-            # Here we just verify the service method was called correctly
 
             # Verify DB operations occurred
             assert mock_db.execute.called
             assert mock_db.add.called  # QuarantineActionRecord should be added
+
+            # Verify httpx was called with correct URL and payload
+            mock_http_client.post.assert_called_once()
+            call_args = mock_http_client.post.call_args
+            assert f"/internal/quarantine/{case_id}/release" in call_args[0][0]
+            assert call_args[1]["json"]["sender"] == "suspicious@example.com"
 
     @pytest.mark.asyncio
     async def test_quarantine_reject_flow(self, mock_db):
@@ -111,20 +118,37 @@ class TestQuarantineFlow:
 
         mock_db.execute.side_effect = execute_side_effect
 
-        # Execute reject/delete
-        service = QuarantineService(mock_db)
-        deleted_case = await service.delete_quarantined(
-            case_id=case_id,
-            user_id=user_id,
-            reason="Confirmed phishing - permanent deletion",
-        )
+        # Mock httpx call for delete
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"status": "deleted"}'
+        mock_http_client = AsyncMock()
+        mock_http_client.post.return_value = mock_response
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock(return_value=False)
 
-        # Assertions
-        assert deleted_case is not None
+        with (
+            patch("app.services.quarantine_service.httpx.AsyncClient",
+                  return_value=mock_http_client),
+            patch("app.services.quarantine_service.settings") as mock_settings,
+        ):
+            mock_settings.gateway_api_url = "http://10.0.0.1:8025"
+            mock_settings.gateway_internal_token = "test-token"
 
-        # Verify DB operations occurred
-        assert mock_db.execute.called
-        assert mock_db.add.called  # QuarantineActionRecord should be added
+            # Execute reject/delete
+            service = QuarantineService(mock_db)
+            deleted_case = await service.delete_quarantined(
+                case_id=case_id,
+                user_id=user_id,
+                reason="Confirmed phishing - permanent deletion",
+            )
+
+            # Assertions
+            assert deleted_case is not None
+
+            # Verify DB operations occurred
+            assert mock_db.execute.called
+            assert mock_db.add.called  # QuarantineActionRecord should be added
 
     @pytest.mark.asyncio
     async def test_quarantine_list_pending(self, mock_db):
@@ -207,19 +231,22 @@ class TestQuarantineFlow:
 
         mock_db.execute.side_effect = execute_side_effect
 
-        # Mock storage and relay
-        with (
-            patch("app.services.quarantine_service.EmailStorage") as MockStorage,
-            patch("app.services.quarantine_service.RelayClient") as MockRelay,
-        ):
-            mock_storage = AsyncMock()
-            mock_storage.retrieve.return_value = b"raw email data"
-            mock_storage.delete.return_value = None
-            MockStorage.return_value = mock_storage
+        # Mock httpx call to VM internal API
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"status": "released"}'
+        mock_http_client = AsyncMock()
+        mock_http_client.post.return_value = mock_response
+        mock_http_client.__aenter__ = AsyncMock(return_value=mock_http_client)
+        mock_http_client.__aexit__ = AsyncMock(return_value=False)
 
-            mock_relay = AsyncMock()
-            mock_relay.deferred_forward.return_value = True
-            MockRelay.return_value = mock_relay
+        with (
+            patch("app.services.quarantine_service.httpx.AsyncClient",
+                  return_value=mock_http_client),
+            patch("app.services.quarantine_service.settings") as mock_settings,
+        ):
+            mock_settings.gateway_api_url = "http://10.0.0.1:8025"
+            mock_settings.gateway_internal_token = "test-token"
 
             # Execute release
             service = QuarantineService(mock_db)
@@ -231,5 +258,3 @@ class TestQuarantineFlow:
 
             # Verify add was called (should include QuarantineActionRecord)
             assert mock_db.add.called
-            # In real implementation, we'd verify the QuarantineActionRecord object
-            # For now, we just verify the DB operation occurred

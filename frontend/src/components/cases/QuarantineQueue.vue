@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCasesStore } from '@/stores/cases'
 import { formatTimeAgo, capitalize } from '@/utils/formatters'
 import { scoreColor, riskColor, riskBg, actionColor, actionBg } from '@/utils/colors'
 import { RISK_OPTIONS, ACTION_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
 import type { Case } from '@/types/case'
+import LoadingState from '@/components/common/LoadingState.vue'
 
 const router = useRouter()
 const store = useCasesStore()
@@ -101,11 +102,19 @@ function formatCategory(cat: string): string {
 function openCase(id: string) {
   router.push({ name: 'case-detail', params: { id } })
 }
+
+onMounted(() => {
+  if (!store.qbCases.length) {
+    store.fetchQuarantineBlocked()
+  }
+})
 </script>
 
 <template>
   <div class="quarantine-queue">
-    <div v-if="cases.length === 0" class="empty-tab">
+    <LoadingState v-if="store.qbLoading && !store.qbCases.length" message="Loading quarantine cases..." />
+
+    <div v-else-if="cases.length === 0 && !store.qbLoading" class="empty-tab">
       <span class="material-symbols-rounded empty-tab-icon">verified_user</span>
       <p>No quarantined or blocked emails</p>
       <span class="empty-tab-hint">All clear — no emails are waiting for review</span>

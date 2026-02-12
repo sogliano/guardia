@@ -182,12 +182,15 @@ Cuando alguna capa no esta disponible, los pesos se redistribuyen automaticament
 
 | Servicio | Proposito |
 |----------|-----------|
-| **Google Cloud Run** | Hosting del backend (contenedor) |
-| **Vercel** | Hosting del frontend (CDN + SPA) |
+| **Google Cloud Run** | Hosting del backend API (contenedor) |
+| **Google Compute Engine** | VM para SMTP Gateway (e2-small, pipeline completo) |
+| **Vercel** | Hosting del frontend (SPA estatica) |
 | **Neon** | PostgreSQL serverless |
+| **Gmail API** | Entrega de emails via `users.messages.import` (primary) |
+| **HuggingFace Hub** | Hosting del modelo ML (distilbert-guardia-v2) |
 | **Clerk** | Autenticacion (RS256 JWT, solo por invitacion) |
+| **OpenAI API** | LLM Analyst (GPT-4o-mini) |
 | **Slack API** | Webhooks de alertas |
-| **Google Workspace** | Destino del relay de email |
 
 ---
 
@@ -197,10 +200,10 @@ Cuando alguna capa no esta disponible, los pesos se redistribuyen automaticament
 guardia/
 ├── backend/                 # Python 3.11 / FastAPI
 │   ├── app/
-│   │   ├── api/v1/          # Endpoints REST (12 modulos)
+│   │   ├── api/v1/          # Endpoints REST (8 modulos)
 │   │   ├── core/            # Constantes, seguridad, excepciones
 │   │   ├── db/              # Sesion SQLAlchemy + migraciones Alembic
-│   │   ├── gateway/         # Servidor SMTP, parser, relay
+│   │   ├── gateway/         # Servidor SMTP, Gmail API delivery, API interna
 │   │   ├── models/          # Modelos ORM (16 tablas)
 │   │   ├── schemas/         # Request/response Pydantic v2
 │   │   └── services/        # Logica de negocio + pipeline

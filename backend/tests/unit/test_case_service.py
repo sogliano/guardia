@@ -68,7 +68,7 @@ class TestListCases:
 
         mock_db.execute.side_effect = [mock_count_result, mock_list_result]
 
-        result = await case_service.list_cases(status="quarantined", page=1, size=20)
+        result = await case_service.list_cases(status=["quarantined"], page=1, size=20)
 
         assert result["total"] == 5
         assert mock_db.execute.call_count == 2
@@ -85,9 +85,9 @@ class TestListCases:
         mock_db.execute.side_effect = [mock_count_result, mock_list_result]
 
         result = await case_service.list_cases(
-            status="pending",
+            status=["pending"],
             risk_level="high",
-            verdict="quarantined",
+            verdict=["quarantined"],
             sender="evil@example.com",
             page=1,
             size=10,

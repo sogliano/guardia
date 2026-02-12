@@ -3,16 +3,22 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
+import httpx
+import structlog
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.constants import CaseStatus
+from app.config import settings
+from app.core.constants import CaseStatus, QuarantineAction, Verdict
 from app.models.analysis import Analysis
 from app.models.case import Case
 from app.models.case_note import CaseNote
 from app.models.email import Email
 from app.models.fp_review import FPReview
+from app.models.quarantine_action import QuarantineActionRecord
+
+logger = structlog.get_logger()
 
 
 class CaseService:
@@ -23,9 +29,9 @@ class CaseService:
         self,
         page: int = 1,
         size: int = 20,
-        status: str | None = None,
+        status: list[str] | None = None,
         risk_level: str | None = None,
-        verdict: str | None = None,
+        verdict: list[str] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         search: str | None = None,
@@ -38,11 +44,11 @@ class CaseService:
         joined = False
 
         if status:
-            query = query.where(Case.status == status)
+            query = query.where(Case.status.in_(status))
         if risk_level:
             query = query.where(Case.risk_level == risk_level)
         if verdict:
-            query = query.where(Case.verdict == verdict)
+            query = query.where(Case.verdict.in_(verdict))
         if date_from:
             query = query.where(Case.created_at >= date_from)
         if date_to:
@@ -169,12 +175,20 @@ class CaseService:
     async def resolve_case(
         self, case_id: UUID, verdict: str, user_id: UUID
     ) -> Case | None:
-        """Resolve a case with a final verdict."""
+        """Resolve a case with a final verdict.
+
+        If the case is quarantined and verdict is 'allowed', release the
+        email (forward to Google) before resolving.
+        """
         stmt = select(Case).where(Case.id == case_id).with_for_update()
         result = await self.db.execute(stmt)
         case = result.scalar_one_or_none()
         if not case:
             return None
+
+        # If quarantined + allowing, forward the stored email first
+        if case.status == CaseStatus.QUARANTINED and verdict == Verdict.ALLOWED:
+            await self._release_quarantined_email(case, user_id)
 
         case.status = CaseStatus.RESOLVED
         case.verdict = verdict
@@ -182,6 +196,60 @@ class CaseService:
         case.resolved_at = datetime.now(timezone.utc)
         await self.db.flush()
         return case
+
+    async def _release_quarantined_email(
+        self, case: Case, user_id: UUID
+    ) -> None:
+        """Forward a quarantined email via the VM internal API."""
+        if not settings.gateway_api_url:
+            logger.warning("resolve_allow_no_gateway_url", case_id=str(case.id))
+            return
+
+        email = await self._load_email(case.email_id)
+        if not email:
+            logger.warning("resolve_allow_no_email", case_id=str(case.id))
+            return
+
+        url = f"{settings.gateway_api_url.rstrip('/')}/internal/quarantine/{case.id}/release"
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "sender": email.sender_email,
+                        "recipients": [email.recipient_email],
+                    },
+                    headers={"X-Gateway-Token": settings.gateway_internal_token},
+                )
+
+            if resp.status_code == 200:
+                action = QuarantineActionRecord(
+                    case_id=case.id,
+                    action=QuarantineAction.RELEASED,
+                    reason="Allowed via quick action",
+                    performed_by=user_id,
+                )
+                self.db.add(action)
+                logger.info("resolve_allow_forwarded", case_id=str(case.id))
+            else:
+                logger.error(
+                    "resolve_allow_forward_failed",
+                    case_id=str(case.id),
+                    status=resp.status_code,
+                    body=resp.text,
+                )
+        except Exception as exc:
+            logger.error(
+                "resolve_allow_gateway_error",
+                case_id=str(case.id),
+                error=str(exc),
+            )
+
+    async def _load_email(self, email_id: UUID) -> Email | None:
+        """Load email record by ID."""
+        stmt = select(Email).where(Email.id == email_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def add_note(
         self, case_id: UUID, author_id: UUID, content: str
@@ -219,34 +287,6 @@ class CaseService:
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
-
-    async def list_fp_reviews(self, case_id: UUID) -> list[FPReview]:
-        """List all FP reviews for a case."""
-        stmt = (
-            select(FPReview)
-            .where(FPReview.case_id == case_id)
-            .order_by(FPReview.created_at.desc())
-        )
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
-
-    async def create_fp_review(
-        self,
-        case_id: UUID,
-        reviewer_id: UUID,
-        decision: str,
-        notes: str | None = None,
-    ) -> FPReview:
-        """Create an FP review record."""
-        review = FPReview(
-            case_id=case_id,
-            reviewer_id=reviewer_id,
-            decision=decision,
-            notes=notes,
-        )
-        self.db.add(review)
-        await self.db.flush()
-        return review
 
     async def list_fp_reviews(self, case_id: UUID) -> list[FPReview]:
         """List all FP reviews for a case."""

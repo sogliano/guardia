@@ -7,7 +7,7 @@ import type { Case } from '@/types/case'
 import { formatDate, capitalize } from '@/utils/formatters'
 import { scoreColor, riskColor, riskBg, actionColor, actionBg, statusColor, statusBg } from '@/utils/colors'
 import { computePageNumbers } from '@/utils/pagination'
-import { RISK_OPTIONS, ACTION_OPTIONS, STATUS_OPTIONS, DATE_RANGE_OPTIONS, dateRangeToParams } from '@/constants/filterOptions'
+import { RISK_OPTIONS, ACTION_OPTIONS, STATUS_OPTIONS } from '@/constants/filterOptions'
 import GlobalFiltersBar from '@/components/GlobalFiltersBar.vue'
 import QuarantineQueue from '@/components/cases/QuarantineQueue.vue'
 import MultiSelect from '@/components/common/MultiSelect.vue'
@@ -24,28 +24,29 @@ const activeTab = ref<TabId>((route.query.tab as TabId) || 'all')
 function setTab(tab: TabId) {
   activeTab.value = tab
   router.replace({ query: tab === 'all' ? {} : { tab } })
+  fetchActiveTab()
 }
 
+// ── All Cases filters ──
 const searchQuery = ref((route.query.search as string) || '')
 const filterRisk = ref<string[]>(RISK_OPTIONS.slice())
 const filterAction = ref<string[]>(ACTION_OPTIONS.slice())
 const filterStatus = ref<string[]>(STATUS_OPTIONS.slice())
 const filterDateRange = ref<{ from: string | null; to: string | null }>({ from: null, to: null })
 
+// ── Needs Action client-side filters (applied on top of server data) ──
 const naSearchQuery = ref('')
 const naFilterRisk = ref<string[]>(RISK_OPTIONS.slice())
 const naFilterAction = ref<string[]>(ACTION_OPTIONS.slice())
 const naFilterDateRange = ref<{ from: string | null; to: string | null }>({ from: null, to: null })
-const naPage = ref(1)
-const naPageSize = ref(10)
 const allowingCaseId = ref<string | null>(null)
 const blockingCaseId = ref<string | null>(null)
 
 type SortDir = 'asc' | 'desc'
-const naSortCol = ref<string | null>(null)
-const naSortDir = ref<SortDir>('asc')
-const sortCol = ref<string | null>(null)
-const sortDir = ref<SortDir>('asc')
+const naSortCol = ref<string | null>('case_number')
+const naSortDir = ref<SortDir>('desc')
+const sortCol = ref<string | null>('case_number')
+const sortDir = ref<SortDir>('desc')
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -53,47 +54,9 @@ watch(() => route.query.search, (newSearch) => {
   searchQuery.value = (newSearch as string) || ''
 })
 
-const naTotalPages = computed(() => Math.ceil(needsActionCases.value.length / naPageSize.value))
-const paginatedNeedsCases = computed(() => {
-  const start = (naPage.value - 1) * naPageSize.value
-  return sortedNeedsAction.value.slice(start, start + naPageSize.value)
-})
-const naStartItem = computed(() => (naPage.value - 1) * naPageSize.value + 1)
-const naEndItem = computed(() => Math.min(naPage.value * naPageSize.value, needsActionCases.value.length))
-
-const totalPages = computed(() => Math.ceil(store.total / store.size))
-const startItem = computed(() => (store.page - 1) * store.size + 1)
-const endItem = computed(() => Math.min(store.page * store.size, store.total))
-
-const hasActiveFilters = computed(() => {
-  return searchQuery.value ||
-    filterRisk.value.length !== RISK_OPTIONS.length ||
-    filterAction.value.length !== ACTION_OPTIONS.length ||
-    filterStatus.value.length !== STATUS_OPTIONS.length ||
-    filterDateRange.value.from ||
-    filterDateRange.value.to
-})
-
-const pageNumbers = computed(() => computePageNumbers(store.page, totalPages.value))
-
-// Overview computeds
-const naHasActiveFilters = computed(() => {
-  return naSearchQuery.value ||
-    naFilterRisk.value.length !== RISK_OPTIONS.length ||
-    naFilterAction.value.length !== ACTION_OPTIONS.length ||
-    naFilterDateRange.value.from ||
-    naFilterDateRange.value.to
-})
-
-function clearNaFilters() {
-  naSearchQuery.value = ''
-  naFilterRisk.value = RISK_OPTIONS.slice()
-  naFilterAction.value = ACTION_OPTIONS.slice()
-  naFilterDateRange.value = { from: null, to: null }
-}
-
-const needsActionCases = computed(() => {
-  let base = store.cases.filter(c => c.status === 'analyzed' || c.status === 'quarantined')
+// ── Needs Action: client-side filtering on server-fetched data ──
+const filteredNeedsAction = computed(() => {
+  let base = store.needsActionCases
   const q = naSearchQuery.value.trim().toLowerCase()
   if (q) {
     base = base.filter(c =>
@@ -119,6 +82,43 @@ const needsActionCases = computed(() => {
   }
   return base
 })
+
+// ── Needs Action pagination (server-side) ──
+const naTotalPages = computed(() => Math.ceil(store.needsActionTotal / store.needsActionSize))
+const naPageNumbers = computed(() => computePageNumbers(store.needsActionPage, naTotalPages.value))
+const naStartItem = computed(() => store.needsActionTotal === 0 ? 0 : (store.needsActionPage - 1) * store.needsActionSize + 1)
+const naEndItem = computed(() => Math.min(store.needsActionPage * store.needsActionSize, store.needsActionTotal))
+
+// ── All Cases pagination ──
+const totalPages = computed(() => Math.ceil(store.total / store.size))
+const startItem = computed(() => (store.page - 1) * store.size + 1)
+const endItem = computed(() => Math.min(store.page * store.size, store.total))
+
+const hasActiveFilters = computed(() => {
+  return searchQuery.value ||
+    filterRisk.value.length !== RISK_OPTIONS.length ||
+    filterAction.value.length !== ACTION_OPTIONS.length ||
+    filterStatus.value.length !== STATUS_OPTIONS.length ||
+    filterDateRange.value.from ||
+    filterDateRange.value.to
+})
+
+const pageNumbers = computed(() => computePageNumbers(store.page, totalPages.value))
+
+const naHasActiveFilters = computed(() => {
+  return naSearchQuery.value ||
+    naFilterRisk.value.length !== RISK_OPTIONS.length ||
+    naFilterAction.value.length !== ACTION_OPTIONS.length ||
+    naFilterDateRange.value.from ||
+    naFilterDateRange.value.to
+})
+
+function clearNaFilters() {
+  naSearchQuery.value = ''
+  naFilterRisk.value = RISK_OPTIONS.slice()
+  naFilterAction.value = ACTION_OPTIONS.slice()
+  naFilterDateRange.value = { from: null, to: null }
+}
 
 const resolvedCount = computed(() => store.cases.filter(c => c.status === 'resolved').length)
 const blockedCount = computed(() => store.blockedCases.length)
@@ -168,7 +168,7 @@ function sortIcon(table: 'na' | 'all', col: string): string {
   return dirRef.value === 'asc' ? 'expand_less' : 'expand_more'
 }
 
-const sortedNeedsAction = computed(() => sortCases(needsActionCases.value, naSortCol.value, naSortDir.value))
+const sortedNeedsAction = computed(() => sortCases(filteredNeedsAction.value, naSortCol.value, naSortDir.value))
 const sortedAllCases = computed(() => sortCases(store.cases, sortCol.value, sortDir.value))
 
 function applyFilters() {
@@ -215,14 +215,31 @@ function openCase(id: string) {
   router.push({ name: 'case-detail', params: { id } })
 }
 
+function fetchActiveTab() {
+  if (activeTab.value === 'all') {
+    store.fetchCases()
+  } else if (activeTab.value === 'needs-action') {
+    store.fetchNeedsAction()
+  } else if (activeTab.value === 'quarantine') {
+    store.fetchQuarantineBlocked()
+  }
+}
+
+function refreshAll() {
+  store.fetchCases()
+  if (activeTab.value === 'needs-action') {
+    store.fetchNeedsAction()
+  } else if (activeTab.value === 'quarantine') {
+    store.fetchQuarantineBlocked()
+  }
+}
+
 async function quickAllow(caseId: string) {
   allowingCaseId.value = caseId
   try {
     await resolveCase(caseId, 'allowed')
+    await store.fetchNeedsAction()
     await store.fetchCases()
-    if (paginatedNeedsCases.value.length === 0 && naPage.value > 1) {
-      naPage.value--
-    }
   } catch (err) {
     console.error('Error allowing case:', err)
     alert(`Failed to allow case: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -235,10 +252,8 @@ async function quickBlock(caseId: string) {
   blockingCaseId.value = caseId
   try {
     await resolveCase(caseId, 'blocked')
+    await store.fetchNeedsAction()
     await store.fetchCases()
-    if (paginatedNeedsCases.value.length === 0 && naPage.value > 1) {
-      naPage.value--
-    }
   } catch (err) {
     console.error('Error blocking case:', err)
     alert(`Failed to block case: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -277,6 +292,11 @@ function exportCSV() {
 
 onMounted(() => {
   store.fetchCases()
+  // Always fetch needs-action count for the KPI badge
+  store.fetchNeedsAction()
+  if (activeTab.value === 'quarantine') {
+    store.fetchQuarantineBlocked()
+  }
 })
 </script>
 
@@ -294,7 +314,7 @@ onMounted(() => {
           <span class="material-symbols-rounded btn-icon">download</span>
           Export CSV
         </button>
-        <button class="btn-outline" @click="store.fetchCases()">
+        <button class="btn-outline" @click="refreshAll">
           <span class="material-symbols-rounded btn-icon">refresh</span>
           Refresh
         </button>
@@ -318,7 +338,7 @@ onMounted(() => {
           <span class="material-symbols-rounded">pending_actions</span>
         </div>
         <div class="kpi-info">
-          <span class="kpi-value">{{ needsActionCases.length }}</span>
+          <span class="kpi-value">{{ store.needsActionTotal }}</span>
           <span class="kpi-label">Needs Review</span>
         </div>
       </div>
@@ -360,7 +380,7 @@ onMounted(() => {
       >
         <span class="material-symbols-rounded tab-icon">pending_actions</span>
         Needs Action
-        <span v-if="needsActionCases.length" class="tab-count tab-count-accent">{{ needsActionCases.length }}</span>
+        <span v-if="store.needsActionTotal" class="tab-count tab-count-accent">{{ store.needsActionTotal }}</span>
       </button>
       <button
         class="tab-btn"
@@ -369,7 +389,7 @@ onMounted(() => {
       >
         <span class="material-symbols-rounded tab-icon">shield</span>
         Quarantine &amp; Blocked
-        <span v-if="store.quarantineAndBlockedCases.length" class="tab-count tab-count-warning">{{ store.quarantineAndBlockedCases.length }}</span>
+        <span v-if="store.qbTotal" class="tab-count tab-count-warning">{{ store.qbTotal }}</span>
       </button>
     </div>
 
@@ -378,7 +398,8 @@ onMounted(() => {
 
     <!-- Tab: Needs Action -->
     <template v-if="activeTab === 'needs-action'">
-      <div v-if="!needsActionCases.length" class="empty-tab">
+      <LoadingState v-if="store.needsActionLoading && !store.needsActionCases.length" message="Loading cases..." />
+      <div v-else-if="!store.needsActionTotal" class="empty-tab">
         <span class="material-symbols-rounded empty-tab-icon">check_circle</span>
         <p>All caught up — no cases need action right now</p>
       </div>
@@ -405,7 +426,7 @@ onMounted(() => {
           />
           <DateRangePicker v-model="naFilterDateRange" />
           <a v-if="naHasActiveFilters" href="#" class="clear-link" @click.prevent="clearNaFilters">Clear Filters</a>
-          <span class="results-count">{{ needsActionCases.length }} cases</span>
+          <span class="results-count">{{ store.needsActionTotal }} cases</span>
         </div>
         <div class="table-card">
           <table class="data-table">
@@ -424,7 +445,7 @@ onMounted(() => {
             </thead>
             <tbody>
               <tr
-                v-for="c in paginatedNeedsCases"
+                v-for="c in sortedNeedsAction"
                 :key="c.id"
                 class="case-row"
                 @click="openCase(c.id)"
@@ -487,17 +508,23 @@ onMounted(() => {
         </div>
         <div class="pagination">
           <div class="pagination-left">
-            <span class="pagination-info">Showing {{ naStartItem }}-{{ naEndItem }} of {{ needsActionCases.length }}</span>
-            <select class="size-select" :value="naPageSize" @change="naPageSize = Number(($event.target as HTMLSelectElement).value); naPage = 1">
-              <option v-for="s in [5, 10, 15, 20]" :key="s" :value="s">{{ s }} / page</option>
+            <span class="pagination-info">Showing {{ naStartItem }}-{{ naEndItem }} of {{ store.needsActionTotal }}</span>
+            <select class="size-select" :value="store.needsActionSize" @change="store.setNeedsActionSize(Number(($event.target as HTMLSelectElement).value))">
+              <option v-for="s in [10, 20, 50]" :key="s" :value="s">{{ s }} / page</option>
             </select>
           </div>
           <div v-if="naTotalPages > 1" class="pagination-buttons">
-            <button class="page-btn" :disabled="naPage <= 1" @click="naPage--">Previous</button>
-            <template v-for="p in naTotalPages" :key="p">
-              <button class="page-btn" :class="{ active: p === naPage }" @click="naPage = p">{{ p }}</button>
+            <button class="page-btn" :disabled="store.needsActionPage <= 1" @click="store.setNeedsActionPage(store.needsActionPage - 1)">Previous</button>
+            <template v-for="p in naPageNumbers" :key="p">
+              <span v-if="p === '...'" class="page-ellipsis">...</span>
+              <button
+                v-else
+                class="page-btn"
+                :class="{ active: p === store.needsActionPage }"
+                @click="typeof p === 'number' && store.setNeedsActionPage(p)"
+              >{{ p }}</button>
             </template>
-            <button class="page-btn" :disabled="naPage >= naTotalPages" @click="naPage++">Next</button>
+            <button class="page-btn" :disabled="store.needsActionPage >= naTotalPages" @click="store.setNeedsActionPage(store.needsActionPage + 1)">Next</button>
           </div>
         </div>
       </template>

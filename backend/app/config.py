@@ -52,13 +52,19 @@ class Settings(BaseSettings):
     # Google Workspace Relay
     google_relay_host: str = "aspmx.l.google.com"
     google_relay_port: int = 25
+    google_relay_user: str = ""
+    google_relay_password: str = ""
     accepted_domains: str = "strike.sh"
+
+    # Gmail API delivery (alternative to SMTP relay)
+    google_service_account_json: str = ""  # Path to service account key JSON
 
     # Pipeline
     threshold_allow: float = 0.3
     threshold_warn: float = 0.6
     threshold_quarantine: float = 0.8
     pipeline_timeout_seconds: int = 30
+    pipeline_ml_enabled: bool = True
 
     # LLM - OpenAI
     openai_api_key: str = ""
@@ -84,6 +90,11 @@ class Settings(BaseSettings):
 
     # Storage
     quarantine_storage_path: str = "./quarantine_store"
+
+    # Gateway Internal API (Cloud Run → VM communication)
+    gateway_internal_port: int = 8025
+    gateway_internal_token: str = ""
+    gateway_api_url: str = ""  # e.g. http://VM_INTERNAL_IP:8025
 
     model_config = {
         "env_file": (f"../.env.{_env}", f".env.{_env}", "../.env", ".env"),

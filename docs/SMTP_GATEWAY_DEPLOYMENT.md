@@ -19,11 +19,12 @@ Email sender (cualquier servidor SMTP)
     2. ML/DistilBERT (~18ms) - clasificacion binaria
     3. LLM/OpenAI  (~2-3s)  - explicacion
        |
-    Forward SMTP
-       |
-[Gmail: aspmx.l.google.com]        <-- Google Workspace recibe emails permitidos
-       |
-[Inbox usuario@guardia-sec.com]
+    Gmail API (primary)                 SMTP Relay (fallback)
+    users.messages.import               aspmx.l.google.com
+       |                                     |
+[Inbox usuario@guardia-sec.com]    [Inbox usuario@guardia-sec.com]
+
+    Internal API (:8025)            <-- Cloud Run llama para quarantine release
 ```
 
 ### Por que una VM y no Cloud Run
@@ -38,11 +39,13 @@ La VM ejecuta todo el pipeline de deteccion localmente: heuristicas, modelo ML (
 |------------|-------------|-------------|
 | aiosmtpd | Servidor SMTP (puerto 25) | Python stdlib |
 | Email Parser | Parseo RFC 5322 | Python stdlib |
-| Heuristic Engine | 7 sub-engines (domain, URL, keyword, auth, attachment, impersonation, header) | Ninguna |
+| Heuristic Engine | 4 sub-engines (auth, domain, URL, keyword) | Ninguna |
 | ML Classifier | DistilBERT fine-tuned, clasificacion binaria + XAI (attention tokens) | PyTorch, Transformers |
 | LLM Explainer | Genera explicacion estructurada del analisis | OpenAI API (HTTP) |
+| Gmail Delivery | Entrega via Gmail API `users.messages.import` (primary) | google-auth, google-api-python-client |
+| Relay Client | Gmail API delivery (primary) + SMTP relay fallback | aiosmtplib (fallback) |
+| Internal API | HTTP API :8025 para operaciones de quarantine desde Cloud Run | FastAPI, uvicorn |
 | SQLAlchemy async | Persiste emails, cases, analyses, evidences | asyncpg, Neon PostgreSQL |
-| Relay Client | Forward SMTP a Google Workspace | aiosmtplib |
 
 ---
 
@@ -238,10 +241,13 @@ SMTP_TLS_CERT=
 SMTP_TLS_KEY=
 SMTP_REQUIRE_TLS=false
 
-# Google Workspace Relay
+# Gmail API delivery (primary)
+GOOGLE_SERVICE_ACCOUNT_JSON=/opt/guardia/backend/service-account.json
+ACCEPTED_DOMAINS=guardia-sec.com
+
+# SMTP Relay fallback (used when Gmail API not configured)
 GOOGLE_RELAY_HOST=aspmx.l.google.com
 GOOGLE_RELAY_PORT=25
-ACCEPTED_DOMAINS=guardia-sec.com
 
 # Database (Neon staging)
 DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>/<database>?sslmode=require
@@ -262,6 +268,10 @@ OPENAI_MODEL=gpt-4o-mini
 
 # Quarantine storage
 QUARANTINE_STORAGE_PATH=/opt/guardia/quarantine_store
+
+# Internal API (para quarantine release desde Cloud Run)
+GATEWAY_INTERNAL_PORT=8025
+GATEWAY_INTERNAL_TOKEN=<shared-secret-con-cloud-run>
 
 # Active users (dejar vacio para procesar todos)
 ACTIVE_USERS=
@@ -284,6 +294,56 @@ python -m app.gateway.server
 
 Deberias ver logs indicando que el SMTP server esta escuchando en puerto 25.
 Verificar en los logs que aparezca `ml_model_loaded` -- esto confirma que el modelo DistilBERT cargo correctamente.
+
+### 2.8 Configurar Gmail API Service Account
+
+El gateway usa Gmail API como metodo principal de entrega de emails. Se requiere una service account con domain-wide delegation.
+
+**1. Crear Service Account en GCP Console:**
+```bash
+gcloud iam service-accounts create guardia-email-delivery \
+  --display-name="Guard-IA Email Delivery" \
+  --project=gen-lang-client-0127131422
+```
+
+**2. Crear JSON key:**
+```bash
+gcloud iam service-accounts keys create /tmp/service-account.json \
+  --iam-account=guardia-email-delivery@gen-lang-client-0127131422.iam.gserviceaccount.com
+```
+
+**3. Habilitar Gmail API:**
+```bash
+gcloud services enable gmail.googleapis.com --project=gen-lang-client-0127131422
+```
+
+**4. Configurar Domain-Wide Delegation en Google Admin:**
+1. Google Admin Console: https://admin.google.com
+2. **Security > API controls > Domain-wide Delegation > Manage**
+3. Add new:
+   - **Client ID:** (numeric ID de la service account, encontrarlo en IAM > Service Accounts)
+   - **OAuth Scopes:** `https://www.googleapis.com/auth/gmail.insert`
+
+**5. Copiar JSON key a la VM:**
+```bash
+# Desde tu maquina local
+gcloud compute scp /tmp/service-account.json guardia-smtp-gateway:/opt/guardia/backend/service-account.json --zone=us-east1-b
+```
+
+**6. Verificar:** Despues de reiniciar el servicio, los logs deben mostrar `relay_using_gmail_api` cuando se procesa un email.
+
+### 2.9 Verificar Internal API
+
+Cuando `GATEWAY_INTERNAL_TOKEN` esta configurado, el server tambien levanta un HTTP API en el puerto 8025. Este API es usado por Cloud Run para operaciones de quarantine (release/delete).
+
+```bash
+# Health check (no requiere auth)
+curl http://localhost:8025/internal/health
+
+# Endpoints disponibles (requieren X-Gateway-Token header):
+# POST /internal/quarantine/{case_id}/release  — libera email quarantineado
+# POST /internal/quarantine/{case_id}/delete   — elimina .eml del disco
+```
 
 ---
 
