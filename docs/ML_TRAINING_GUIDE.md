@@ -201,7 +201,7 @@ class TrainingConfig:
     num_labels: int = 2
 
     # Tokenization
-    max_length: int = 256  # Max tokens per email
+    max_length: int = 512  # Max tokens per email (DistilBERT native support)
     truncation: bool = True
     padding: str = "max_length"
 
@@ -545,7 +545,7 @@ classifier = pipeline(
 
 # Test inference
 test_email = "URGENT: Your account will be suspended unless you click here"
-result = classifier(test_email, truncation=True, max_length=256)
+result = classifier(test_email, truncation=True, max_length=512)
 
 print(f"Result: {result}")
 # Expected: [{'label': 'LABEL_1', 'score': 0.92}]
@@ -678,7 +678,7 @@ class MLClassifier:
 config.batch_size = 8  # o 4
 
 # Reducir max_length
-config.max_length = 128  # de 256 a 128
+config.max_length = 256  # de 512 a 256
 
 # Usar gradient accumulation
 training_args.gradient_accumulation_steps = 2  # Simula batch_size=16
@@ -710,7 +710,7 @@ print(train_df["label"].value_counts())
 device = torch.device("cuda")
 
 # 2. Reducir max_length
-max_length = 128  # de 256 a 128
+max_length = 256  # de 512 a 256
 
 # 3. Batch inference (si es posible)
 results = classifier(texts, batch_size=8)

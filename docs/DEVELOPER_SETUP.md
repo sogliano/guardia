@@ -64,10 +64,10 @@ EOF
 
 ```bash
 cd backend
-python3.11 -m venv .venv
+python3 -m venv .venv  # Python 3.11+
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -e ".[dev]"  # Uses pyproject.toml
 
 # Environment
 cp .env.example .env

@@ -9,8 +9,8 @@ Documentación completa de la API REST de Guard-IA. Todos los endpoints requiere
 | Entorno | URL |
 |---------|-----|
 | **Development** | `http://localhost:8000/api/v1` |
-| **Staging** | `https://guardia-backend-staging-xxxxx.run.app/api/v1` |
-| **Production** | `https://guardia-backend-xxxxx.run.app/api/v1` |
+| **Staging** | `https://guardia-api-81580052566.us-east1.run.app/api/v1` |
+| **Production** | `https://guardia-api-production-XXXXX.us-east1.run.app/api/v1` |
 
 ---
 
@@ -764,11 +764,11 @@ http://localhost:8000/redoc
 http://localhost:8000/openapi.json
 ```
 
-**Production:**
+**Staging:**
 ```
-https://guardia-backend-xxxxx.run.app/docs
-https://guardia-backend-xxxxx.run.app/redoc
-https://guardia-backend-xxxxx.run.app/openapi.json
+https://guardia-api-81580052566.us-east1.run.app/docs
+https://guardia-api-81580052566.us-east1.run.app/redoc
+https://guardia-api-81580052566.us-east1.run.app/openapi.json
 ```
 
 ---

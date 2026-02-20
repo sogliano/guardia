@@ -24,7 +24,7 @@
 
 Guard-IA es un **sistema de seguridad de email pre-entrega** que intercepta emails entrantes a traves de un gateway SMTP antes de que lleguen a las casillas de Google Workspace. Cada email es analizado por un **pipeline de 3 capas de IA** que combina heuristicas deterministas, un modelo ML fine-tuned, y un analista LLM para producir un score de amenaza unificado y un veredicto accionable.
 
-Desarrollado como proyecto de tesis universitaria (ORT Uruguay) para [Strike Security](https://strike.sh).
+Desarrollado como proyecto de tesis universitaria 2025-2026 (ORT Uruguay) para [Strike Security](https://strike.sh) por Nico Sogliano, Rodrigo Miranda, Nacho y Juanma.
 
 ### Caracteristicas Principales
 
@@ -74,8 +74,9 @@ graph TB
     subgraph External["Servicios Externos"]
         CLERK["Clerk Auth"]
         SLACK["Slack"]
-        GOOGLE["Google Workspace"]
+        GMAIL_API["Gmail API"]
         OPENAI["OpenAI API"]
+        HF["HuggingFace Hub"]
     end
 
     EMAIL -->|SMTP| SMTP
@@ -84,8 +85,9 @@ graph TB
     ORCH --> ML
     ORCH --> LLM
     LLM -.-> OPENAI
+    ML -.->|"first load"| HF
     ORCH --> DB
-    ORCH -->|Reenviar| GOOGLE
+    ORCH -->|"deliver"| GMAIL_API
     ORCH -->|Alerta| SLACK
     ANALYST --> SPA
     SPA -->|HTTP| API --> DB
@@ -145,10 +147,10 @@ Cuando alguna capa no esta disponible, los pesos se redistribuyen automaticament
 
 | | Tecnologia |
 |---|---|
-| **Lenguaje** | Python 3.11 |
+| **Lenguaje** | Python 3.11+ |
 | **Framework** | FastAPI (async) |
 | **ORM** | SQLAlchemy 2.0 async + asyncpg |
-| **Base de datos** | PostgreSQL 16 (Neon serverless) |
+| **Base de datos** | PostgreSQL 16 (Neon) |
 | **Validacion** | Pydantic v2 |
 | **SMTP** | aiosmtpd |
 | **Logging** | structlog (JSON) |
@@ -255,8 +257,8 @@ cp .env.example .env.local
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
+pip install -e ".[dev]"
+PYTHONPATH=$PWD alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -282,7 +284,7 @@ make migration msg="" # Crear nueva migracion
 
 ```bash
 cd backend
-python -m scripts.seed_test_emails
+.venv/bin/python -m scripts.seed_test_emails
 ```
 
 ---
@@ -313,16 +315,23 @@ Los archivos de entorno se cargan segun `APP_ENV`:
 graph LR
     V["Vercel CDN"] -->|"/api/v1"| CR["Cloud Run"]
     CR --> N["Neon PostgreSQL"]
-    CR -.-> OAI["OpenAI gpt-4o-mini"]
-    CR -.-> SL["Slack Webhooks"]
+    CR -->|"quarantine release"| VM["GCE VM"]
+    VM --> N
+    VM -.-> OAI["OpenAI gpt-4o-mini"]
+    VM -.-> GMAIL["Gmail API"]
+    VM -.-> SL["Slack"]
+    VM -.-> HF["HuggingFace Hub"]
     V -.-> CL["Clerk Auth"]
     CR -.-> CL
 
     style V fill:#000,color:#fff
     style CR fill:#4285f4,color:#fff
+    style VM fill:#4285f4,color:#fff
     style N fill:#00e599,color:#000
     style CL fill:#6c47ff,color:#fff
     style OAI fill:#10a37f,color:#fff
+    style GMAIL fill:#ea4335,color:#fff
+    style HF fill:#ffd21e,color:#000
     style SL fill:#4a154b,color:#fff
 ```
 

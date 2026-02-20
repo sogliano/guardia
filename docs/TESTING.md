@@ -80,10 +80,10 @@ tests/
 
 ### Setup
 
-**Install test dependencies:**
+**Install dependencies (includes test deps):**
 ```bash
 cd backend
-pip install pytest pytest-asyncio pytest-cov httpx
+pip install -e ".[dev]"  # Installs pytest, pytest-asyncio, pytest-cov, httpx, etc.
 ```
 
 **Configure pytest:**
@@ -219,6 +219,14 @@ def test_check_suspicious_urls(url, expected_score):
     result = engine.check_suspicious_urls(email)
     assert abs(result.score - expected_score) < 0.2
 ```
+
+### Known Issue: API Test Event Loop
+
+> **Warning:** The backend uses a module-level SQLAlchemy engine (`app.db.session.engine`) created at import time. This engine binds to the event loop that first imports the module. In tests, `pytest-asyncio` creates a different loop, causing `"Task attached to a different loop"` errors.
+>
+> **Impact:** Only the first DB-hitting test per session works reliably. Subsequent tests that go through the ASGI client and hit the database may fail.
+>
+> **Workaround:** For unit tests, use `mock_db` (AsyncMock) instead of a real DB session. For integration tests that need the full ASGI stack, keep them minimal and avoid multiple DB round-trips through the `client` fixture.
 
 ### Writing Integration Tests
 
@@ -358,64 +366,52 @@ async def test_pipeline_timeout(db_session):
 
 ### Fixtures (conftest.py)
 
-```python
-# tests/conftest.py
-import pytest
-import asyncio
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from app.main import app
-from app.db.session import get_db
-from app.models.base import Base
+The actual `tests/conftest.py` provides these key fixtures:
 
-# Test database URL (use SQLite for speed)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+```python
+# tests/conftest.py (simplified overview)
+
+@pytest.fixture
+def mock_db():
+    """AsyncMock DB session for unit tests (no real DB needed)."""
+    ...
+
+@pytest.fixture
+def clean_email_data():
+    """Dict with legitimate email data for testing."""
+    ...
+
+@pytest.fixture
+def phishing_email_data():
+    """Dict with suspicious/phishing email data for testing."""
+    ...
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+def db_container():
+    """PostgreSQL 16 testcontainer (real DB for integration tests)."""
+    ...
+
+@pytest.fixture(scope="session")
+async def test_engine(db_container):
+    """Async SQLAlchemy engine connected to test DB with schema created."""
+    ...
 
 @pytest.fixture
-async def engine():
-    """Create test database engine."""
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
-
-@pytest.fixture
-async def db_session(engine):
-    """Create test database session."""
-    async with AsyncSession(engine) as session:
-        yield session
-        await session.rollback()
+async def db_session(test_engine):
+    """Fresh AsyncSession per test with automatic rollback."""
+    ...
 
 @pytest.fixture
 async def client(db_session):
-    """Create test HTTP client."""
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
-
-    app.dependency_overrides.clear()
-
-@pytest.fixture
-def auth_headers():
-    """Mock auth headers (Clerk JWT)."""
-    return {
-        "Authorization": "Bearer mock-jwt-token",
-    }
+    """AsyncClient with FastAPI app, mocked Clerk auth (admin user)."""
+    ...
 ```
+
+**Key points:**
+- Unit tests use `mock_db` (fast, no real DB)
+- Integration tests use `db_session` backed by a PostgreSQL testcontainer
+- The `client` fixture mocks Clerk JWT auth as an admin user (`test@strike.sh`)
+- See the "Known Issue: API Test Event Loop" section above for caveats about the `client` fixture
 
 ### Running Tests
 
@@ -801,79 +797,40 @@ npm run test:e2e -- --project=firefox
 
 ## CI/CD Tests
 
-### GitHub Actions Workflow
+### GitHub Actions Workflows
 
-Tests se ejecutan automáticamente en cada push y PR.
+Guard-IA uses 5 GitHub Actions workflows:
 
-**Backend workflow:**
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | PR to `main` | Runs backend tests (pytest, 60% coverage minimum) |
+| `deploy-backend-staging.yml` | Manual (`workflow_dispatch`) | Test + build Docker + deploy Cloud Run + sync VM |
+| `deploy-backend-production.yml` | Manual (`workflow_dispatch`, `main` only) | Test + build Docker + deploy Cloud Run + sync VM |
+| `deploy-frontend-staging.yml` | Manual (`workflow_dispatch`) | Test + Vite build + deploy to Vercel |
+| `deploy-frontend-production.yml` | Manual (`workflow_dispatch`) | Test + Vite build + deploy to Vercel |
+
+**CI workflow (runs on every PR):**
 ```yaml
-# .github/workflows/backend-test.yml
-name: Backend Tests
+# .github/workflows/ci.yml
+name: CI
 
-on: [push, pull_request]
+on:
+  pull_request:
+    branches: [main]
 
 jobs:
-  test:
+  backend-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov
-
-      - name: Run tests
-        run: |
-          cd backend
-          pytest --cov=app --cov-report=xml --cov-fail-under=60
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          file: backend/coverage.xml
+      - run: cd backend && pip install -e ".[dev]"
+      - run: cd backend && pytest --cov=app --cov-fail-under=60
 ```
 
-**Frontend workflow:**
-```yaml
-# .github/workflows/frontend-test.yml
-name: Frontend Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: |
-          cd frontend
-          npm ci
-
-      - name: Run tests
-        run: |
-          cd frontend
-          npm run test:coverage
-
-      - name: Run E2E tests
-        run: |
-          cd frontend
-          npx playwright install --with-deps
-          npm run test:e2e
-```
+**Deploy workflows** also run tests before deploying, and include a `sync-smtp-gateway` job that auto-updates the GCE VM code via SSH after a successful Cloud Run deploy.
 
 ### Coverage Enforcement
 

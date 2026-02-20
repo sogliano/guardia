@@ -236,7 +236,7 @@ The final score is a weighted average with graceful degradation and post-process
 
 | Component | Technology |
 |-----------|-----------|
-| Framework | FastAPI (Python 3.11) |
+| Framework | FastAPI (Python 3.11+) |
 | ORM | SQLAlchemy 2.0 (async) |
 | DB Driver | asyncpg |
 | Validation | Pydantic v2 |

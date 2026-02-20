@@ -267,6 +267,28 @@ El workflow automaticamente:
 - Deploya a Cloud Run production
 - Sincroniza la VM SMTP Gateway (git pull + restart servicio)
 
+### Deploy Frontend
+
+El frontend tiene workflows separados: **Deploy Frontend Staging** y **Deploy Frontend Production**.
+
+1. GitHub > Actions > **Deploy Frontend Staging** (o Production)
+2. Click **Run workflow**
+
+El workflow automaticamente:
+- Corre tests unitarios (Vitest)
+- Buildea con Vite inyectando `VITE_API_BASE_URL` y `VITE_CLERK_PUBLISHABLE_KEY` desde GitHub environment secrets
+- Deploya `dist/` a Vercel via `vercel deploy --prod --yes dist/`
+
+### Resumen de Workflows (5 total)
+
+| Workflow | Archivo | Trigger |
+|----------|---------|---------|
+| CI | `ci.yml` | Automatico en PRs a `main` |
+| Deploy Backend Staging | `deploy-backend-staging.yml` | Manual (cualquier branch) |
+| Deploy Backend Production | `deploy-backend-production.yml` | Manual (solo `main`) |
+| Deploy Frontend Staging | `deploy-frontend-staging.yml` | Manual |
+| Deploy Frontend Production | `deploy-frontend-production.yml` | Manual |
+
 ---
 
 ## PASO 5: Verificar
