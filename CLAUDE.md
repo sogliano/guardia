@@ -1,20 +1,52 @@
 # Guard-IA
 
-AI-powered pre-delivery email fraud detection middleware (phishing, BEC, impersonation). University thesis (ORT Uruguay) for Strike Security. Single-tenant, Google Workspace integration.
+AI-powered pre-delivery email fraud detection middleware (phishing, BEC, impersonation). University thesis (ORT Uruguay, 2025-2026) for Strike Security. Single-tenant, Google Workspace integration.
+
+## Project Context
+
+**What:** Pre-delivery email security system that intercepts inbound emails via SMTP before they reach Google Workspace inboxes. Analyzes through a 3-layer AI pipeline and delivers a threat score + verdict.
+
+**Why:** University thesis project for ORT Uruguay, built for Strike Security. Balances production viability with academic rigor. Goal is to demonstrate that a lightweight AI pipeline can detect phishing/BEC in real-time.
+
+**Team:** 4 students (Nico, Rodrigo, Nacho, Juanma). Jira board at guardia-ort.atlassian.net.
+
+**Releases:**
+- v0.1 (DONE): MVP end-to-end. Heuristics, basic frontend, Docker, ingestion.
+- v0.2 (DONE): SMTP gateway, ML DistilBERT, LLM Explainer, auth, deploy, CI/CD.
+- v0.3 (IN PROGRESS, Feb 11-28): Evaluation metrics, FP/FN feedback loop, dashboard CISO v1, test suite.
+- v1.0 (PLANNED, Mar 1-21): Security hardening, performance, observability, feature freeze.
 
 ## Architecture
 
 ```
 guardia/
-├── backend/    → Python 3.11 / FastAPI / SQLAlchemy async / PostgreSQL 16
+├── backend/    → Python 3.11+ / FastAPI / SQLAlchemy async / PostgreSQL 16 (Neon)
 ├── frontend/   → Vue 3 / TypeScript / Pinia / Chart.js / Vite
-├── ml/         → DistilBERT fine-tuned (66M params) / MLflow
-└── infra/      → Docker / Nginx / GCP
+├── ml/         → DistilBERT fine-tuned (66M params) / MLflow / HuggingFace Hub
+└── infra/      → Docker / Nginx / GCP (Cloud Run + GCE VM + Neon)
 ```
 
-**Pipeline:** Heuristics (~5ms) → DistilBERT ML (~18ms) → LLM Explainer (2-3s, OpenAI GPT). Final score = weighted average with LLM floor/cap adjustments.
+**Pipeline:** Heuristics (~5ms) → DistilBERT ML (~18ms, max_seq_length=512) → LLM Explainer (2-3s, OpenAI GPT-4o-mini). Final score = weighted average (H:30% + ML:50% + LLM:20%) with LLM floor/cap adjustments.
 
-**Thresholds:** ALLOW < 0.3, WARN 0.3-0.6, QUARANTINE 0.6-0.8, BLOCKED ≥ 0.8
+**LLM Floor/Cap:** If LLM score >= 0.80, enforces minimum final score. If LLM score < 0.15, caps final score to reduce false positives.
+
+**Thresholds:** ALLOW < 0.3, WARN 0.3-0.6, QUARANTINE 0.6-0.8, BLOCKED >= 0.8
+
+**Email Flow:** Inbound email → SMTP Gateway (GCE VM, aiosmtpd :25) → Detection Pipeline → Gmail API delivery (users.messages.import with neverMarkSpam) to recipient inbox.
+
+## Deployment
+
+| Component | Service | URL |
+|-----------|---------|-----|
+| Backend API | Google Cloud Run (us-east1) | guardia-backend-*.run.app/api/v1 |
+| Frontend SPA | Vercel | guardia.vercel.app |
+| Database | Neon PostgreSQL 16 | neon.tech (serverless) |
+| SMTP Gateway | GCE VM (e2-small, us-east1-b) | Port 25 (SMTP) + :8025 (Internal API) |
+| ML Model | HuggingFace Hub | Rodrigo-Miranda-0/distilbert-guardia-v2 |
+| Auth | Clerk | RS256 JWT, invitation-only |
+| LLM | OpenAI | GPT-4o-mini |
+
+**CI/CD:** GitHub Actions deploys backend to Cloud Run and auto-syncs SMTP gateway VM on push to main. PR checks run lint + tests + build.
 
 ## Key Paths
 
@@ -30,7 +62,7 @@ backend/app/
 ├── schemas/             # Pydantic v2 request/response (CreateRequest, Response, DetailResponse)
 ├── core/                # Constants, security, exceptions, rate_limit
 ├── db/                  # Session + Alembic migrations
-└── gateway/             # SMTP server (aiosmtpd) + email parser (RFC 5322)
+└── gateway/             # SMTP server (aiosmtpd), parser, Gmail API delivery, internal API (:8025)
 
 frontend/src/
 ├── views/               # Page components (7 views: Dashboard, Cases, EmailExplorer, etc.)
@@ -790,16 +822,58 @@ make simulate-email   # Send test email to pipeline
 
 ---
 
+## Pipeline Details
+
+### Heuristic Checks
+- SPF/DKIM/DMARC authentication scoring
+- Brand lookalike domain detection (char substitution: 0→o, 1→l, etc. + brand suffixes)
+- Auth score contextual multiplier (1.5x for lookalike domains, 1.3x for known domains)
+- URL analysis (suspicious TLDs, shortened URLs, IP-based URLs)
+- Header anomaly detection
+
+### ML Classifier (DistilBERT)
+- Model: `Rodrigo-Miranda-0/distilbert-guardia-v2` on HuggingFace Hub
+- Input: email subject + body, tokenized to max_seq_length=512
+- Output: phishing probability [0.0, 1.0] + XAI attention tokens
+- Short-text dampening: reduces confidence for very short emails
+- Post-ML guardrail: floors ML score to 0.3 when domain attack detected but ML score is low
+
+### LLM Explainer (OpenAI GPT-4o-mini)
+- Generates human-readable risk assessment + structured score
+- Calibration examples in system prompt (0.55 vendor invoice, 0.75 domain lookalike)
+- Score differentiation guide to avoid clustering scores around 0.5
+- Rule: "reserve above 0.85 for confirmed threats"
+
+### Score Combination
+- Weighted average: Heuristics 30% + ML 50% + LLM 20%
+- LLM Floor: if LLM >= 0.80, enforces minimum final score
+- LLM Cap: if LLM < 0.15, reduces final score to avoid false positives
+- Graceful degradation: if ML unavailable → H:60% + LLM:40%; if LLM unavailable → H:40% + ML:60%
+
+---
+
 ## Design Decisions
 
 - **Single-tenant** (Strike Security only)
 - **Clerk auth** (RS256 JWT, invitation-only, hybrid sync with local users)
 - **Pre-delivery interception**, not post-delivery scanning
+- **Gmail API delivery** (`users.messages.import` with `neverMarkSpam=True`) as primary, SMTP relay as fallback
 - **PostgreSQL JSONB** for email metadata (flexible schema)
 - **Thesis project:** decisions balance production viability with academic rigor
 - **Fail-open pipeline:** if crashes, email is forwarded (avoid blocking legitimate mail)
 - **3-layer detection:** Heuristics (fast) + ML (accurate) + LLM (explainable)
-- **LLM as third opinion with floor/cap:** Final score is weighted average (H+ML+LLM) with LLM floor (high LLM >= 0.80 enforces minimum) and LLM cap (low LLM < 0.15 reduces false positives)
+
+---
+
+## Known Issues & Caveats
+
+- **API tests event loop:** Module-level DB engine binds to one event loop; tests run on another. Only first DB-hitting test per session works. Avoid API tests with multiple DB round-trips through ASGI client.
+- **handler.py:172** references `EmailModel` but only `Email` is imported (only triggers at SMTP runtime).
+- **TypeScript check:** `npx vue-tsc --noEmit` has ~34 pre-existing type errors (non-blocking).
+- **Backend venv:** Located at `backend/.venv/` with Python 3.13.11 locally.
+- **Run tests:** `cd backend && .venv/bin/python -m pytest tests/`
+- **Frontend build:** `cd frontend && npx vite build`
+- **User handles git commits/push** (never commit or push automatically).
 
 ---
 

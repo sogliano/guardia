@@ -1,283 +1,239 @@
-<mxfile host="app.diagrams.net" modified="2025-01-01T00:00:00.000Z" agent="draw.io" version="24.0.0" type="device">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" version="29.3.8">
   <diagram id="guardia-architecture" name="Guard-IA Architecture">
-    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+    <mxGraphModel dx="3158" dy="785" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1000" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
-        <!-- ==================== INTERNET GROUP ==================== -->
-        <mxCell id="internet-group" value="Internet" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=13;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;container=1;collapsible=0;spacingTop=5;" vertex="1" parent="1">
-          <mxGeometry x="20" y="350" width="160" height="240" as="geometry" />
+        <mxCell id="gcp-label" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=14;fillColor=none;strokeColor=#1565C0;strokeWidth=2;dashed=1;container=0;spacingTop=5;" value="Google Cloud Platform" vertex="1">
+          <mxGeometry height="605" width="720" x="160" y="5" as="geometry" />
         </mxCell>
-        <mxCell id="email-sender" value="&lt;b&gt;Email Sender&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Inbound SMTP&lt;/font&gt;" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="internet-group">
-          <mxGeometry x="40" y="40" width="80" height="70" as="geometry" />
+        <mxCell id="email-sender" parent="1" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;Email Sender&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;External SMTP&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="80" x="20" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="analyst" value="&lt;b&gt;Security&lt;br&gt;Analyst&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Dashboard&lt;/font&gt;" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="internet-group">
-          <mxGeometry x="40" y="140" width="80" height="70" as="geometry" />
+        <mxCell id="analyst" parent="1" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;Security&lt;br&gt;Analyst&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Dashboard&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="80" x="5" y="650" as="geometry" />
         </mxCell>
-
-        <!-- ==================== GCP GROUP ==================== -->
-        <mxCell id="gcp-group" value="Google Cloud Platform" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=14;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=2;container=1;collapsible=0;spacingTop=5;" vertex="1" parent="1">
-          <mxGeometry x="240" y="60" width="620" height="580" as="geometry" />
+        <mxCell id="vm-group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#BBDEFB;strokeColor=#1976D2;container=1;collapsible=0;spacingTop=5;" value="GCE VM (e2-small) &amp;mdash; 34.138.132.198" vertex="1">
+          <mxGeometry height="340" width="680" x="180" y="40" as="geometry" />
         </mxCell>
-
-        <!-- GCE VM Subgroup -->
-        <mxCell id="vm-group" value="GCE VM (e2-small) — 34.138.132.198" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#BBDEFB;strokeColor=#1976D2;container=1;collapsible=0;spacingTop=5;" vertex="1" parent="gcp-group">
-          <mxGeometry x="20" y="40" width="580" height="300" as="geometry" />
+        <mxCell id="smtp-gateway" parent="vm-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4FC3F7;strokeColor=#0277BD;fontColor=#000000;" value="&lt;b&gt;SMTP Gateway&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;aiosmtpd :25&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="20" y="20" as="geometry" />
         </mxCell>
-
-        <!-- SMTP Gateway -->
-        <mxCell id="smtp-gateway" value="&lt;b&gt;SMTP Gateway&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;aiosmtpd :25&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4FC3F7;strokeColor=#0277BD;fontColor=#000000;" vertex="1" parent="vm-group">
-          <mxGeometry x="20" y="40" width="120" height="50" as="geometry" />
+        <mxCell id="email-parser" parent="vm-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4FC3F7;strokeColor=#0277BD;fontColor=#000000;" value="&lt;b&gt;Email Parser&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;RFC 5322&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="20" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="email-parser" value="&lt;b&gt;Email Parser&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;RFC 5322&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4FC3F7;strokeColor=#0277BD;fontColor=#000000;" vertex="1" parent="vm-group">
-          <mxGeometry x="20" y="110" width="120" height="50" as="geometry" />
+        <mxCell id="pipeline-group" parent="vm-group" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fillColor=#E1F5FE;strokeColor=#0288D1;container=1;collapsible=0;dashed=1;" value="Detection Pipeline" vertex="1">
+          <mxGeometry height="130" width="480" x="190" y="90" as="geometry" />
         </mxCell>
-
-        <!-- Detection Pipeline -->
-        <mxCell id="pipeline-group" value="Detection Pipeline" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fillColor=#E1F5FE;strokeColor=#0288D1;container=1;collapsible=0;dashed=1;" vertex="1" parent="vm-group">
-          <mxGeometry x="170" y="35" width="390" height="130" as="geometry" />
+        <mxCell id="orchestrator" parent="pipeline-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#29B6F6;strokeColor=#0277BD;fontColor=#000000;" value="&lt;b&gt;Orchestrator&lt;/b&gt;" vertex="1">
+          <mxGeometry height="35" width="100" x="172.5" y="90" as="geometry" />
         </mxCell>
-        <mxCell id="orchestrator" value="&lt;b&gt;Orchestrator&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#29B6F6;strokeColor=#0277BD;fontColor=#000000;" vertex="1" parent="pipeline-group">
-          <mxGeometry x="10" y="30" width="100" height="40" as="geometry" />
+        <mxCell id="ml-classifier" parent="pipeline-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;fontColor=#000000;" value="&lt;b&gt;ML Classifier&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;DistilBERT 50% ~18ms&lt;/font&gt;" vertex="1">
+          <mxGeometry height="40" width="145" x="150" y="20" as="geometry" />
         </mxCell>
-        <mxCell id="heuristics" value="&lt;b&gt;Heuristics&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;30% ~5ms&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;fontColor=#000000;" vertex="1" parent="pipeline-group">
-          <mxGeometry x="10" y="80" width="110" height="40" as="geometry" />
+        <mxCell id="llm-explainer" parent="pipeline-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;fontColor=#000000;" value="&lt;b&gt;LLM Analyst&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;GPT-4o-mini 20% ~3s&lt;/font&gt;" vertex="1">
+          <mxGeometry height="40" width="155" x="310" y="20" as="geometry" />
         </mxCell>
-        <mxCell id="ml-classifier" value="&lt;b&gt;ML Classifier&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;DistilBERT 50% ~18ms&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;fontColor=#000000;" vertex="1" parent="pipeline-group">
-          <mxGeometry x="140" y="80" width="120" height="40" as="geometry" />
-        </mxCell>
-        <mxCell id="llm-explainer" value="&lt;b&gt;LLM Analyst&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;GPT-4o-mini 20% ~2-3s&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;fontColor=#000000;" vertex="1" parent="pipeline-group">
-          <mxGeometry x="275" y="80" width="105" height="40" as="geometry" />
-        </mxCell>
-
-        <!-- Orchestrator arrows to layers -->
-        <mxCell id="orch-heur" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="orchestrator" target="heuristics" parent="pipeline-group">
+        <mxCell id="orch-ml" edge="1" parent="pipeline-group" source="orchestrator" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" target="ml-classifier" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="orch-ml" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="orchestrator" target="ml-classifier" parent="pipeline-group">
+        <mxCell id="orch-llm" edge="1" parent="pipeline-group" source="orchestrator" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" target="llm-explainer" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="orch-llm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="orchestrator" target="llm-explainer" parent="pipeline-group">
+        <mxCell id="relay-client" parent="vm-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EF9A9A;strokeColor=#C62828;fontColor=#000000;" value="&lt;b&gt;Relay Client&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Gmail API / SMTP fallback&lt;/font&gt;" vertex="1">
+          <mxGeometry height="45" width="160" x="500" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="quarantine-store" parent="vm-group" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#FFE0B2;strokeColor=#E65100;" value="&lt;b&gt;Quarantine Store&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;.eml files&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="130" x="275" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="internal-api" parent="vm-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4FC3F7;strokeColor=#0277BD;fontColor=#000000;" value="&lt;b&gt;Internal API&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;HTTP :8025&lt;/font&gt;" vertex="1">
+          <mxGeometry height="45" width="130" x="110" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="smtp-parser" edge="1" parent="vm-group" source="smtp-gateway" style="rounded=0;" target="email-parser" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Quarantine Store -->
-        <mxCell id="quarantine-store" value="&lt;b&gt;Quarantine Store&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;.eml files&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#FFE0B2;strokeColor=#E65100;" vertex="1" parent="vm-group">
-          <mxGeometry x="20" y="195" width="120" height="50" as="geometry" />
+        <mxCell id="orch-quarantine" edge="1" parent="vm-group" source="orchestrator" style="html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#E65100;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" target="quarantine-store" value="">
+          <mxGeometry relative="1" x="0.0042" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="388" y="250" />
+              <mxPoint x="340" y="250" />
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <!-- Internal API -->
-        <mxCell id="internal-api" value="&lt;b&gt;Internal API&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;HTTP :8025&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4FC3F7;strokeColor=#0277BD;fontColor=#000000;" vertex="1" parent="vm-group">
-          <mxGeometry x="20" y="255" width="120" height="40" as="geometry" />
+        <mxCell id="orch-relay" edge="1" parent="vm-group" source="orchestrator" style="html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#C62828;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="relay-client" value="ALLOW / WARN">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="412" y="240" />
+              <mxPoint x="580" y="240" />
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <!-- VM internal arrows -->
-        <mxCell id="smtp-parser" style="rounded=0;" edge="1" source="smtp-gateway" target="email-parser" parent="vm-group">
+        <mxCell id="quarantine-relay" edge="1" parent="vm-group" source="quarantine-store" style="html=1;rounded=0;strokeColor=#E65100;" target="relay-client" value="release">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="parser-orch" style="rounded=0;" edge="1" source="email-parser" target="orchestrator" parent="vm-group">
+        <mxCell id="intapi-quarantine" edge="1" parent="vm-group" source="internal-api" style="rounded=0;dashed=1;strokeColor=#E65100;" target="quarantine-store" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Cloud Run Subgroup -->
-        <mxCell id="cloudrun-group" value="Cloud Run (us-east1) — 2 vCPU / 4 GiB" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#BBDEFB;strokeColor=#1976D2;container=1;collapsible=0;spacingTop=5;" vertex="1" parent="gcp-group">
-          <mxGeometry x="20" y="370" width="580" height="180" as="geometry" />
+        <mxCell id="sD6tEUQdLG-tNoVEd2oJ-7" edge="1" parent="vm-group" source="email-parser" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" target="heuristics" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="330" y="175" as="sourcePoint" />
+            <mxPoint x="520" y="208" as="targetPoint" />
+          </mxGeometry>
         </mxCell>
-        <mxCell id="fastapi" value="&lt;b&gt;FastAPI Backend&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;REST API /api/v1 :8000&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#42A5F5;strokeColor=#1565C0;fontColor=#FFFFFF;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="20" y="40" width="180" height="50" as="geometry" />
+        <mxCell id="heuristics" parent="vm-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;fontColor=#000000;" value="&lt;b&gt;Heuristics&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;30% ~5ms&lt;/font&gt;" vertex="1">
+          <mxGeometry height="40" width="120" x="200" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="api-cases" value="Cases" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="230" y="35" width="70" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="api-dashboard" value="Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="310" y="35" width="70" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="api-quarantine" value="Quarantine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="390" y="35" width="70" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="api-monitoring" value="Monitoring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="470" y="35" width="70" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="api-emails" value="Emails" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="230" y="70" width="70" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="api-ingestion" value="Ingestion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="310" y="70" width="70" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="api-health" value="Health" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="390" y="70" width="70" height="30" as="geometry" />
-        </mxCell>
-
-        <!-- Alembic migrations note -->
-        <mxCell id="alembic" value="&lt;font style=&quot;font-size:10px&quot;&gt;SQLAlchemy async + Alembic migrations&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="cloudrun-group">
-          <mxGeometry x="20" y="120" width="210" height="30" as="geometry" />
-        </mxCell>
-
-        <!-- ==================== VERCEL ==================== -->
-        <mxCell id="vercel-group" value="Vercel" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=13;fillColor=#212121;strokeColor=#424242;fontColor=#FFFFFF;container=1;collapsible=0;spacingTop=5;" vertex="1" parent="1">
-          <mxGeometry x="920" y="370" width="200" height="120" as="geometry" />
-        </mxCell>
-        <mxCell id="vue-spa" value="&lt;font color=&quot;#ffffff&quot;&gt;&lt;b&gt;Vue 3 SPA&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;TypeScript + Vite + Pinia&lt;br&gt;Chart.js + Material Symbols&lt;/font&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#424242;strokeColor=#616161;fontColor=#FFFFFF;" vertex="1" parent="vercel-group">
-          <mxGeometry x="20" y="35" width="160" height="65" as="geometry" />
-        </mxCell>
-
-        <!-- ==================== GOOGLE WORKSPACE ==================== -->
-        <mxCell id="google-ws" value="&lt;b&gt;Google Workspace&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Gmail Inbox&lt;br&gt;(strike.sh)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#C62828;fontColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="920" y="160" width="200" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ==================== EXTERNAL SERVICES ==================== -->
-        <mxCell id="ext-group" value="External Services" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=13;fillColor=#F3E5F5;strokeColor=#7B1FA2;container=1;collapsible=0;spacingTop=5;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="1170" y="60" width="400" height="520" as="geometry" />
-        </mxCell>
-
-        <!-- Neon PostgreSQL -->
-        <mxCell id="neon" value="&lt;b&gt;Neon&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;PostgreSQL 16&lt;br&gt;Serverless&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#00E676;strokeColor=#00C853;fontColor=#000000;" vertex="1" parent="ext-group">
-          <mxGeometry x="20" y="40" width="130" height="70" as="geometry" />
-        </mxCell>
-
-        <!-- Clerk Auth -->
-        <mxCell id="clerk" value="&lt;b&gt;Clerk&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Auth (RS256 JWT)&lt;br&gt;Invitation-only&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7C4DFF;strokeColor=#651FFF;fontColor=#FFFFFF;" vertex="1" parent="ext-group">
-          <mxGeometry x="20" y="140" width="130" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- OpenAI -->
-        <mxCell id="openai" value="&lt;b&gt;OpenAI API&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;GPT-4o-mini&lt;br&gt;LLM Analyst&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00BFA5;strokeColor=#00897B;fontColor=#FFFFFF;" vertex="1" parent="ext-group">
-          <mxGeometry x="20" y="230" width="130" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- Gmail API -->
-        <mxCell id="gmail-api" value="&lt;b&gt;Gmail API&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;users.messages.import&lt;br&gt;Primary delivery&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EF5350;strokeColor=#C62828;fontColor=#FFFFFF;" vertex="1" parent="ext-group">
-          <mxGeometry x="200" y="40" width="150" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- HuggingFace Hub -->
-        <mxCell id="hf-hub" value="&lt;b&gt;HuggingFace Hub&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;distilbert-guardia-v2&lt;br&gt;Auto-download&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFD600;strokeColor=#F9A825;fontColor=#000000;" vertex="1" parent="ext-group">
-          <mxGeometry x="200" y="140" width="150" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- Slack -->
-        <mxCell id="slack" value="&lt;b&gt;Slack&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Webhook Alerts&lt;br&gt;High-risk notifications&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7B1FA2;strokeColor=#4A148C;fontColor=#FFFFFF;" vertex="1" parent="ext-group">
-          <mxGeometry x="200" y="230" width="150" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- ==================== CI/CD ==================== -->
-        <mxCell id="cicd-group" value="CI/CD" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=13;fillColor=#ECEFF1;strokeColor=#607D8B;container=1;collapsible=0;spacingTop=5;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="1170" y="400" width="400" height="180" as="geometry" />
-        </mxCell>
-        <mxCell id="gh-actions" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;4 workflows&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B0BEC5;strokeColor=#607D8B;fontColor=#000000;" vertex="1" parent="cicd-group">
-          <mxGeometry x="20" y="35" width="140" height="45" as="geometry" />
-        </mxCell>
-        <mxCell id="wf-backend-stg" value="deploy-backend-staging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" vertex="1" parent="cicd-group">
-          <mxGeometry x="190" y="30" width="180" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="wf-backend-prod" value="deploy-backend-production" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" vertex="1" parent="cicd-group">
-          <mxGeometry x="190" y="60" width="180" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="wf-frontend-stg" value="deploy-frontend-staging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" vertex="1" parent="cicd-group">
-          <mxGeometry x="190" y="90" width="180" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="wf-frontend-prod" value="deploy-frontend-production" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" vertex="1" parent="cicd-group">
-          <mxGeometry x="190" y="120" width="180" height="25" as="geometry" />
-        </mxCell>
-        <!-- Deploy targets text -->
-        <mxCell id="deploy-targets" value="&lt;font style=&quot;font-size:9px&quot;&gt;Backend → Cloud Run + VM sync&lt;br&gt;Frontend → Vite build + Vercel CLI&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="cicd-group">
-          <mxGeometry x="20" y="100" width="160" height="40" as="geometry" />
-        </mxCell>
-
-        <!-- ==================== CONNECTIONS ==================== -->
-
-        <!-- Email Sender → SMTP Gateway -->
-        <mxCell id="conn-sender-smtp" value="SMTP :25" style="rounded=0;fontStyle=0;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" source="email-sender" target="smtp-gateway" parent="1">
+        <mxCell id="orch-heur" edge="1" parent="vm-group" source="orchestrator" style="rounded=0;" target="heuristics" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Analyst → Vue SPA -->
-        <mxCell id="conn-analyst-spa" value="HTTPS" style="rounded=0;fontStyle=0;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" source="analyst" target="vue-spa" parent="1">
+        <mxCell id="cloudrun-group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#BBDEFB;strokeColor=#1976D2;container=1;collapsible=0;spacingTop=5;" value="Cloud Run (us-east1) &amp;mdash; 2 vCPU / 4 GiB" vertex="1">
+          <mxGeometry height="155" width="510" x="180" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="fastapi" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#42A5F5;strokeColor=#1565C0;fontColor=#FFFFFF;" value="&lt;b&gt;FastAPI Backend&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;REST API /api/v1 :8000&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="170" x="15" y="38" as="geometry" />
+        </mxCell>
+        <mxCell id="api-dashboard" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" value="Dashboard" vertex="1">
+          <mxGeometry height="26" width="70" x="215" y="33" as="geometry" />
+        </mxCell>
+        <mxCell id="api-cases" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" value="Cases" vertex="1">
+          <mxGeometry height="26" width="70" x="295" y="33" as="geometry" />
+        </mxCell>
+        <mxCell id="api-quarantine" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" value="Quarantine" vertex="1">
+          <mxGeometry height="26" width="70" x="375" y="33" as="geometry" />
+        </mxCell>
+        <mxCell id="api-emails" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" value="Emails" vertex="1">
+          <mxGeometry height="26" width="70" x="215" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="api-monitoring" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" value="Monitoring" vertex="1">
+          <mxGeometry height="26" width="70" x="295" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="api-health" parent="cloudrun-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;" value="Health" vertex="1">
+          <mxGeometry height="26" width="70" x="375" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="alembic" parent="cloudrun-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=10;" value="SQLAlchemy async + Alembic migrations" vertex="1">
+          <mxGeometry height="30" width="210" x="15" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="vercel-group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=13;fillColor=#212121;strokeColor=#424242;fontColor=#FFFFFF;container=1;collapsible=0;spacingTop=5;" value="Vercel" vertex="1">
+          <mxGeometry height="90" width="250" x="155" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="vue-spa" parent="vercel-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#424242;strokeColor=#616161;fontColor=#FFFFFF;" value="&lt;b&gt;Vue 3 SPA&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;TypeScript + Vite + Pinia + Chart.js&lt;/font&gt;" vertex="1">
+          <mxGeometry height="45" width="210" x="20" y="33" as="geometry" />
+        </mxCell>
+        <mxCell id="gmail-api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EF5350;strokeColor=#C62828;fontColor=#FFFFFF;" value="&lt;b&gt;Gmail API&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;users.messages.import&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="960" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="google-ws" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#C62828;fontColor=#000000;" value="&lt;b&gt;Google Workspace&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Gmail Inbox (guardia-sec.com)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="180" x="1200" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="neon" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#00E676;strokeColor=#00C853;fontColor=#000000;" value="&lt;b&gt;Neon&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;PostgreSQL 16 Serverless&lt;/font&gt;" vertex="1">
+          <mxGeometry height="55" width="160" x="960" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hf-hub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFD600;strokeColor=#F9A825;fontColor=#000000;" value="&lt;b&gt;HuggingFace Hub&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;distilbert-guardia-v2&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="180" x="1180" y="133" as="geometry" />
+        </mxCell>
+        <mxCell id="openai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00BFA5;strokeColor=#00897B;fontColor=#FFFFFF;" value="&lt;b&gt;OpenAI API&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;GPT-4o-mini&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="960" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="slack" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7B1FA2;strokeColor=#4A148C;fontColor=#FFFFFF;" value="&lt;b&gt;Slack&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Webhook Alerts&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="180" x="1180" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="clerk" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7C4DFF;strokeColor=#651FFF;fontColor=#FFFFFF;" value="&lt;b&gt;Clerk&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Auth RS256 JWT&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="570" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="cicd-group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#ECEFF1;strokeColor=#607D8B;container=1;collapsible=0;spacingTop=5;dashed=1;" value="CI/CD" vertex="1">
+          <mxGeometry height="170" width="410" x="890" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="gh-actions" parent="cicd-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B0BEC5;strokeColor=#607D8B;fontColor=#000000;" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;5 workflows&lt;/font&gt;" vertex="1">
+          <mxGeometry height="45" width="130" x="15" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="wf-ci" parent="cicd-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" value="ci (PR checks)" vertex="1">
+          <mxGeometry height="22" width="200" x="185" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="wf-backend-stg" parent="cicd-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" value="deploy-backend-staging" vertex="1">
+          <mxGeometry height="22" width="200" x="185" y="52" as="geometry" />
+        </mxCell>
+        <mxCell id="wf-backend-prod" parent="cicd-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" value="deploy-backend-production" vertex="1">
+          <mxGeometry height="22" width="200" x="185" y="79" as="geometry" />
+        </mxCell>
+        <mxCell id="wf-frontend-stg" parent="cicd-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" value="deploy-frontend-staging" vertex="1">
+          <mxGeometry height="22" width="200" x="185" y="106" as="geometry" />
+        </mxCell>
+        <mxCell id="wf-frontend-prod" parent="cicd-group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CFD8DC;strokeColor=#90A4AE;fontSize=9;" value="deploy-frontend-production" vertex="1">
+          <mxGeometry height="22" width="200" x="185" y="133" as="geometry" />
+        </mxCell>
+        <mxCell id="deploy-targets" parent="cicd-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=9;" value="Backend: Cloud Run + VM sync&lt;br&gt;Frontend: Vite build + Vercel CLI" vertex="1">
+          <mxGeometry height="40" width="150" x="15" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="conn-sender-smtp" edge="1" parent="1" source="email-sender" style="html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;fontSize=9;labelBackgroundColor=#FFFFFF;" target="smtp-gateway" value="SMTP :25">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Vue SPA → FastAPI -->
-        <mxCell id="conn-spa-api" value="/api/v1" style="rounded=0;fontStyle=0;fontSize=10;" edge="1" source="vue-spa" target="fastapi" parent="1">
+        <mxCell id="conn-relay-gmail" edge="1" parent="1" source="relay-client" style="html=1;rounded=0;strokeColor=#C62828;strokeWidth=2;fontSize=9;labelBackgroundColor=#FFFFFF;" target="gmail-api" value="HTTPS">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- FastAPI → Neon -->
-        <mxCell id="conn-api-neon" value="asyncpg" style="rounded=0;fontStyle=0;fontSize=10;" edge="1" source="fastapi" target="neon" parent="1">
+        <mxCell id="conn-gmail-gws" edge="1" parent="1" source="gmail-api" style="html=1;rounded=0;strokeColor=#C62828;strokeWidth=2;fontSize=9;labelBackgroundColor=#FFFFFF;" target="google-ws" value="import">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Pipeline → Neon (persist) -->
-        <mxCell id="conn-pipeline-neon" value="persist" style="rounded=0;fontStyle=0;fontSize=10;dashed=1;" edge="1" source="orchestrator" target="neon" parent="1">
+        <mxCell id="conn-llm-openai" edge="1" parent="1" source="llm-explainer" style="html=1;rounded=0;dashed=1;fontSize=9;labelBackgroundColor=#FFFFFF;" target="openai" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Pipeline → OpenAI (LLM) -->
-        <mxCell id="conn-pipeline-openai" value="" style="rounded=0;fontStyle=0;fontSize=10;dashed=1;" edge="1" source="llm-explainer" target="openai" parent="1">
+        <mxCell id="conn-ml-hf" edge="1" parent="1" source="ml-classifier" style="html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;fontSize=9;labelBackgroundColor=#FFFFFF;" target="hf-hub" value="auto-download">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="930" y="148" />
+              <mxPoint x="930" y="158" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn-cr-internal" edge="1" parent="1" source="fastapi" style="html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#E65100;dashed=1;fontSize=9;labelBackgroundColor=#FFFFFF;" target="internal-api" value="release">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="350" y="420" />
+              <mxPoint x="350" y="370" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn-spa-api" edge="1" parent="1" source="vue-spa" style="html=1;rounded=0;fontSize=9;labelBackgroundColor=#FFFFFF;" target="fastapi" value="/api/v1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- ML → HF Hub -->
-        <mxCell id="conn-ml-hf" value="auto-download" style="rounded=0;fontStyle=0;fontSize=10;dashed=1;" edge="1" source="ml-classifier" target="hf-hub" parent="1">
+        <mxCell id="conn-analyst-spa" edge="1" parent="1" source="analyst" style="html=1;rounded=0;fontSize=9;labelBackgroundColor=#FFFFFF;" target="vue-spa" value="HTTPS">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Pipeline → Gmail API (deliver) -->
-        <mxCell id="conn-pipeline-gmail" value="deliver" style="rounded=0;fontStyle=0;fontSize=10;strokeColor=#C62828;" edge="1" source="orchestrator" target="gmail-api" parent="1">
+        <mxCell id="legend-group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fillColor=#FAFAFA;strokeColor=#BDBDBD;container=1;collapsible=0;" value="Legend" vertex="1">
+          <mxGeometry height="110" width="480" x="370" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-solid" parent="legend-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=10;" value="&amp;mdash;&amp;mdash; Solid line: primary data flow" vertex="1">
+          <mxGeometry height="25" width="200" x="10" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-dashed" parent="legend-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=10;" value="- - - Dashed line: async / on-demand" vertex="1">
+          <mxGeometry height="25" width="210" x="10" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-red" parent="legend-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=10;fontColor=#C62828;" value="&amp;mdash;&amp;mdash; Red line: email delivery path" vertex="1">
+          <mxGeometry height="25" width="200" x="10" y="75" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-score" parent="legend-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=10;" value="&lt;b&gt;Final Score&lt;/b&gt; = 0.30xH + 0.50xML + 0.20xLLM&lt;br&gt;+ LLM floor/cap adjustments" vertex="1">
+          <mxGeometry height="40" width="250" x="230" y="22" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-verdicts" parent="legend-group" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontSize=10;" value="&lt;b&gt;Verdicts:&lt;/b&gt; ALLOW &amp;lt;0.3 | WARN 0.3-0.6&lt;br&gt;QUARANTINE 0.6-0.8 | BLOCK &amp;ge;0.8" vertex="1">
+          <mxGeometry height="40" width="230" x="230" y="62" as="geometry" />
+        </mxCell>
+        <mxCell id="title" parent="1" style="text;html=1;align=right;verticalAlign=middle;resizable=0;points=[];autosize=1;" value="&lt;font style=&quot;font-size:16px&quot;&gt;&lt;b&gt;Guard-IA &amp;mdash; Infrastructure Architecture&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;AI-powered pre-delivery email fraud detection middleware&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="340" x="1050" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="sD6tEUQdLG-tNoVEd2oJ-4" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#00E676;strokeColor=#00C853;fontColor=#000000;" value="&lt;b&gt;Neon&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;PostgreSQL 16 Serverless&lt;/font&gt;" vertex="1">
+          <mxGeometry height="55" width="160" x="-40" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="sD6tEUQdLG-tNoVEd2oJ-5" edge="1" parent="1" source="fastapi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;" target="sD6tEUQdLG-tNoVEd2oJ-4">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Gmail API → Google Workspace -->
-        <mxCell id="conn-gmail-gws" value="import" style="rounded=0;fontStyle=0;fontSize=10;strokeColor=#C62828;" edge="1" source="gmail-api" target="google-ws" parent="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="sD6tEUQdLG-tNoVEd2oJ-6" edge="1" parent="1" source="orchestrator" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" target="sD6tEUQdLG-tNoVEd2oJ-4">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="430" y="237" />
+              <mxPoint x="40" y="237" />
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <!-- Pipeline → Slack (alerts) -->
-        <mxCell id="conn-pipeline-slack" value="alert" style="rounded=0;fontStyle=0;fontSize=10;dashed=1;" edge="1" source="orchestrator" target="slack" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <!-- Cloud Run → Internal API (quarantine release) -->
-        <mxCell id="conn-cr-internal" value="quarantine&lt;br&gt;release" style="rounded=0;fontStyle=0;fontSize=10;strokeColor=#E65100;" edge="1" source="fastapi" target="internal-api" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <!-- Vue SPA ↔ Clerk -->
-        <mxCell id="conn-spa-clerk" value="JWT" style="rounded=0;fontStyle=0;fontSize=10;dashed=1;strokeColor=#7C4DFF;" edge="1" source="vue-spa" target="clerk" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <!-- FastAPI ↔ Clerk -->
-        <mxCell id="conn-api-clerk" value="verify" style="rounded=0;fontStyle=0;fontSize=10;dashed=1;strokeColor=#7C4DFF;" edge="1" source="fastapi" target="clerk" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <!-- ==================== LEGEND ==================== -->
-        <mxCell id="legend-group" value="Legend" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=11;fillColor=#FAFAFA;strokeColor=#BDBDBD;container=1;collapsible=0;" vertex="1" parent="1">
-          <mxGeometry x="20" y="680" width="510" height="110" as="geometry" />
-        </mxCell>
-        <mxCell id="leg-solid" value="&lt;font style=&quot;font-size:10px&quot;&gt;── Solid line: primary data flow&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="legend-group">
-          <mxGeometry x="10" y="25" width="170" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="leg-dashed" value="&lt;font style=&quot;font-size:10px&quot;&gt;- - Dashed line: async / on-demand&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="legend-group">
-          <mxGeometry x="10" y="50" width="190" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="leg-red" value="&lt;font style=&quot;font-size:10px&quot;&gt;── Red line: email delivery path&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;fontColor=#C62828;" vertex="1" parent="legend-group">
-          <mxGeometry x="10" y="75" width="170" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="leg-score" value="&lt;font style=&quot;font-size:10px&quot;&gt;&lt;b&gt;Final Score&lt;/b&gt; = 0.30×H + 0.50×ML + 0.20×LLM&lt;br&gt;+ LLM floor/cap adjustments&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="legend-group">
-          <mxGeometry x="220" y="25" width="240" height="40" as="geometry" />
-        </mxCell>
-        <mxCell id="leg-verdicts" value="&lt;font style=&quot;font-size:10px&quot;&gt;&lt;b&gt;Verdicts:&lt;/b&gt; ALLOW &amp;lt;0.3 | WARN 0.3-0.6&lt;br&gt;QUARANTINE 0.6-0.8 | BLOCK ≥0.8&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="legend-group">
-          <mxGeometry x="220" y="65" width="220" height="40" as="geometry" />
-        </mxCell>
-
-        <!-- Title -->
-        <mxCell id="title" value="&lt;font style=&quot;font-size:18px&quot;&gt;&lt;b&gt;Guard-IA — Infrastructure Architecture&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;AI-powered pre-delivery email fraud detection middleware&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="1">
-          <mxGeometry x="530" y="680" width="360" height="50" as="geometry" />
-        </mxCell>
-
       </root>
     </mxGraphModel>
   </diagram>

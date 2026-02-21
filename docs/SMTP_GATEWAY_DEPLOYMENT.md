@@ -175,7 +175,7 @@ gcloud compute ssh guardia-smtp-gateway --zone=us-east1-b --project=gen-lang-cli
 ```bash
 sudo apt update && sudo apt upgrade -y
 
-# Python 3.11
+# Python 3.11+
 sudo apt install -y python3.11 python3.11-venv python3-pip git
 
 # Build dependencies (para compilar wheels)

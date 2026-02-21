@@ -87,7 +87,7 @@ npm run dev
 
 ```bash
 cd backend
-python -m scripts.seed_emails
+.venv/bin/python -m scripts.seed_emails
 ```
 
 ---
@@ -139,7 +139,7 @@ python -m scripts.seed_emails
 
 | Component | Technology |
 |-----------|-----------|
-| **Backend** | Python 3.11, FastAPI, SQLAlchemy async, PostgreSQL 16 |
+| **Backend** | Python 3.11+, FastAPI, SQLAlchemy async, PostgreSQL 16 (Neon) |
 | **Frontend** | Vue 3 (Composition API), TypeScript, Pinia, Vite |
 | **ML** | DistilBERT (66M params), HuggingFace Hub, MLflow tracking |
 | **Auth** | Clerk (RS256 JWT, invitation-only) |
@@ -516,7 +516,7 @@ alembic history
 **Model:** DistilBERT (distilbert-base-uncased) fine-tuned for binary classification
 **Parameters:** 66M
 **Inference time:** ~18ms
-**Input:** Email subject + body (max 512 tokens)
+**Input:** Email subject + body (max_seq_length=512 tokens)
 **Output:** Phishing probability [0.0, 1.0]
 
 ### Training (for ML engineer)
@@ -626,7 +626,6 @@ pytest tests/unit/test_heuristics.py -v
 pytest tests/integration/ -v
 ```
 
-**Coverage:** 45% unit, ~20% integration (using mocks)
 **Target:** 60%+ for production
 
 ### Frontend Tests
@@ -910,9 +909,9 @@ All rights reserved. Strike Security.
 
 This project is a university thesis (ORT Uruguay) developed for Strike Security. Technical decisions balance production viability with academic rigor.
 
-**Thesis supervisor:** [Name]
-**Student:** [Name]
-**Year:** 2024-2025
+**Thesis supervisor:** ORT Uruguay
+**Team:** Nico Sogliano, Rodrigo Miranda, Nacho, Juanma
+**Year:** 2025-2026
 
 ---
 
