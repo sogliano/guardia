@@ -47,16 +47,20 @@ Guard-IA is a **pre-delivery email security system** that intercepts inbound ema
 
 ### Local Development (5 minutes)
 
+> **Windows users:** See the [Windows setup section](#windows) below for PowerShell-specific commands.
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/your-org/guardia.git
 cd guardia
 
 # 2. Configure environment
-cp .env.example .env.local
-# Edit .env.local with your credentials (DB, Clerk, OpenAI, Slack)
+cp backend/.env.example backend/.env
+# Edit backend/.env with your credentials (DB, Clerk, OpenAI, Slack)
+cp frontend/.env.example frontend/.env.local
+# Edit frontend/.env.local with VITE_API_BASE_URL and VITE_CLERK_PUBLISHABLE_KEY
 
-# 3. Start all services (recommended)
+# 3. Start all services (recommended — macOS/Linux only)
 make dev
 
 # OR manually:
@@ -191,6 +195,8 @@ guardia/
 
 ### Make Commands
 
+> `make` commands require GNU Make and are designed for **macOS/Linux**. On Windows, use the manual commands below.
+
 ```bash
 make dev              # Start all services (db, mlflow, backend, frontend)
 make test             # Run all tests (backend + frontend)
@@ -202,7 +208,7 @@ make clean            # Stop all services
 
 ### Manual Commands
 
-**Backend:**
+**Backend (macOS/Linux):**
 ```bash
 cd backend
 source .venv/bin/activate
@@ -222,7 +228,37 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 ```
 
-**Frontend:**
+**Backend (Windows PowerShell):**
+```powershell
+cd backend
+
+# First time: create venv and install deps
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+# Run migrations
+$env:PYTHONPATH = "."
+.venv\Scripts\alembic.exe upgrade head
+
+# Run server (foreground)
+$env:PYTHONPATH = "."
+.venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run tests
+$env:PYTHONPATH = "."
+.venv\Scripts\pytest.exe --cov=app --cov-report=term-missing
+
+# Lint
+.venv\Scripts\ruff.exe check app
+.venv\Scripts\mypy.exe app
+```
+
+> **Note:** On Windows with `AllSigned` PowerShell execution policy, use the `.exe` binaries
+> directly (e.g. `.venv\Scripts\python.exe`) instead of activating the venv via `Activate.ps1`.
+> `npm` must be called as `npm.cmd` in PowerShell.
+
+**Frontend (macOS/Linux):**
 ```bash
 cd frontend
 
@@ -240,6 +276,24 @@ npm run type-check
 # Build
 npm run build
 npm run preview       # Preview production build
+```
+
+**Frontend (Windows PowerShell):**
+```powershell
+cd frontend
+
+# Install deps
+npm.cmd install
+
+# Dev server
+npm.cmd run dev
+
+# Tests
+npm.cmd run test
+npm.cmd run test:e2e
+
+# Build
+npm.cmd run build
 ```
 
 ### Environment Variables
@@ -599,6 +653,7 @@ npm run test -- src/stores/cases.spec.ts
 
 ### Backend won't start
 
+**macOS/Linux:**
 ```bash
 # Check Python version
 python --version  # Must be 3.11+
@@ -617,13 +672,41 @@ psql $DATABASE_URL -c "SELECT 1"
 alembic upgrade head
 ```
 
+**Windows (PowerShell):**
+```powershell
+# Check Python version
+python --version  # Must be 3.11+
+
+# Reinstall dependencies
+cd backend
+Remove-Item -Recurse -Force .venv
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+# Run migrations
+$env:PYTHONPATH = "."
+.venv\Scripts\alembic.exe upgrade head
+```
+
 ### Frontend build fails
 
+**macOS/Linux:**
 ```bash
 # Clear cache
 cd frontend
 rm -rf node_modules dist .vite
 npm install
+
+# Check Node version
+node --version  # Must be 18+
+```
+
+**Windows (PowerShell):**
+```powershell
+# Clear cache
+cd frontend
+Remove-Item -Recurse -Force node_modules, dist, .vite -ErrorAction SilentlyContinue
+npm.cmd install
 
 # Check Node version
 node --version  # Must be 18+
@@ -647,6 +730,155 @@ alembic upgrade head
 - Check `RATE_LIMIT_PER_MINUTE` in `.env`
 - Default: 1000/min (development), 100/min (production)
 - Specific endpoints have lower limits (see Rate Limits section)
+
+---
+
+## Windows
+
+This section covers the full local setup on **Windows with PowerShell**.
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Python | 3.11+ | Install from python.org or Microsoft Store |
+| Node.js | 18+ | Install from nodejs.org |
+| Git | 2.30+ | Install from git-scm.com |
+| Docker Desktop | 20+ | Optional — only needed to run local PostgreSQL |
+
+### PowerShell Execution Policy
+
+Many Windows machines have `AllSigned` execution policy, which blocks `.ps1` scripts (including
+npm's `npm.ps1` shim and Python's `Activate.ps1`). **Workaround: use `.exe` and `.cmd` binaries directly.**
+
+```powershell
+# Check your policy
+Get-ExecutionPolicy -List
+
+# If restricted, you can try (may be blocked by GPO):
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+If the policy cannot be changed (e.g. corporate GPO), use the workarounds in the commands below.
+
+### Setup
+
+```powershell
+# 1. Clone
+git clone https://github.com/your-org/guardia.git
+cd guardia
+
+# 2. Backend environment
+cd backend
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+# Create .env (copy from .env.example and fill in values)
+Copy-Item .env.example .env
+# Edit backend\.env with your credentials
+
+# 3. Run migrations
+$env:PYTHONPATH = "."
+.venv\Scripts\alembic.exe upgrade head
+
+# 4. Frontend environment
+cd ..\frontend
+npm.cmd install                           # Use npm.cmd, not npm, in PowerShell
+
+# Create .env.local
+Copy-Item .env.example .env.local
+# Edit frontend\.env.local with VITE_API_BASE_URL and VITE_CLERK_PUBLISHABLE_KEY
+```
+
+### Start Services
+
+Open **two PowerShell terminals** (or use PowerShell background jobs):
+
+**Terminal 1 — Backend:**
+```powershell
+cd backend
+$env:PYTHONPATH = "."
+.venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```powershell
+cd frontend
+npm.cmd run dev
+```
+
+**Or using PowerShell background jobs (single terminal):**
+```powershell
+# Start backend
+$backendJob = Start-Job -ScriptBlock {
+    Set-Location "C:\path\to\guardia\backend"
+    $env:PYTHONPATH = "."
+    & ".venv\Scripts\uvicorn.exe" app.main:app --host 0.0.0.0 --port 8000 2>&1
+}
+
+# Start frontend
+$frontendJob = Start-Job -ScriptBlock {
+    Set-Location "C:\path\to\guardia\frontend"
+    & "npm.cmd" run dev 2>&1
+}
+
+# Check output
+Start-Sleep -Seconds 5
+Receive-Job -Id $backendJob.Id   # Should show "Uvicorn running on http://0.0.0.0:8000"
+Receive-Job -Id $frontendJob.Id  # Should show "VITE ready in ... http://localhost:3000/"
+
+# Stop when done
+Stop-Job -Id $backendJob.Id, $frontendJob.Id
+Remove-Job -Id $backendJob.Id, $frontendJob.Id
+```
+
+### Environment Files
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `backend\.env` | `backend/` | Backend config (DB, Clerk, OpenAI, etc.) |
+| `frontend\.env.local` | `frontend/` | Frontend config (API URL, Clerk key) |
+
+**Minimum `backend\.env`:**
+```env
+APP_ENV=local
+APP_DEBUG=true
+DATABASE_URL=postgresql+asyncpg://user:pass@host/db?sslmode=require
+CLERK_SECRET_KEY=sk_test_...
+CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_PEM_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+OPENAI_API_KEY=sk-proj-...
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+**Minimum `frontend\.env.local`:**
+```env
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+```
+
+### Common Issues on Windows
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `npm : ... npm.ps1 is not digitally signed` | AllSigned policy | Use `npm.cmd` instead of `npm` |
+| `Activate.ps1 cannot be loaded` | AllSigned policy | Use `.venv\Scripts\python.exe` directly |
+| `PYTHONPATH` not recognized as env var | Bash syntax in PowerShell | Use `$env:PYTHONPATH = "."` |
+| `make dev` fails | GNU Make not installed | Use manual commands above |
+| `rm -rf` not found | Bash command | Use `Remove-Item -Recurse -Force` |
+
+### Verify Installation
+
+```powershell
+# Backend health
+Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing | Select-Object StatusCode, Content
+# Expected: 200, {"status":"ok","version":"0.1.0","database":true}
+
+# Frontend
+Invoke-WebRequest -Uri "http://localhost:3000" -UseBasicParsing | Select-Object StatusCode
+# Expected: 200
+```
 
 ---
 
