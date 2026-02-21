@@ -6,11 +6,27 @@ Guia para levantar Guard-IA en local y empezar a desarrollar.
 
 ## Prerequisites
 
-- **Python 3.11+** (pyenv recomendado)
-- **Node.js 18+** (nvm recomendado)
-- **Docker** 20+ & Docker Compose
+- **Python 3.11+** (pyenv recomendado en macOS/Linux, python.org en Windows)
+- **Node.js 18+** (nvm recomendado en macOS/Linux, nodejs.org en Windows)
+- **Docker** 20+ & Docker Compose (opcional, para base de datos local)
 - **Git** 2.30+
-- **Make** (pre-installed en macOS/Linux)
+- **Make** (pre-installed en macOS/Linux) — **No disponible por defecto en Windows**, usar comandos manuales
+
+---
+
+## Configuración rápida por OS
+
+| | macOS/Linux | Windows |
+|--|------------|---------|
+| Activar venv | `source .venv/bin/activate` | Usar `.venv\Scripts\python.exe` directamente |
+| Setear PYTHONPATH | `PYTHONPATH=$PWD uvicorn ...` | `$env:PYTHONPATH = "." ; .venv\Scripts\uvicorn.exe ...` |
+| npm | `npm` | `npm.cmd` (PowerShell bloquea `npm.ps1` con AllSigned) |
+| Eliminar directorio | `rm -rf .venv` | `Remove-Item -Recurse -Force .venv` |
+| Make | `make dev` | No disponible — usar comandos manuales |
+
+---
+
+## Setup en macOS/Linux
 
 ### Instalar Python 3.11 (macOS)
 
@@ -142,7 +158,169 @@ cd frontend && npm run test
 
 ---
 
-## Development Workflow
+## Setup en Windows (PowerShell)
+
+Esta sección cubre el setup completo en **Windows con PowerShell**. Los comandos de macOS/Linux NO funcionan directamente por diferencias en el shell.
+
+### Problema con PowerShell Execution Policy
+
+Si tu sistema tiene la política `AllSigned`, los scripts `.ps1` (como `npm.ps1` o `.venv\Scripts\Activate.ps1`) no se pueden ejecutar. **Workaround: usar los binarios `.exe` y `.cmd` directamente.**
+
+```powershell
+# Ver tu política actual
+Get-ExecutionPolicy -List
+
+# Intentar cambiarla (puede estar bloqueada por GPO corporativa)
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+### 1. Backend
+
+```powershell
+cd backend
+
+# Crear entorno virtual
+python -m venv .venv
+
+# Actualizar pip
+.venv\Scripts\python.exe -m pip install --upgrade pip
+
+# Instalar dependencias (base + dev)
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+# Crear archivo de configuración
+Copy-Item .env.example .env
+# Editar backend\.env con DB, Clerk, OpenAI, etc.
+
+# Correr migraciones contra la base de datos
+$env:PYTHONPATH = "."
+.venv\Scripts\alembic.exe upgrade head
+```
+
+> **Nota:** Si usás Neon (recomendado para desarrollo), la base de datos ya tiene las migraciones aplicadas.
+> `alembic upgrade head` verifica el estado y no hace nada si ya está al día.
+
+### 2. Frontend
+
+```powershell
+cd frontend
+
+# Instalar dependencias
+npm.cmd install
+
+# Crear archivo de configuración
+Copy-Item .env.example .env.local
+# Editar frontend\.env.local con VITE_API_BASE_URL y VITE_CLERK_PUBLISHABLE_KEY
+```
+
+### 3. Levantar servicios
+
+Abrí **dos terminales PowerShell** separadas:
+
+**Terminal 1 — Backend:**
+```powershell
+cd backend
+$env:PYTHONPATH = "."
+.venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```powershell
+cd frontend
+npm.cmd run dev
+```
+
+**O con un único terminal usando PowerShell Jobs:**
+```powershell
+# Reemplazar con tu ruta absoluta real
+$root = "C:\Users\TuUsuario\guardia"
+
+$backendJob = Start-Job -ScriptBlock {
+    Set-Location "$using:root\backend"
+    $env:PYTHONPATH = "."
+    & "$using:root\backend\.venv\Scripts\uvicorn.exe" app.main:app --host 0.0.0.0 --port 8000 2>&1
+}
+
+$frontendJob = Start-Job -ScriptBlock {
+    Set-Location "$using:root\frontend"
+    & "npm.cmd" run dev 2>&1
+}
+
+# Verificar que arrancaron (esperar ~5 segundos)
+Start-Sleep -Seconds 5
+Receive-Job -Id $backendJob.Id | Select-Object -Last 5
+Receive-Job -Id $frontendJob.Id | Select-Object -Last 5
+
+# Detener cuando termines
+Stop-Job -Id $backendJob.Id, $frontendJob.Id
+Remove-Job -Id $backendJob.Id, $frontendJob.Id
+```
+
+### 4. Verificar instalación
+
+```powershell
+# Backend health (debe retornar {"status":"ok","database":true})
+Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing | Select-Object StatusCode, Content
+
+# Frontend
+Invoke-WebRequest -Uri "http://localhost:3000" -UseBasicParsing | Select-Object StatusCode
+```
+
+### Comandos equivalentes en Windows
+
+| macOS/Linux | Windows PowerShell |
+|------------|-------------------|
+| `source .venv/bin/activate` | (no necesario — usar `.venv\Scripts\python.exe` directo) |
+| `PYTHONPATH=$PWD alembic upgrade head` | `$env:PYTHONPATH = "." ; .venv\Scripts\alembic.exe upgrade head` |
+| `PYTHONPATH=$PWD uvicorn app.main:app ...` | `$env:PYTHONPATH = "." ; .venv\Scripts\uvicorn.exe app.main:app ...` |
+| `pytest` | `.venv\Scripts\pytest.exe` |
+| `ruff check app` | `.venv\Scripts\ruff.exe check app` |
+| `npm install` | `npm.cmd install` |
+| `npm run dev` | `npm.cmd run dev` |
+| `rm -rf .venv` | `Remove-Item -Recurse -Force .venv` |
+| `make dev` | Usar comandos manuales (ver arriba) |
+
+### Troubleshooting Windows
+
+**`npm : ... npm.ps1 is not digitally signed`**
+```powershell
+# Usar npm.cmd en vez de npm
+npm.cmd install   # ✅
+npm install       # ❌ (falla con AllSigned policy)
+```
+
+**`Activate.ps1 cannot be loaded`**
+```powershell
+# No activar el venv, usar los binarios directamente
+.venv\Scripts\python.exe -m pytest   # ✅
+source .venv/bin/activate && pytest  # ❌ (sintaxis bash)
+```
+
+**`PYTHONPATH=$PWD` no reconocido**
+```powershell
+# Sintaxis correcta para PowerShell
+$env:PYTHONPATH = "."                    # ✅
+PYTHONPATH=$PWD uvicorn app.main:app ... # ❌ (sintaxis bash)
+```
+
+**Backend no levanta — config no carga**
+```powershell
+# Verificar que .env existe en backend/
+Test-Path "backend\.env"
+
+# Verificar que la config se carga correctamente
+cd backend
+$env:PYTHONPATH = "."
+.venv\Scripts\python.exe -c "from app.config import settings; print('OK:', settings.app_env)"
+```
+
+**`make dev` no funciona**
+```
+'make' is not recognized as an internal or external command
+```
+Make no viene instalado en Windows. Usar los comandos manuales de las secciones anteriores, o instalar [GNU Make para Windows](https://gnuwin32.sourceforge.net/packages/make.htm) / [Chocolatey: `choco install make`].
+
+---
 
 ### Branches
 
